@@ -447,9 +447,52 @@ For substantial architectural changes, update the relevant documentation under `
 
 ## License and Attribution
 
-The project's own source-code license has not yet been selected. Add a repository `LICENSE` file before distributing the application or accepting contributions under a stated license.
+RiverGuard Proprietary License
 
-External datasets retain their own licenses and attribution requirements. In particular, review the [Project NOAH Hazard Maps dataset page](https://huggingface.co/datasets/bettergovph/project-noah-hazard-maps) and its ODbL terms before redistributing or adapting the data. Keep source attribution with the relevant map layer and document any derived datasets.
+Copyright © 2026 RiverGuard Team. All Rights Reserved.
+
+RiverGuard is proprietary software. Unless explicitly authorized in writing by the copyright owner, no person or organization is permitted to:
+
+Copy, reproduce, or redistribute the source code or application.
+
+Modify, adapt, or create derivative works from the software.
+
+Republish, rebrand, or distribute the application, whether commercially or non-commercially.
+
+Sell, sublicense, lease, or commercially exploit the software or its components.
+
+Host, deploy, or provide unauthorized copies of the application as a service.
+
+Reuse proprietary source code, original UI designs, graphics, documentation, or other protected assets.
+
+Access to this repository does not grant any license or permission to use, reproduce, modify, distribute, or commercialize RiverGuard.
+
+All rights are reserved by the copyright owner. Written authorization is required for any use not expressly permitted by applicable law.
+
+Third-Party Software and Datasets
+
+RiverGuard incorporates or may utilize third-party software, libraries, and datasets. These materials remain subject to their respective licenses and terms of use.
+
+In particular:
+
+Project NOAH Hazard Maps: Provided by BetterGov.PH through Hugging Face. The dataset is subject to the Open Data Commons Open Database License (ODbL). Applicable attribution and share-alike requirements must be respected.
+
+Third-party libraries: Next.js, Convex, FastAPI, XGBoost, MapLibre GL JS, and other dependencies retain their respective licenses.
+
+External datasets: Any additional datasets retain their original ownership, licensing, and attribution requirements.
+
+RiverGuard's proprietary license does not override or replace the licenses of third-party materials.
+
+Trademarks and Branding
+
+The RiverGuard name, logo, branding, and original visual identity are reserved for the project and may not be used to imply endorsement, affiliation, or official association without authorization.
+
+Permissions and Licensing Inquiries
+
+For licensing inquiries, commercial partnerships, authorized use, or permission to reproduce any proprietary part of RiverGuard, contact:
+
+Copyright Owner: RiverGuard Team.
+Email: [TBA - CONTACT EMAIL]
 
 ---
 
