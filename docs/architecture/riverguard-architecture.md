@@ -39,6 +39,8 @@ Use indexes for real application access patterns and paginate historical reading
 
 The initial AWS workload will be **AWS Lambda running a container image that contains the FastAPI application**. Use the Mangum ASGI adapter to expose FastAPI through Lambda's event handler interface.
 
+Before committing to AWS Lambda, evaluate simplified PaaS hosting (for example Render or Railway) first to save time and reduce infrastructure operational overhead; proceed with AWS Lambda/Mangum only if a PaaS option does not meet the project's needs. This matches Phase 4 of the delivery plan.
+
 Why Lambda instead of ECS/Fargate for the current budget:
 
 - There is no continuously running container to pay for while idle.
@@ -479,17 +481,16 @@ The published Lambda pricing currently lists a monthly free tier of 1 million re
 
 ## 13. Development phases
 
-| Phase | Scope | Result |
+Delivery is organized into six phases. Detailed objectives, key tasks, entry/exit criteria, and go/no-go decisions for each phase live in [`docs/plan/roadmap-phases.md`](plan/roadmap-phases.md). The phase summaries below show how they map to the architecture decisions in this document.
+
+| Phase | Scope | Architectural result |
 |---|---|---|
-| 1. Application foundation | Next.js, TypeScript, Convex schema, authentication, roles, dashboard shell | Working application foundation |
-| 2. Hazard-map integration | MapLibre, remote Project NOAH PMTiles, layer controls, station markers, attribution | Interactive baseline hazard map without AWS map-storage costs |
-| 3. Hydrological data | Station registry, sample/import pipeline, validation, sensor readings, historical charts | Traceable historical observations |
-| 4. ML service locally | FastAPI, feature pipeline, baseline models, tests, local inference | Reproducible local ML API |
-| 5. AWS Lambda deployment | Mangum adapter, Lambda container image, ECR, Function URL, IAM, cost budget | On-demand hosted ML inference |
-| 6. Risk and explainability | Threshold configuration, calibrated probabilities, SHAP explanations | Interpretable risk assessments |
-| 7. Alerts and operational workflow | Alert review/publication, acknowledgement, data freshness, audit history | LGU-oriented warning workflow |
-| 8. Physical sensors | IoT Core, SQS, ingestion Lambda, authenticated Convex ingestion | Device-to-dashboard pipeline |
-| 9. Scale and hardening | Load tests, retention, observability, backup/recovery, cost review | Evidence-based production-readiness improvements |
+| 1. Data Acquisition & Exploration (Critical Path) | Secure clean, multi-year rainfall and river-level data; document licensing, coverage, measurement units, and update frequency | Go/No-Go decision recorded before any application or ML work proceeds |
+| 2. Local ML Prototyping | Feature-engineering pipelines, baseline XGBoost/Scikit-learn models, SHAP explanations, chronological evaluation | Reproducible local models and evaluation results documented in `docs/report/` |
+| 3. Application Foundation | Next.js, TypeScript, Convex schema, indexes, ingest observations, initial dashboard | Convex-backed dashboard with historical charts and data-freshness indicators |
+| 4. API Integration & Simplified Hosting | FastAPI inference service, versioned API contract, Convex-to-ML connection; evaluate PaaS (e.g. Render/Railway) before AWS Lambda/Mangum | Forecasts flow from the ML service to Convex and update the dashboard reactively |
+| 5. Project NOAH Map & Explainability UI | MapLibre GL JS + remotely hosted Project NOAH PMTiles, SHAP explanations, station markers, attribution | Interactive hazard map and explainable risk surfaces on the dashboard |
+| 6. Alerts and Operational Validation | Alert rules, acknowledgement workflow, user roles, failure/missing-data testing, stakeholder validation | LGU alerting workflow; no experimental predictions presented as operational warnings |
 
 ## 14. Initial repository organization
 
@@ -511,8 +512,17 @@ riverguard/
 │       └── pyproject.toml
 ├── data/                        # Small development samples and schemas only
 ├── docs/
-│   └── architecture/
-│       └── riverguard-architecture.md
+│   ├── architecture/
+│   │   └── riverguard-architecture.md
+│   ├── data-sources.md
+│   ├── guides/
+│   ├── issues/
+│   ├── ml-methodology.md
+│   ├── plan/
+│   │   └── roadmap-phases.md
+│   ├── README.md
+│   ├── reference/
+│   └── report/
 └── README.md
 ```
 
