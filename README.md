@@ -628,61 +628,40 @@ If inference becomes too slow, needs persistent workers, or requires long-runnin
 
 ## Development Roadmap
 
-### Phase 1 — Application foundation
+### Phase 1 — Data Acquisition & Exploration (Critical Path)
+- [ ] Secure historical rainfall and river-level CSV data (e.g., via DOST-ASTI PhilSensors or PAGASA).
+- [ ] Document source licensing, coverage, measurement units, and update frequency.
+- [ ] Clean the dataset (handle missing data, NaNs, and timezone alignment) locally.
+- [ ] **Go/No-Go Decision:** Do not proceed to web development until a working, clean dataset spanning multiple years is secured.
 
+### Phase 2 — Local ML Prototyping
+- [ ] Define forecast targets, horizons, and station-specific thresholds based on the acquired data.
+- [ ] Build reproducible feature-engineering pipelines in a local Python environment.
+- [ ] Train baseline XGBoost/Scikit-learn models on local machines.
+- [ ] Generate local SHAP plots to verify explainability outputs.
+- [ ] Evaluate models using chronological train-test splits (target metrics: RMSE, MAE).
+
+### Phase 3 — Application Foundation
 - [ ] Initialize the Next.js application and TypeScript configuration.
 - [ ] Configure Convex and implement the initial schema.
-- [ ] Implement user roles and monitoring-station management.
-- [ ] Build the initial dashboard layout.
+- [ ] Ingest the cleaned CSV observations into Convex with indexes for station/time queries.
+- [ ] Build the initial dashboard layout (historical charts and data-freshness indicators).
 
-### Phase 2 — Project NOAH map integration
-
-- [ ] Integrate MapLibre GL JS and the PMTiles protocol.
-- [ ] Load the remotely hosted Project NOAH flood layers.
-- [ ] Add station markers, map legend, layer controls, and attribution.
-- [ ] Verify remote CORS and HTTP byte-range behavior in supported browsers.
-
-### Phase 3 — Observation data pipeline
-
-- [ ] Identify accessible rainfall and river-level data sources.
-- [ ] Document source licensing, coverage, units, and update frequency.
-- [ ] Implement ingestion and validation.
-- [ ] Store observations in Convex with indexes for station/time queries.
-- [ ] Add historical charts and data-freshness indicators.
-
-### Phase 4 — Forecasting and risk models
-
-- [ ] Define forecast targets, horizons, and station-specific thresholds.
-- [ ] Build reproducible feature-engineering pipelines.
-- [ ] Establish baseline regression and classification models.
-- [ ] Evaluate models using chronological and event-based validation.
-- [ ] Add SHAP-based prediction explanations.
-
-### Phase 5 — AWS ML deployment
-
-- [ ] Keep FastAPI runnable locally through Uvicorn.
-- [ ] Add the Mangum Lambda handler.
-- [ ] Create a Lambda-compatible Dockerfile.
-- [ ] Create the ECR repository and Lambda function.
-- [ ] Configure the Lambda Function URL and request authentication.
+### Phase 4 — API Integration & Simplified Hosting
+- [ ] Wrap the working XGBoost and SHAP models into a FastAPI application.
+- [ ] Keep FastAPI runnable locally through Uvicorn for frontend testing.
+- [ ] Deploy the FastAPI service (evaluate simplified PaaS providers like Render/Railway first to save time, or proceed with AWS Lambda/Mangum only if required).
 - [ ] Connect Convex actions to the deployed ML endpoint.
-- [ ] Configure AWS Budgets notifications and validate actual costs.
-- [ ] Benchmark cold starts, inference latency, memory, and model output quality.
 
-### Phase 6 — Alerts and operational validation
+### Phase 5 — Project NOAH Map & Explainability UI
+- [ ] Integrate MapLibre GL JS and load remotely hosted Project NOAH PMTiles.
+- [ ] Render the SHAP force plots and risk classifications on the Next.js dashboard.
+- [ ] Add station markers, map legend, layer controls, and attribution.
 
-- [ ] Implement configurable alert rules and alert history.
-- [ ] Add prediction metadata and stale-data safeguards.
-- [ ] Validate warning workflows with relevant stakeholders.
-- [ ] Test service failures, retries, missing observations, and deployment rollback.
-- [ ] Document operational ownership and procedures before any real-world warning use.
-
-### Phase 7 — Physical sensors (future)
-
-- [ ] Select and test suitable river-monitoring devices.
-- [ ] Define device identity, communication protocol, and measurement format.
-- [ ] Evaluate AWS IoT Core and SQS for secure device ingestion and buffering.
-- [ ] Validate sensor calibration, connectivity, and failure behavior.
+### Phase 6 — Alerts and Operational Validation
+- [ ] Implement configurable alert rules and alert history in Convex.
+- [ ] Test service failures, missing observations, and deployment rollback.
+- [ ] Validate warning workflows with relevant stakeholders (or academic advisers).
 
 ---
 
