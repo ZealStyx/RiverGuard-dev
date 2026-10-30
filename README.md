@@ -1,377 +1,318 @@
-# RiverGuard — Technical Architecture
+# RiverGuard
 
-> **Status:** Proposed initial architecture  
-> **Architecture principle:** Start with Convex as the primary application database. Add specialized infrastructure only when a measured requirement justifies it.
+**Explainable Machine Learning for Hydrological Flood Risk and Water-Level Forecasting**
 
-## 1. Project overview
+RiverGuard is a proposed web-based flood-monitoring and decision-support platform. It is designed to combine river and rainfall observations, historical geographic information, and machine-learning models to forecast near-future water levels and estimate localized flood risk.
 
-RiverGuard is a web-based, explainable flood-risk monitoring and forecasting system. It is intended to help local government units (LGUs) and residents understand changing river conditions through near-future water-level forecasts, localized flood-risk estimates, interactive hazard maps, and timely warnings.
+The platform aims to help local government units (LGUs), disaster-risk reduction offices, and residents understand changing river conditions and make better-informed preparedness decisions.
 
-The initial system is designed around four capabilities:
+> **Project status:** Early development / architecture stage. The repository currently contains a planned project structure and placeholder files. Forecasts, risk probabilities, alerts, and dashboard features described here are intended capabilities—not claims of an operational or validated warning system.
 
-1. **Hazard-map visualization** — display Project NOAH hazard layers alongside monitoring stations and current risk information.
-2. **Hydrological data management** — collect, validate, and store time-stamped rainfall and water-level observations.
-3. **Forecasting and risk assessment** — use historical and current observations to forecast water levels and estimate the probability of exceeding locally defined thresholds.
-4. **Explainable warnings** — show the factors that contributed to a model result and provide LGU operators with tools to review and publish alerts.
+---
 
-The Project NOAH hazard maps provide static or baseline hazard context. They are not, by themselves, a time-series dataset and are not sufficient to train a model that forecasts changing water levels. Forecasting requires time-stamped hydrological observations and suitable historical records.
+## Table of Contents
 
-## 2. Architecture decision
+- [Project Goals](#project-goals)
+- [Planned Features](#planned-features)
+- [System Architecture](#system-architecture)
+- [Technology Stack](#technology-stack)
+- [Data Sources and Data Strategy](#data-sources-and-data-strategy)
+- [Machine-Learning Approach](#machine-learning-approach)
+- [Repository Structure](#repository-structure)
+- [Development Setup](#development-setup)
+- [Development Roadmap](#development-roadmap)
+- [Important Limitations and Safety Considerations](#important-limitations-and-safety-considerations)
+- [Contributing](#contributing)
+- [License and Attribution](#license-and-attribution)
 
-### 2.1 Use Convex as the initial primary database
+---
 
-RiverGuard will use **Convex for application data and real-time application updates**. The initial implementation will not require a separate PostgreSQL, PostGIS, or TimescaleDB deployment.
+## Project Goals
 
-Convex will store and manage:
+RiverGuard is intended to address several limitations of static hazard maps and opaque predictive systems:
 
-- Users, roles, and LGU profiles.
-- Monitoring-station metadata.
-- Sensor observations and their quality/status metadata.
-- Forecast results and risk assessments.
-- Alerts and alert acknowledgements.
-- Hazard-layer metadata and references to externally hosted map files.
-- Model-version metadata and evaluation summaries.
+1. **Monitor changing conditions.** Bring available rainfall and river-level observations into a common monitoring interface.
+2. **Forecast near-future water levels.** Estimate how river levels may change over configurable forecast horizons.
+3. **Estimate localized risk.** Assess the probability of exceeding locally defined water-level or impact thresholds.
+4. **Explain model outputs.** Show which input features contributed to an individual prediction, rather than presenting a probability without context.
+5. **Support timely decisions.** Give LGU personnel and residents accessible information about station conditions, forecasts, data freshness, and warnings.
+6. **Provide geographic context.** Display Project NOAH hazard layers alongside monitoring stations and model outputs.
 
-Convex's indexed queries and reactive subscriptions are appropriate for the initial dashboard and monitoring workflows. The application should use indexes for its main access patterns and paginate historical readings instead of loading unbounded datasets into a single query.
+RiverGuard is a decision-support tool. It is not intended to independently issue official evacuation orders or replace the authority of LGUs and relevant government agencies.
 
-### 2.2 Keep large geospatial files outside Convex
+## Planned Features
 
-Large PMTiles files and other static geospatial assets should be stored in object storage, such as **Cloudflare R2**, rather than in Convex documents or file storage.
+### Monitoring dashboard
 
-The web client will use **MapLibre GL JS** to render the map and the **PMTiles protocol** to request only the tile data needed for the current view. The object-storage endpoint must support HTTP byte-range requests so that PMTiles can be accessed efficiently.
+- Overview of monitored river stations.
+- Latest available water levels and rainfall observations.
+- Station status and data freshness indicators.
+- Historical water-level and rainfall charts.
+- Search and filtering by station, river, municipality, or barangay where data is available.
 
-Convex stores metadata and references for these assets; it does not serve the large tile archive.
+### Interactive hazard map
 
-### 2.3 Keep machine learning in a Python service
+- MapLibre-based map interface.
+- Project NOAH flood hazard layers for 5-, 25-, and 100-year return periods.
+- Monitoring-station markers and station detail views.
+- Optional overlays for forecast results and risk classifications.
+- Layer controls, map legend, and source attribution.
 
-The forecasting and explainability code will live in a separate **Python service**, initially exposed through **FastAPI**. This keeps the ML environment independent of the frontend and Convex application functions.
+### Forecasting and risk assessment
 
-The Python service is responsible for:
+- Near-future water-level forecasts for supported monitoring stations.
+- Risk estimates based on locally defined thresholds.
+- Forecast horizon and model-version information.
+- Prediction timestamps and input-data freshness.
+- Clear indication when observations are missing, stale, or outside expected ranges.
 
-- Preparing and validating model input data.
-- Creating time-window and hydrological features.
-- Running water-level forecasting models.
-- Estimating flood-threshold exceedance probabilities.
-- Producing SHAP-based feature-contribution explanations where appropriate.
-- Recording model version, prediction time, input-data time range, and data-quality information with each prediction.
+### Explainability
 
-The service will read required observations from Convex through an authenticated integration and publish forecasts and risk assessments back through an authenticated Convex endpoint/function. The integration mechanism should be implemented using the currently supported Convex HTTP/function APIs; credentials must remain server-side.
+- SHAP-based feature-contribution explanations where appropriate for the selected model.
+- Human-readable summaries of influential inputs.
+- Separation of model contribution from physical causation.
+- Model evaluation and validation information available to authorized users.
 
-## 3. Recommended technology stack
+### Alerts and administration
 
-| Layer | Technology | Responsibility |
-|---|---|---|
-| Web application | Next.js | Public interface and LGU dashboard |
-| Language | TypeScript | Frontend and Convex application code |
-| UI styling | Tailwind CSS | Layout and styling |
-| UI components | shadcn/ui | Reusable dashboard components |
-| Charts | Recharts | Rainfall, water-level, and forecast charts |
-| Interactive maps | MapLibre GL JS | Hazard layers, stations, rivers, and risk overlays |
-| Map archive format | PMTiles | Cloud-optimized vector-tile distribution |
-| Application database | Convex | Application records, observations, predictions, alerts, and live updates |
-| ML/API service | Python + FastAPI | Data processing, model inference, and ML endpoints |
-| Data processing | Pandas + NumPy | Data cleaning and feature engineering |
-| Initial ML models | Scikit-learn + XGBoost | Regression and classification baselines |
-| Explainability | SHAP | Feature-contribution explanations |
-| Object storage | Cloudflare R2 | PMTiles archives and model artifacts |
-| Web deployment | Vercel or equivalent | Next.js hosting |
-| Python deployment | A managed Python/container host | FastAPI hosting and scheduled inference jobs |
+- Configurable station and threshold monitoring.
+- Alert history and acknowledgement workflow.
+- User roles for public users, LGU personnel, and system administrators.
+- Administrative management of stations, data sources, and model versions.
 
-This is an intentionally lean initial stack. Do not introduce a message broker, Kubernetes, or a separate microservice for every capability unless operational requirements later demonstrate a need.
+All features above are planned. Their availability will depend on data access, implementation, and validation.
 
-## 4. System architecture
+---
 
-### 4.1 High-level component diagram
+## System Architecture
+
+The initial architecture is **Convex-first**. Convex is the primary application database and backend. A separate Python service handles data processing and machine learning. Large PMTiles files and model artifacts are stored in object storage rather than in Convex documents.
 
 ```mermaid
-flowchart TB
-    subgraph SOURCES[External and field data sources]
-        RAIN[Rainfall observations]
-        LEVEL[River water-level sensors]
-        HIST[Historical hydrological records]
-        TERRAIN[Terrain and catchment data]
-        NOAH[Project NOAH hazard maps]
+flowchart TD
+    subgraph Sources[External and Field Data Sources]
+        R[Rainfall observations]
+        W[River water-level observations]
+        S[Soil-moisture observations, if available]
+        N[Project NOAH hazard maps]
+        T[Terrain and catchment information]
     end
 
-    subgraph APP[RiverGuard application]
-        WEB[Next.js web application]
-        CONVEX[(Convex database and functions)]
-        ML[Python ML service\nFastAPI + XGBoost + SHAP]
+    subgraph ML[Python ML Service]
+        I[Data ingestion and validation]
+        F[Feature engineering]
+        M[Forecasting and risk models]
+        X[Explainability and model evaluation]
+        API[FastAPI endpoints]
+        I --> F --> M --> X
+        M --> API
     end
 
-    subgraph STORAGE[Object storage]
-        R2[(Cloudflare R2\nPMTiles and model artifacts)]
+    subgraph Backend[Convex Application Backend]
+        C[(Convex database)]
+        Q[Queries and mutations]
+        A[Actions and scheduled jobs]
+        C <--> Q
+        A <--> C
     end
 
-    MAP[MapLibre GL JS] 
-    USER[Residents and LGU operators]
+    subgraph Storage[Object Storage]
+        O[PMTiles hazard files]
+        P[Model artifacts and larger datasets]
+    end
 
-    RAIN --> ML
-    LEVEL --> ML
-    HIST --> CONVEX
-    TERRAIN --> ML
-    NOAH --> R2
+    subgraph Web[Web Application]
+        UI[Next.js dashboard]
+        MAP[MapLibre map]
+        CH[Charts, forecasts, and alerts]
+        UI --> MAP
+        UI --> CH
+    end
 
-    WEB <--> CONVEX
-    ML <-->|Read observations / publish results| CONVEX
-    WEB --> MAP
-    MAP -->|Fetch vector tiles| R2
-    WEB --> USER
+    R --> I
+    W --> I
+    S --> I
+    T --> I
+    I <--> C
+    API <--> A
+    X --> C
+    N --> O
+    P <--> ML
+    C <--> UI
+    O --> MAP
 ```
 
-### 4.2 Prediction and alert workflow
+### Main component responsibilities
+
+| Component | Responsibility |
+|---|---|
+| Next.js web application | Public interface, LGU dashboard, maps, charts, and administration UI |
+| Convex | Application data, users, station metadata, readings, predictions, risk assessments, alerts, and reactive updates |
+| Python / FastAPI | Data validation, feature engineering, model inference, explainability, and ML APIs |
+| MapLibre GL JS | Interactive map rendering and hazard-layer visualization |
+| PMTiles | Cloud-optimized vector-tile format for large static hazard maps |
+| Object storage | Hosting PMTiles files, model artifacts, and other large files |
+
+### Prediction workflow
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant S as Sensors / Data Providers
-    participant I as Ingestion Process
-    participant C as Convex
-    participant M as Python ML Service
-    participant D as Dashboard
-    participant O as LGU Operator
+    participant Source as Sensor / Data Source
+    participant Ingest as Python Ingestion
+    participant Convex as Convex
+    participant ML as ML Pipeline
+    participant Web as RiverGuard Web App
+    participant User as LGU / Resident
 
-    S->>I: Send timestamped observations
-    I->>I: Validate units, timestamps, ranges, and station identity
-    I->>C: Store accepted readings and data-quality status
-    M->>C: Request recent observations and station metadata
-    C-->>M: Return indexed, time-bounded input data
-    M->>M: Build features and run forecasting / risk models
-    M->>M: Generate explanation and record model metadata
-    M->>C: Publish forecast and risk assessment
-    C-->>D: Notify subscribed dashboard queries
-    D->>O: Display forecast, risk, freshness, and explanation
-    O->>C: Review and publish / acknowledge an alert
-    C-->>D: Update alert state in real time
+    Source->>Ingest: Send or provide observation
+    Ingest->>Ingest: Validate, normalize, and check data quality
+    Ingest->>Convex: Store accepted observation
+    Convex->>ML: Make eligible station data available
+    ML->>ML: Build features and generate forecast
+    ML->>ML: Estimate risk and calculate explanations
+    ML->>Convex: Publish prediction, risk, and metadata
+    Convex-->>Web: Reactive update
+    Web-->>User: Display forecast, risk, explanation, and freshness
 ```
 
-### 4.3 Data-to-map rendering workflow
+---
 
-```mermaid
-flowchart LR
-    NOAH[Project NOAH PMTiles] --> R2[(Cloudflare R2)]
-    R2 -->|HTTP byte-range tile requests| PM[PMTiles protocol]
-    PM --> MAP[MapLibre GL JS]
-    CONVEX[(Convex)] -->|Station metadata, current readings, risk results| WEB[Next.js]
-    WEB --> MAP
-    MAP --> UI[Interactive RiverGuard map]
-```
+## Technology Stack
 
-## 5. Data ownership and storage boundaries
-
-Use one clear owner for each category of data. This avoids unnecessary duplication and keeps the application easier to maintain.
-
-| Data category | Initial storage | Notes |
+| Area | Planned technology | Purpose |
 |---|---|---|
-| Users and roles | Convex | Apply role-based authorization to all privileged operations. |
-| LGU profiles | Convex | Associate users, stations, and alert permissions with the appropriate LGU. |
-| Monitoring stations | Convex | Store station identifier, name, coordinates, river/basin association, units, and operational status. |
-| Sensor readings | Convex | Store timestamped observations with source and quality metadata. Use indexed, bounded queries. |
-| Forecasts | Convex | Store forecast horizon, predicted level, generation time, model version, and input-data window. |
-| Risk assessments | Convex | Store threshold, estimated exceedance probability, risk category, and explanation metadata. |
-| Alerts | Convex | Store alert status, severity, affected area/stations, timestamps, issuer, and acknowledgement history. |
-| Hazard-layer metadata | Convex | Store layer names, descriptions, attribution, source, and object-storage references. |
-| PMTiles archives | Cloudflare R2 | Keep large static map files out of Convex. |
-| Trained model artifacts | Cloudflare R2 | Store versioned model files and associated metadata. |
-| Spatial reference data | Initially Convex metadata + static map layers | Use a separate spatial database only if advanced spatial querying becomes a real requirement. |
+| Frontend | Next.js | Web application and dashboard |
+| Frontend language | TypeScript | Typed application code |
+| UI and styling | Tailwind CSS, shadcn/ui | Layout and reusable interface components |
+| Charts | Recharts | Rainfall and water-level visualizations |
+| Mapping | MapLibre GL JS | Interactive geospatial display |
+| Map data format | PMTiles | Efficient delivery of large vector-tile datasets |
+| Application backend and database | Convex | Application data, queries, mutations, actions, and real-time subscriptions |
+| ML language | Python | Data preparation, model training, and inference |
+| ML API | FastAPI | HTTP interface for the ML service |
+| Data processing | Pandas and NumPy | Cleaning and feature engineering |
+| ML algorithms | Scikit-learn and XGBoost | Baseline forecasting and risk-classification models |
+| Explainability | SHAP | Feature-contribution explanations |
+| Object storage | Cloudflare R2 or compatible object storage | PMTiles, model files, and larger datasets |
+| Testing | TypeScript tests, Pytest | Application and ML-service testing |
 
-### 5.1 Suggested Convex tables
+### Database strategy: Convex first
 
-The following is a logical starting point, not a requirement to implement every table immediately.
+Convex is the primary database for the initial implementation. The project will not add PostgreSQL, PostGIS, or TimescaleDB by default.
 
-| Table | Example fields | Purpose |
-|---|---|---|
-| `users` | `name`, `email`, `role`, `lguId` | User identity and authorization metadata |
-| `lgu_profiles` | `name`, `region`, `province`, `municipality` | LGU organization information |
-| `monitoring_stations` | `stationCode`, `name`, `latitude`, `longitude`, `riverName`, `status`, `waterLevelUnit` | Station registry and location metadata |
-| `sensor_readings` | `stationId`, `timestamp`, `waterLevel`, `rainfall`, `soilMoisture`, `source`, `qualityStatus` | Time-stamped sensor and weather observations |
-| `predictions` | `stationId`, `generatedAt`, `horizonMinutes`, `targetTimestamp`, `predictedWaterLevel`, `modelVersion`, `inputWindow` | Forecast results |
-| `risk_assessments` | `stationId`, `generatedAt`, `thresholdId`, `exceedanceProbability`, `riskCategory`, `modelVersion`, `explanation` | Flood-threshold risk estimates and explanations |
-| `risk_thresholds` | `stationId` or `locationId`, `name`, `waterLevel`, `unit`, `source`, `effectiveFrom` | Locally established warning thresholds and provenance |
-| `alerts` | `stationId`, `locationId`, `severity`, `status`, `message`, `createdAt`, `issuedBy` | Warning lifecycle and operator actions |
-| `hazard_layers` | `name`, `hazardType`, `source`, `attribution`, `tileUrl`, `format`, `enabled` | Metadata for externally hosted map layers |
-| `model_versions` | `modelName`, `version`, `artifactUrl`, `trainedAt`, `metrics`, `featureSchemaVersion` | Model registry metadata and evaluation results |
+Use Convex for:
 
-### 5.2 Important index and query patterns
+- User profiles, roles, and LGU associations.
+- Monitoring-station metadata.
+- Sensor observations and station status.
+- Forecasts and risk assessments.
+- Alerts and acknowledgement records.
+- Hazard-layer metadata and model-version metadata.
 
-For `sensor_readings`, the primary historical access pattern is retrieving a bounded time range for one station. Define a compound index equivalent to:
+Use object storage for large PMTiles files and model artifacts. Do not store multi-gigabyte map files as Convex documents or commit them to Git.
 
-```typescript
-.index("by_station_timestamp", ["stationId", "timestamp"])
-```
+A specialized database can be considered later if measured requirements justify it:
 
-Use the index to query one station and a time range. Add other indexes only for demonstrated query patterns, such as retrieving alerts by status and creation time or predictions by station and generation time.
-
-Implementation guidelines:
-
-- Always bound historical queries by station and time range where possible.
-- Paginate older readings and historical records.
-- Do not fetch an entire station history for every dashboard render.
-- Keep frequently displayed latest-value summaries separate from large historical result sets when that improves query efficiency.
-- Define a retention and archival policy before sensor volume becomes large.
-- Preserve units, source timestamps, ingestion timestamps, and quality flags. Do not silently mix measurements with different units or sampling intervals.
-
-## 6. Machine learning design
-
-### 6.1 Start with a measurable baseline
-
-Begin with conventional supervised-learning models for structured hydrological observations. Avoid starting with a deep-learning architecture unless the available dataset size, sampling frequency, and validation results justify it.
-
-Recommended initial approach:
-
-- **Water-level forecasting:** XGBoost regression as a baseline, evaluated against persistence and simple statistical baselines.
-- **Flood-threshold classification:** Scikit-learn or XGBoost classification for the probability of exceeding a defined local water-level threshold within a specified forecast horizon.
-- **Explainability:** SHAP feature contributions for supported model types, accompanied by clear descriptions of the input window and data freshness.
-
-### 6.2 Candidate input features
-
-Candidate features should be selected based on actual data availability and quality:
-
-- Current and lagged water-level measurements.
-- Water-level change over recent intervals.
-- Rolling rainfall totals (for example, 1-hour, 3-hour, 6-hour, and 24-hour windows).
-- Recent and forecast rainfall, where a reliable forecast source is available.
-- Soil-moisture observations, where measured and sufficiently reliable.
-- Station, river, and catchment characteristics.
-- Elevation, slope, and other terrain-derived attributes.
-- Relevant upstream station measurements, where hydrological connectivity and timing are established.
-
-Do not treat unavailable inputs as if they were measured. Track missingness and input quality, and define what the model should do when required inputs are stale or absent.
-
-### 6.3 Forecast and risk outputs
-
-Keep water-level forecasts and flood-risk probabilities conceptually separate.
-
-A water-level forecast might provide a predicted value at several horizons (for example, 1, 2, and 3 hours). A risk model might estimate the probability of exceeding a station-specific threshold within a stated horizon.
-
-Every output should identify:
-
-- Station and location.
-- Forecast generation timestamp.
-- Target timestamp or forecast horizon.
-- Predicted water level and unit, where applicable.
-- Threshold and threshold source, where applicable.
-- Estimated probability and risk category, where applicable.
-- Model name and version.
-- Input-data time window and freshness.
-- Data-quality warnings or missing-input indicators.
-- Explanation method and feature contributions, when available.
-
-Probability values must be validated and calibrated against held-out historical events. A probability is not a certainty and should not be presented as one.
-
-### 6.4 Explainability limitations
-
-SHAP can describe how input features contributed to a particular model output. It does not prove that a feature physically caused the observed or forecasted flood condition. Present explanations as model explanations, not causal conclusions.
-
-### 6.5 Model evaluation
-
-Use time-aware validation. Do not randomly split adjacent observations from the same storm event across training and test sets, because that can produce misleadingly optimistic results.
-
-Suggested metrics:
-
-| Task | Evaluation |
+| Technology | Introduce it when |
 |---|---|
-| Water-level regression | MAE, RMSE, and error by forecast horizon and station |
-| Threshold classification | Precision, recall, F1, precision-recall AUC, and confusion matrix |
-| Probability estimates | Calibration curve and a suitable probability scoring metric |
-| Operational warning performance | Lead time, missed events, false alarms, and data availability |
+| PostgreSQL | SQL-based analytics, reporting, or integrations require a separate relational store |
+| PostGIS | Workloads require advanced spatial indexing, spatial joins, intersections, or watershed analysis that are unsuitable for the current application design |
+| TimescaleDB | Historical sensor volume and time-series analytics exceed what is practical or cost-effective in the Convex-first design |
 
-Compare model results with simple baselines. Report performance by station, event, forecast horizon, and relevant data-quality conditions where the dataset permits.
+Any database migration or addition should be based on representative workload tests, query patterns, retention needs, and operational cost—not assumed scale.
 
-## 7. Geospatial implementation
+---
 
-### 7.1 Map rendering
+## Data Sources and Data Strategy
 
-Use MapLibre GL JS for the interactive map and PMTiles for distribution of the Project NOAH vector-tile archive.
+RiverGuard needs both geographic context and time-stamped hydrological observations. These are different data categories and should not be treated as interchangeable.
 
-The map can display:
+### Project NOAH hazard maps
 
-- Project NOAH flood-hazard layers and other available hazard layers.
-- Monitoring-station markers and station status.
-- Current water-level readings.
-- Forecast summaries and risk categories.
-- Barangay or administrative boundaries, where available.
-- User-selected layers and legends.
+Initial map source:
 
-Store the PMTiles archive in Cloudflare R2 or compatible object storage. Configure public or appropriately secured tile access and ensure HTTP byte-range support. Store the archive URL and attribution information in Convex as metadata.
+- Dataset: [BetterGov.PH — Project NOAH Hazard Maps](https://huggingface.co/datasets/bettergovph/project-noah-hazard-maps)
+- PMTiles directory: [Project NOAH PMTiles](https://huggingface.co/datasets/bettergovph/project-noah-hazard-maps/tree/main/PMTiles)
+- Initial flood layers of interest: `flood_5yr.pmtiles`, `flood_25yr.pmtiles`, and `flood_100yr.pmtiles`.
 
-### 7.2 Rendering is not spatial analysis
+These static hazard layers can provide baseline geographic context and show mapped flood-prone areas. They do **not** provide live water levels, rainfall observations, or near-future forecasts.
 
-MapLibre rendering a hazard layer does not mean the application can perform every spatial query against that layer. If RiverGuard later needs server-side point-in-polygon tests, watershed intersections, spatial joins, or large-scale geospatial analysis, evaluate a dedicated geospatial processing workflow. This could initially use Python geospatial libraries and, if query complexity or volume warrants it, PostGIS.
+For local development, use the hosted PMTiles files where practical or keep downloaded copies outside Git. For deployment, host the required files in object storage that supports HTTP byte-range requests, then configure MapLibre to read them through the PMTiles protocol.
 
-### 7.3 Hazard-map interpretation
+### Hydrological data required for forecasting
 
-Project NOAH hazard layers should be described as baseline or reference hazard information, with their source and assumptions visible to users. Do not present a static return-period map as a live forecast or as a guarantee of the extent of a future flood.
+The ML system requires reliable, timestamped observations. Candidate data categories include:
 
-## 8. Real-time application behavior
+- River or stream water levels, with station identifiers and measurement units.
+- Rainfall measurements, with observation timestamps and station or geographic coverage.
+- Soil-moisture observations, if available and sufficiently reliable.
+- Historical flood occurrence or impact records for threshold selection and evaluation.
+- River, catchment, elevation, and terrain attributes for geographic and hydrological context.
+- Forecast rainfall, if a suitable source and integration are available.
 
-Convex subscriptions can keep connected dashboards current when new readings, predictions, or alert records are written.
+The exact providers, access permissions, update frequency, coverage, and licensing for these data sources must be documented before model development relies on them.
 
-Recommended behavior:
+### Data quality requirements
 
-1. A new observation is validated and stored.
-2. The latest station condition is reflected in the dashboard.
-3. The ML service runs on an appropriate schedule or ingestion trigger.
-4. A completed forecast and risk assessment are written to Convex.
-5. Subscribed dashboards receive the new application data.
-6. An authorized LGU operator reviews and issues or acknowledges an alert.
+Each observation should preserve, where applicable:
 
-Do not run expensive model training inside ordinary interactive dashboard queries. Training, batch evaluation, and scheduled inference should run in the Python environment as separate jobs.
+- Source and station identifier.
+- Observation timestamp and timezone convention.
+- Measurement value and unit.
+- Ingestion timestamp.
+- Quality or validation status.
+- Missing-data and sensor-status information.
 
-## 9. Security, reliability, and operational safeguards
+Do not silently replace missing measurements with zero. Missing, stale, invalid, and estimated values must remain distinguishable throughout ingestion, model inference, and dashboard presentation.
 
-RiverGuard supports public-safety decisions, so data quality and operational safeguards are essential.
+---
 
-- Keep service credentials, model-storage credentials, and privileged Convex credentials on the server. Never expose them in browser code.
-- Authenticate and authorize sensor-ingestion and ML-publication endpoints.
-- Validate station identifiers, timestamps, measurement units, and plausible value ranges before accepting observations.
-- Preserve both the source timestamp and ingestion timestamp to identify delayed or out-of-order data.
-- Track sensor health, data freshness, missing values, and quality status.
-- Show when a forecast is stale, unavailable, or based on incomplete inputs.
-- Record model version and input-data provenance for each published prediction.
-- Log alert creation, publication, acknowledgement, and resolution actions.
-- Back up critical configuration and establish a recovery procedure.
-- Treat ML output as decision support. Do not automatically equate a model classification with an official evacuation order.
-- Ensure warning thresholds, escalation rules, and public messaging are reviewed and approved by the responsible authorities.
+## Machine-Learning Approach
 
-## 10. When to introduce specialized databases
+The initial goal is to establish trustworthy baselines with structured environmental data before considering more complex models.
 
-The initial design deliberately avoids additional databases. Reconsider that decision only when a concrete requirement or benchmark demonstrates that Convex is no longer the best fit for a workload.
+### Water-level forecasting
 
-| Technology | Introduce it when... | Example workload |
-|---|---|---|
-| PostgreSQL | Relational SQL analytics, external tooling, or integrations require a dedicated SQL database. | Cross-domain reporting and complex SQL queries. |
-| PostGIS | Server-side spatial querying becomes central and cannot be handled efficiently by the existing geospatial workflow. | Point-in-polygon queries, watershed intersections, spatial joins, and proximity analysis. |
-| TimescaleDB | Sensor volume and time-series analytics require specialized partitioning, retention, compression, or continuous aggregation capabilities. | Large historical sensor archives and recurring time-window analytics. |
+Start with supervised regression models using time-derived and environmental features, such as:
 
-As an illustration, 100 stations recording one reading every five minutes produce about 10.5 million readings per year. This is a reason to benchmark ingestion, indexed reads, storage growth, and historical analytics; it is not, by itself, proof that a database migration is necessary.
+- Current and lagged water levels.
+- Water-level change over recent intervals.
+- Rolling rainfall totals over relevant windows.
+- Antecedent rainfall indicators.
+- Catchment, river, and terrain attributes.
+- Soil moisture and forecast rainfall, when reliable data is available.
 
-Before adding a database, measure:
+XGBoost regression and suitable Scikit-learn baselines are candidates for initial experiments. The forecast horizons and target stations should be defined from actual observation frequency and operational needs.
 
-- Read and write volume, including burst rates.
-- Query latency for the dashboard's actual access patterns.
-- Historical-query and aggregation performance.
-- Storage growth and retention requirements.
-- Cost and operational maintenance.
-- Backup, recovery, and data-export requirements.
+### Flood-risk estimation
 
-If a specialized database is introduced later, document which data it owns and how data is synchronized. Avoid maintaining competing authoritative copies without a clear consistency strategy.
+Risk classification should be tied to locally meaningful outcomes, such as the probability of exceeding an established station-specific water-level threshold within a defined forecast horizon.
 
-## 11. Suggested implementation phases
+Avoid presenting an arbitrary model score as an official flood warning. Thresholds should be based on documented local references and reviewed with appropriate domain experts or authorities.
 
-| Phase | Scope | Expected result |
-|---|---|---|
-| 1. Application foundation | Next.js, TypeScript, Convex schema, authentication, roles, and dashboard shell | Working application foundation |
-| 2. Hazard map | MapLibre, PMTiles hosting, layer controls, station markers, and map attribution | Interactive baseline hazard map |
-| 3. Hydrological data | Station registry, ingestion pipeline, validation, readings, and historical charts | Traceable historical observations |
-| 4. Forecasting baseline | Python/FastAPI service, feature pipeline, baseline models, and evaluation | Measured water-level forecasts |
-| 5. Risk and explainability | Threshold configuration, probability models, calibration, and SHAP explanations | Interpretable risk assessments |
-| 6. Alerts and operational workflow | Alert review, publication, acknowledgement, freshness indicators, and audit history | LGU-oriented warning workflow |
-| 7. Scale and hardening | Load tests, retention policy, monitoring, backup/recovery, and database reassessment | Evidence-based production-readiness improvements |
+### Explainability
 
-## 12. Initial repository organization
+SHAP can be used to describe how input features contributed to an individual model prediction. These contributions explain model behavior; they do not establish that a feature physically caused a flood or water-level change.
 
-A possible starting layout is:
+### Model evaluation
+
+Evaluation should use chronological or event-based splits rather than randomly mixing observations from the same time series across training and test sets.
+
+Potential metrics include:
+
+| Task | Evaluation measures |
+|---|---|
+| Water-level regression | MAE, RMSE, bias, and errors by forecast horizon and station |
+| Risk classification | Precision, recall, F1, PR-AUC, and confusion matrix |
+| Probability estimates | Calibration analysis and Brier score |
+| Operational performance | Data freshness, missing-input behavior, inference latency, and alert lead time |
+
+Model performance should be reported by station, event, and forecast horizon where sample sizes permit. A model should not be described as reliable for deployment until it has been validated against appropriate held-out observations and operational requirements.
+
+---
+
+## Repository Structure
 
 ```text
 riverguard/
@@ -379,44 +320,137 @@ riverguard/
 │   └── web/                    # Next.js application
 ├── convex/                     # Convex schema, queries, mutations, actions
 ├── services/
-│   └── ml/                      # Python/FastAPI and model code
+│   └── ml/                     # Python/FastAPI and model code
 │       ├── app/
 │       ├── tests/
-│       ├── models/
+│       ├── models/              # Local model artifacts; binary files stay out of Git
 │       └── pyproject.toml
-├── data/                        # Small development samples and schemas only
+├── data/                       # Small development samples and schemas only
+│   ├── samples/
+│   └── schemas/
 ├── docs/
 │   └── architecture/
 │       └── riverguard-architecture.md
+├── .env.example
+├── .gitignore
 └── README.md
 ```
 
-Do not commit large PMTiles archives, raw sensor dumps, secrets, or private model artifacts to the Git repository. Store those in appropriate object storage or managed data services. Keep only small, non-sensitive fixtures and data schemas in the repository.
+The exact contents may evolve as the application is implemented. Generated files, local datasets, secrets, and trained binary artifacts should not be committed unless there is an explicit reason and an approved storage strategy.
 
-## 13. Initial decision summary
+---
 
-The initial RiverGuard architecture is:
+## Development Setup
 
-- **Next.js + TypeScript** for the web application.
-- **Convex** as the primary application database and real-time backend.
-- **MapLibre GL JS + PMTiles** for interactive hazard-map visualization.
-- **Cloudflare R2** for large map archives and model artifacts.
-- **Python + FastAPI** for data processing and machine-learning inference.
-- **XGBoost / Scikit-learn** for initial forecasting and classification baselines.
-- **SHAP** for model feature-contribution explanations.
+The repository is currently at the scaffold stage. The following are the expected prerequisites; exact install and run commands should be added once the application manifests and service entry points are implemented.
 
-PostgreSQL, PostGIS, and TimescaleDB are **not part of the initial required stack**. Revisit them only when measured SQL, geospatial, or time-series requirements justify the added infrastructure.
+### Prerequisites
 
-The highest-priority technical risk is not database selection. It is obtaining sufficient, reliable, time-stamped rainfall and river-level observations to train and validate useful forecasts. Establish data provenance, units, sampling intervals, historical coverage, and ground-truth flood events before making strong claims about model performance or warning reliability.
+- Node.js LTS and a Node package manager.
+- Python version supported by the ML service dependencies.
+- A Convex account and development deployment.
+- Access to the selected object-storage provider when hosting PMTiles or model artifacts.
 
-## 14. Useful references
+### Configuration
 
-- [Convex documentation](https://docs.convex.dev/)
-- [MapLibre GL JS documentation](https://maplibre.org/maplibre-gl-js/docs/)
-- [PMTiles documentation](https://docs.protomaps.com/pmtiles/)
-- [Cloudflare R2 documentation](https://developers.cloudflare.com/r2/)
-- [FastAPI documentation](https://fastapi.tiangolo.com/)
-- [XGBoost documentation](https://xgboost.readthedocs.io/)
-- [Scikit-learn documentation](https://scikit-learn.org/stable/)
-- [SHAP documentation](https://shap.readthedocs.io/)
-- [Project NOAH hazard-map dataset](https://huggingface.co/datasets/bettergovph/project-noah-hazard-maps/tree/main/PMTiles)
+1. Clone the repository.
+2. Install the web application's dependencies after its `package.json` has been configured.
+3. Install the Python ML service and its dependencies from `services/ml/pyproject.toml` after it has been populated.
+4. Configure the required environment variables using `.env.example` as a template.
+5. Configure the Convex deployment and its environment variables.
+6. Configure the ML service URL and any authentication used for service-to-service requests.
+7. Configure the PMTiles source URL and map attribution in the web application.
+
+Never commit populated `.env` files, API keys, credentials, or production secrets.
+
+### Environment variables
+
+The exact variable names will be finalized during implementation. The project is expected to need configuration for:
+
+- Convex deployment URL and application environment.
+- Public web application URL.
+- ML service URL and service authentication.
+- PMTiles base URL or individual layer URLs.
+- Object-storage credentials for server-side uploads, if required.
+
+Only variables intentionally exposed to the browser should use the framework's public environment-variable prefix. Storage credentials and service secrets must remain server-side.
+
+---
+
+## Development Roadmap
+
+### Phase 1 — Application foundation
+
+- [ ] Initialize the Next.js application and TypeScript configuration.
+- [ ] Configure Convex and establish the initial schema.
+- [ ] Implement user roles and monitoring-station management.
+- [ ] Build the initial dashboard layout.
+
+### Phase 2 — Map integration
+
+- [ ] Integrate MapLibre GL JS.
+- [ ] Configure PMTiles protocol support.
+- [ ] Display the 5-, 25-, and 100-year Project NOAH flood layers.
+- [ ] Add station markers, map legend, layer controls, and attribution.
+
+### Phase 3 — Observation data pipeline
+
+- [ ] Identify accessible rainfall and river-level data sources.
+- [ ] Document source licensing, coverage, units, and update frequency.
+- [ ] Implement ingestion and validation.
+- [ ] Store observations in Convex with appropriate indexes.
+- [ ] Add historical charts and data-freshness indicators.
+
+### Phase 4 — Forecasting and risk models
+
+- [ ] Define forecast targets, horizons, and station-specific thresholds.
+- [ ] Build reproducible feature-engineering pipelines.
+- [ ] Establish baseline forecasting and classification models.
+- [ ] Evaluate models using chronological and event-based validation.
+- [ ] Add SHAP-based prediction explanations.
+
+### Phase 5 — Alerts and operational validation
+
+- [ ] Implement configurable alert rules and alert history.
+- [ ] Add prediction metadata and stale-data safeguards.
+- [ ] Validate warning workflows with relevant stakeholders.
+- [ ] Test failure handling, monitoring, and deployment procedures.
+
+---
+
+## Important Limitations and Safety Considerations
+
+- **Static maps are not forecasts.** Project NOAH hazard layers describe mapped hazard scenarios; they do not show current river conditions.
+- **Predictions depend on data quality.** Missing, delayed, inaccurate, or poorly located sensors can produce unreliable outputs.
+- **Probability is not certainty.** Risk estimates must be presented with their forecast horizon, threshold definition, data freshness, and model version.
+- **Explainability is not causality.** SHAP feature contributions describe model behavior and should not be presented as proof of physical causation.
+- **Human authority remains essential.** RiverGuard should support—not replace—official LGU and government warning, evacuation, and response procedures.
+- **No unvalidated live warnings.** Do not expose experimental model outputs as operational public-safety warnings until the system has been adequately validated and approved for its intended use.
+
+---
+
+## Contributing
+
+Contributions should keep data provenance, reproducibility, and public-safety implications in view.
+
+Before submitting a change:
+
+1. Keep data schemas and API contracts consistent across the web, Convex, and ML service.
+2. Add or update tests for changed behavior.
+3. Document external datasets, transformations, units, and licensing.
+4. Avoid committing secrets, large datasets, PMTiles files, or model binaries.
+5. Clearly label mock data and illustrative predictions so they cannot be mistaken for observations or validated forecasts.
+
+For substantial architectural changes, update the relevant documentation under `docs/architecture/`.
+
+---
+
+## License and Attribution
+
+The project's own source-code license has not yet been selected. Add a repository `LICENSE` file before distributing the application or accepting contributions under a stated license.
+
+External datasets retain their own licenses and attribution requirements. In particular, review the [Project NOAH Hazard Maps dataset page](https://huggingface.co/datasets/bettergovph/project-noah-hazard-maps) and its ODbL terms before redistributing or adapting the data. Keep source attribution with the relevant map layer and document any derived datasets.
+
+---
+
+**RiverGuard — clearer hydrological insight for better-informed flood preparedness.**
