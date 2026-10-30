@@ -1,0 +1,28 @@
+﻿# Node.js
+node_modules/
+.next/
+out/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
+
+# Large datasets and map tiles
+*.pmtiles
+
+# Trained model artifacts
+*.pkl
+*.joblib
+*.onnx
+
+# OS files
+.DS_Store
+Thumbs.db
