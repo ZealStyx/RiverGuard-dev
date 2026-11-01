@@ -210,8 +210,7 @@
     <button class="toggle-btn" id="btnFloodPoly">Flood Polygons: Off</button>
   </div>
 
-  <div style="margin-top:14px; font-size:0.72rem; color:#64748b; border-top:1px solid rgba(255,255,255,0.08); padding-top:8px;">
-    <div>Complementary data: synthetic DEM (elevation model)</div>
+    <div>Complementary data: DEM (Copernicus GLO-30 COG + synthetic fallback)</div>
     <div>Primary data: Project NOAH PMTiles (Hugging Face)</div>
     <div>No AWS — fully client-side WebGL</div>
   </div>
@@ -219,11 +218,12 @@
 
 <div id="info">
   <div class="info-title">RiverGuard · 3D Flood Prototype</div>
+  <div class="data-row"><span>DEM source:</span><span class="data-val" id="demSource">loading…</span></div>
   <div class="data-row"><span>Station:</span><span class="data-val">SAN-001 San Pablo River</span></div>
   <div class="data-row"><span>Terrain peak:</span><span class="data-val ok" id="terrainPeak">—</span></div>
   <div class="data-row"><span>Water depth:</span><span class="data-val" id="waterDepth">—</span></div>
   <div class="data-row"><span>Affected area:</span><span class="data-val" id="affectedArea">—</span></div>
-  <div class="data-row"><span>Data source:</span><span class="data-val">Project NOAH + synthetic DEM</span></div>
+  <div class="data-row"><span>Data source:</span><span class="data-val">Project NOAH + DEM</span></div>
 </div>
 
 <div id="legend">
@@ -244,7 +244,8 @@
     "three": "../node_modules/three/build/three.module.js",
     "maplibre-gl": "../node_modules/maplibre-gl/dist/maplibre-gl.mjs",
     "@turf/turf": "../node_modules/@turf/turf/dist/turf.min.js",
-    "pmtiles": "../node_modules/pmtiles/dist/index.browser.js"
+    "pmtiles": "../node_modules/pmtiles/dist/index.browser.js",
+    "geotiff": "../node_modules/geotiff/dist-browser/geotiff.js"
   }
 }
 </script>
@@ -268,12 +269,43 @@ const NOAH_LAYERS = {
   flood_100yr: `${NOAH_BASE}/flood_100yr.pmtiles`,
 };
 
-// ============ Synthetic DEM (complementary data) ============
-// Since real DEM tiles are large to download, we generate a synthetic
-// elevation heightmap approximating the San Pablo / Mount Makiling area.
-// In production, this would be replaced with a real Cloud Optimized GeoTIFF.
-const DEM_SIZE = 64; // grid resolution
+// ============ Complementary DEM (real Copernicus GLO-30 COG + synthetic fallback) ============
+// Copernicus GLO-30 COG tile covering Laguna / San Pablo (approx. N14, E120).
+// Public AWS S3 bucket — no sign-up required. Replace with exact tile ID from
+// https://dataspace.copernicus.eu/ if a different tile is needed.
+// URL pattern: https://copernicus-dem-30m.s3.amazonaws.com/30m/{LAT_DIR}{LAT}/{LON_DIR}{LON}/{tile}.tif
+const COG_URL = 'https://copernicus-dem-30m.s3.amazonaws.com/30m/N14/E120/Copernicus_DSM_30M_t0510_N14_00_E120_00_DEM.tif';
+
+const DEM_SIZE = 64; // grid resolution for the heightmap
 const DEM_BBOX_PAD = 0.04; // degrees padding around center
+let DEM = null;
+let demSource = 'synthetic'; // 'copernicus' or 'synthetic'
+
+async function loadCopernicusDEM() {
+  try {
+    const response = await fetch(COG_URL);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const arrayBuffer = await response.arrayBuffer();
+    const tiff = await geotiff.fromArrayBuffer(arrayBuffer);
+    const image = await tiff.getImage();
+    const width = image.getWidth();
+    const height = image.getHeight();
+    const values = await image.readRasters();
+    const data = new Float32Array(values[0]);
+    let maxElev = -Infinity;
+    let minElev = Infinity;
+    for (let i = 0; i < data.length; i++) {
+      if (isNaN(data[i])) continue;
+      maxElev = Math.max(maxElev, data[i]);
+      minElev = Math.min(minElev, data[i]);
+    }
+    console.log('Copernicus GLO-30 DEM loaded:', width, 'x', height, 'elev', minElev, 'to', maxElev);
+    return { data, size: Math.min(DEM_SIZE, Math.ceil(Math.sqrt(data.length))), minElev, maxElev, width, height };
+  } catch (e) {
+    console.warn('Copernicus DEM load failed (sandbox may block external fetch):', e.message);
+    return null;
+  }
+}
 
 function generateSyntheticDEM() {
   const data = new Float32Array(DEM_SIZE * DEM_SIZE);
@@ -284,17 +316,13 @@ function generateSyntheticDEM() {
 
   for (let row = 0; row < DEM_SIZE; row++) {
     for (let col = 0; col < DEM_SIZE; col++) {
-      // Distance from center (simulates a volcanic peak near San Pablo)
       const dx = (col - cx) / cx;
       const dy = (row - cy) / cy;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      
-      // Base elevation + volcanic cone + noise
       const base = 150;
       const cone = Math.max(0, 1 - dist / 1.3) * 900; // peak ~1050m
       const noise = (Math.sin(col * 0.7) * Math.cos(row * 0.5) + 0.5) * 80;
       const elev = base + cone + noise;
-      
       data[row * DEM_SIZE + col] = elev;
       maxElev = Math.max(maxElev, elev);
       minElev = Math.min(minElev, elev);
@@ -303,8 +331,20 @@ function generateSyntheticDEM() {
   return { data, size: DEM_SIZE, minElev, maxElev };
 }
 
-const DEM = generateSyntheticDEM();
-document.getElementById('terrainPeak').textContent = DEM.maxElev.toFixed(0) + ' m';
+// Initialize DEM (async: try Copernicus first, fall back to synthetic)
+(async () => {
+  const realDEM = await loadCopernicusDEM();
+  if (realDEM) {
+    DEM = realDEM;
+    demSource = 'copernicus';
+  } else {
+    DEM = generateSyntheticDEM();
+    demSource = 'synthetic';
+  }
+  document.getElementById('terrainPeak').textContent = DEM.maxElev.toFixed(0) + ' m';
+  document.getElementById('demSource').textContent = demSource === 'copernicus' ? 'Copernicus GLO-30' : 'Synthetic (fallback)';
+  document.getElementById('demSource').className = demSource === 'copernicus' ? 'data-val ok' : 'data-val warn';
+})();
 
 // ============ MapLibre + Three.js setup ============
 const map = new maplibregl.Map({
@@ -377,18 +417,18 @@ map.on('load', () => {
       sun.position.set(50, 100, 50);
       this.scene.add(sun);
 
-      // Build terrain mesh from synthetic DEM
-      this.buildTerrain();
+      // Build water (terrain built asynchronously once DEM is ready)
       this.buildWater();
-
-      this.scene.add(this.terrainMesh);
-      this.scene.add(this.waterMesh);
+      if (this.waterMesh) this.scene.add(this.waterMesh);
+      this.terrainBuilt = false;
+      this.waterBuilt = !!this.waterMesh;
 
       // Water level uniform (for shader-like control via material)
       this.waterLevel = 10; // meters
     }
 
     buildTerrain() {
+      if (!DEM || this.terrainBuilt) return false;
       const size = DEM.size;
       const minE = DEM.minElev;
       const maxE = DEM.maxElev;
@@ -433,9 +473,13 @@ map.on('load', () => {
       });
       this.terrainMesh = new THREE.Mesh(geometry, material);
       this.terrainMesh.position.set(-span * 111000 / 2, 0, -span * 111000 / 2);
+      this.scene.add(this.terrainMesh);
+      this.terrainBuilt = true;
+      return true;
     }
 
     buildWater() {
+      if (!DEM) return;
       const span = DEM_BBOX_PAD;
       const size = DEM.size;
       const geometry = new THREE.PlaneGeometry(
@@ -490,6 +534,14 @@ map.on('load', () => {
     }
 
     render(gl, matrix) {
+      // Build terrain/water once DEM is ready (async load may not have finished at onAdd time)
+      if (!this.terrainBuilt) this.buildTerrain();
+      if (!this.waterBuilt && DEM) {
+        this.buildWater();
+        if (this.waterMesh) this.scene.add(this.waterMesh);
+        this.waterBuilt = true;
+      }
+
       // Sync Three.js camera with MapLibre camera
       const center = this.map.getCenter();
       const zoom = this.map.getZoom();
@@ -727,8 +779,10 @@ Data layers:
   1. Project NOAH PMTiles (Hugging Face) — flood_5yr / flood_25yr / flood_100yr
      Source: https://huggingface.co/datasets/bettergovph/project-noah-hazard-maps
      License: ODbL (Open Data Commons Open Database License)
-  2. Synthetic DEM (complementary) — procedural elevation model
-     Replace with real DEM (SRTM / Copernicus / NAMRIA LiDAR) for production
+  2. Copernicus GLO-30 DEM (complementary) — Cloud Optimized GeoTIFF
+     URL: https://copernicus-dem-30m.s3.amazonaws.com/30m/N14/E120/Copernicus_DSM_30M_t0510_N14_00_E120_00_DEM.tif
+     License: Copernicus Licence (free, open, attribution required)
+     Falls back to synthetic DEM if external fetch is blocked
   3. Station data — illustrative (Convex in production)
 
 No AWS required — runs entirely client-side via WebGL (MapLibre GL JS + Three.js).
