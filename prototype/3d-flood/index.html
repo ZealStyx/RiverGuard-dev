@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>RiverGuard — 3D Flood Prototype</title>
-<link rel="stylesheet" href="node_modules/maplibre-gl/dist/maplibre-gl.css">
+<link rel="stylesheet" href="./node_modules/maplibre-gl/dist/maplibre-gl.css">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -274,13 +274,13 @@
 <script type="importmap">
 {
   "imports": {
-    "maplibre-gl": "node_modules/maplibre-gl/dist/maplibre-gl.mjs"
+    "maplibre-gl": "./node_modules/maplibre-gl/dist/maplibre-gl.mjs"
   }
 }
 </script>
 <script type="module">
 import * as maplibregl from 'maplibre-gl';
-maplibregl.setWorkerUrl('node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs');
+maplibregl.setWorkerUrl('./node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs');
 
 const jsError = document.getElementById('js-error');
 const statMap = document.getElementById('statMap');
@@ -301,7 +301,7 @@ window.addEventListener('unhandledrejection', (e) => {
 
 if (!maplibregl || !maplibregl.Map) {
   jsError.style.display = 'block';
-  jsError.textContent = 'MapLibre GL JS failed to load. Check if node_modules/maplibre-gl/dist/maplibre-gl.mjs is accessible.';
+  jsError.textContent = 'MapLibre GL JS failed to load. Check if ./node_modules/maplibre-gl/dist/maplibre-gl.mjs is accessible.';
 }
 
 // ============ Configuration ============
