@@ -168,7 +168,23 @@
 </head>
 <body>
 
-<div id="map"></div>
+<div id="map" style="border: 2px solid #334155;"></div>
+
+<div id="js-error" style="
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(239, 68, 68, 0.9);
+  color: #fff;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 0.75rem;
+  max-width: 80vw;
+  z-index: 100;
+  display: none;
+  line-height: 1.5;
+"></div>
 
 <div id="controls">
   <h2>3D Flood Visualization</h2>
@@ -237,6 +253,25 @@
 <script type="module">
 import * as maplibregl from 'maplibre-gl';
 maplibregl.setWorkerUrl('node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs');
+
+const jsError = document.getElementById('js-error');
+
+window.addEventListener('error', (e) => {
+  jsError.style.display = 'block';
+  jsError.textContent = 'JS Error: ' + (e.message || String(e.error));
+  console.error(e);
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  jsError.style.display = 'block';
+  jsError.textContent = 'Unhandled Rejection: ' + String(e.reason);
+  console.error(e.reason);
+});
+
+if (!maplibregl || !maplibregl.Map) {
+  jsError.style.display = 'block';
+  jsError.textContent = 'MapLibre GL JS failed to load. Check if node_modules/maplibre-gl/dist/maplibre-gl.mjs is accessible.';
+}
 
 // ============ Configuration ============
 const CENTER = [120.9457, 14.0694];
