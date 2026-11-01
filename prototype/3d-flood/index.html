@@ -36,7 +36,7 @@
   #controls h2 {
     font-size: 1rem;
     margin-bottom: 12px;
-    color: #8ecbff;
+    color: #c084fc;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -70,7 +70,7 @@
     -webkit-appearance: none;
     width: 16px;
     height: 16px;
-    background: #8ecbff;
+    background: #c084fc;
     border-radius: 50%;
     cursor: pointer;
   }
@@ -87,9 +87,9 @@
     text-align: left;
   }
   .toggle-btn.active {
-    background: rgba(142, 203, 255, 0.15);
-    border-color: #8ecbff;
-    color: #8ecbff;
+    background: rgba(192, 132, 252, 0.15);
+    border-color: #c084fc;
+    color: #c084fc;
   }
   .toggle-btn:hover { border-color: rgba(255, 255, 255, 0.3); }
   #info {
@@ -108,7 +108,7 @@
     line-height: 1.5;
   }
   .info-title {
-    color: #8ecbff;
+    color: #c084fc;
     font-weight: 700;
     margin-bottom: 6px;
     font-size: 0.85rem;
@@ -122,9 +122,27 @@
     font-size: 0.78rem;
   }
   .data-val { color: #e8eaf2; font-weight: 600; font-family: 'Courier New', monospace; }
-  .data-val.ok { color: #4ade80; }
+  .data-val.ok { color: #a3e635; }
   .data-val.warn { color: #fbbf24; }
   .data-val.danger { color: #f87171; }
+  #status {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 20;
+    max-width: 300px;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+  .status-line { margin: 3px 0; }
+  .status-ok { color: #a3e635; }
+  .status-warn { color: #fbbf24; }
+  .status-error { color: #f87171; }
   #legend {
     position: absolute;
     bottom: 20px;
@@ -138,14 +156,14 @@
     font-size: 0.75rem;
     color: #cbd5e1;
   }
-  .legend-title { color: #8ecbff; font-weight: 700; margin-bottom: 8px; font-size: 0.8rem; }
+  .legend-title { color: #c084fc; font-weight: 700; margin-bottom: 8px; font-size: 0.8rem; }
   .legend-item { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
   .legend-swatch {
     width: 16px; height: 16px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.2);
   }
-  .swatch-water { background: rgba(142, 203, 255, 0.4); }
+  .swatch-water { background: rgba(192, 132, 252, 0.4); }
   .swatch-terrain { background: linear-gradient(135deg, #7c3a2a, #d97706); }
-  .swatch-flood5 { background: rgba(142, 203, 255, 0.25); border-color: #8ecbff; }
+  .swatch-flood5 { background: rgba(192, 132, 252, 0.25); border-color: #c084fc; }
   .swatch-flood25 { background: rgba(251, 191, 36, 0.3); border-color: #fbbf24; }
   .swatch-flood100 { background: rgba(248, 113, 113, 0.35); border-color: #f87171; }
   .hint {
@@ -160,31 +178,38 @@
     position: absolute;
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    color: #8ecbff;
+    color: #c084fc;
     font-size: 0.9rem;
     display: none;
+  }
+  #js-error {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(239, 68, 68, 0.95);
+    color: #fff;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 0.75rem;
+    max-width: 80vw;
+    z-index: 100;
+    display: none;
+    line-height: 1.5;
   }
 </style>
 </head>
 <body>
 
-<div id="map" style="border: 2px solid #334155;"></div>
+<div id="map"></div>
 
-<div id="js-error" style="
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(239, 68, 68, 0.9);
-  color: #fff;
-  padding: 1rem 1.5rem;
-  border-radius: 8px;
-  font-family: monospace;
-  font-size: 0.75rem;
-  max-width: 80vw;
-  z-index: 100;
-  display: none;
-  line-height: 1.5;
-"></div>
+<div id="js-error"></div>
+
+<div id="status">
+  <div class="status-line"><span class="status-ok">●</span> <span id="statMap">MapLibre: initializing…</span></div>
+  <div class="status-line"><span class="status-warn">○</span> <span id="statDEM">DEM: not loaded</span></div>
+  <div class="status-line"><span class="status-warn">○</span> <span id="statTerrain">Terrain: not built</span></div>
+</div>
 
 <div id="controls">
   <h2>3D Flood Visualization</h2>
@@ -216,7 +241,7 @@
     <button class="toggle-btn active" id="btnWater">Flood: On</button>
   </div>
   <div style="margin-top:14px; font-size:0.72rem; color:#64748b; border-top:1px solid rgba(255,255,255,0.08); padding-top:8px;">
-    <div>Complementary data: DEM (Copernicus GLO-30-derived Laguna tile, .img &rarr; binary + synthetic fallback)</div>
+    <div>Complementary data: DEM (Copernicus GLO-30-derived Laguna tile)</div>
     <div>Primary data: Project NOAH PMTiles (Hugging Face)</div>
     <div>MapLibre GL JS — native WebGL 3D</div>
   </div>
@@ -224,9 +249,9 @@
 
 <div id="info">
   <div class="info-title">RiverGuard · 3D Flood Prototype</div>
-  <div class="data-row"><span>DEM source:</span><span class="data-val" id="demSource">synthetic</span></div>
-  <div class="data-row"><span>Station:</span><span class="data-val">SAN-001 San Pablo River</span></div>
-  <div class="data-row"><span>Terrain peak:</span><span class="data-val ok" id="terrainPeak">1050 m</span></div>
+  <div class="data-row"><span>DEM source:</span><span class="data-val" id="demSource">loading…</span></div>
+  <div class="data-row"><span>Station:</span><span class="data-val">SAN-001 San Cristobal River</span></div>
+  <div class="data-row"><span>Terrain peak:</span><span class="data-val ok" id="terrainPeak">— m</span></div>
   <div class="data-row"><span>Water depth:</span><span class="data-val" id="waterDepth">10.0 m</span></div>
   <div class="data-row"><span>Affected area:</span><span class="data-val" id="affectedArea">2.5 km²</span></div>
 </div>
@@ -241,7 +266,7 @@
   <div class="hint">Drag to rotate · Scroll to zoom · Right-click drag to tilt</div>
 </div>
 
-<div id="loading" class="loading">Loading terrain &amp; flood data…</div>
+<div id="loading">Loading terrain &amp; flood data…</div>
 
 <script type="importmap">
 {
@@ -255,6 +280,9 @@ import * as maplibregl from 'maplibre-gl';
 maplibregl.setWorkerUrl('node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs');
 
 const jsError = document.getElementById('js-error');
+const statMap = document.getElementById('statMap');
+const statDEM = document.getElementById('statDEM');
+const statTerrain = document.getElementById('statTerrain');
 
 window.addEventListener('error', (e) => {
   jsError.style.display = 'block';
@@ -337,6 +365,8 @@ async function initDEM() {
     document.getElementById('demSource').textContent = 'Copernicus GLO-30 DEM — Laguna';
     document.getElementById('demSource').className = 'data-val ok';
     document.getElementById('terrainPeak').textContent = DEM.maxElev.toFixed(0) + ' m';
+    statDEM.innerHTML = '<span class="status-ok">●</span> DEM: real (' + DEM.width + 'x' + DEM.height + ')';
+    statDEM.className = 'status-ok';
     console.log('DEM loaded:', DEM.width, 'x', DEM.height, 'elev', DEM.minElev, '..', DEM.maxElev, 'm');
   } catch (e) {
     console.warn('Real DEM unavailable, using synthetic fallback:', e.message);
@@ -344,6 +374,8 @@ async function initDEM() {
     document.getElementById('demSource').textContent = 'Synthetic (fallback)';
     document.getElementById('demSource').className = 'data-val warn';
     document.getElementById('terrainPeak').textContent = DEM.maxElev.toFixed(0) + ' m';
+    statDEM.innerHTML = '<span class="status-warn">○</span> DEM: synthetic fallback';
+    statDEM.className = 'status-warn';
   }
 }
 
@@ -365,14 +397,27 @@ const map = new maplibregl.Map({
 const loadingEl = document.getElementById('loading');
 loadingEl.style.display = 'block';
 
-map.on('load', async () => {
-  await initDEM();
-  loadingEl.style.display = 'none';
-  buildAllLayers();
+map.on('load', () => {
+  statMap.innerHTML = '<span class="status-ok">●</span> MapLibre: loaded';
+  statMap.className = 'status-ok';
+  initDEM().then(() => {
+    loadingEl.style.display = 'none';
+    buildAllLayers();
+  }).catch((e) => {
+    console.error('initDEM failed:', e);
+    loadingEl.style.display = 'none';
+    buildAllLayers();
+  });
 });
 
-// ============ Terrain layer (synthetic DEM as fill-extrusion) ============
-function demToGeoJSON(stride = 2) {
+map.on('error', (e) => {
+  console.error('MapLibre error:', e);
+  jsError.style.display = 'block';
+  jsError.textContent = 'MapLibre error: ' + String(e.error || e);
+});
+
+// ============ Terrain layer (DEM as fill-extrusion) ============
+function demToGeoJSON(stride = 6) {
   const { width, height, west, north, pixelSize } = DEM;
   const features = [];
 
@@ -419,23 +464,26 @@ function buildAllLayers() {
   // Terrain source & layer (3D extrusion from DEM)
   map.addSource('terrain-dem-source', {
     type: 'geojson',
-    data: demToGeoJSON()
+    data: demToGeoJSON(6)
   });
+  const terrainExag = parseFloat(document.getElementById('terrainExag').value);
   map.addLayer({
     id: 'terrain-dem',
     type: 'fill-extrusion',
     source: 'terrain-dem-source',
     paint: {
       'fill-extrusion-color': [
-        'interpolate', ['linear'], ['zoom'],
-        10, ['rgba', 124, 58, 42, 0.8],
-        14, ['rgba', 124, 58, 42, 0.9]
+        'interpolate', ['linear'], ['z'],
+        0, ['rgba', 124, 58, 42, 0.85],
+        256, ['rgba', 217, 119, 6, 0.9]
       ],
-      'fill-extrusion-height': ['*', ['get', 'height'], 1],
+      'fill-extrusion-height': ['*', ['get', 'height'], terrainExag],
       'fill-extrusion-base': 0,
-      'fill-extrusion-opacity': 0.85
+      'fill-extrusion-opacity': 0.9
     }
   }, 'background');
+  statTerrain.innerHTML = '<span class="status-ok">●</span> Terrain: built (stride 6)';
+  statTerrain.className = 'status-ok';
 
   // Water surface layer (3D extrusion = flood depth)
   const { west, north, pixelSize } = DEM;
@@ -462,7 +510,7 @@ function buildAllLayers() {
     type: 'fill-extrusion',
     source: 'flood-water-source',
     paint: {
-      'fill-extrusion-color': '#2288ff',
+      'fill-extrusion-color': '#c084fc',
       'fill-extrusion-height': 10,
       'fill-extrusion-base': 0,
       'fill-extrusion-opacity': 0.5,
@@ -491,7 +539,7 @@ function buildAllLayers() {
   map.addSource('noah-flood', { type: 'geojson', data: noahPlaceholder });
 
   ['flood_5yr', 'flood_25yr', 'flood_100yr'].forEach(scenario => {
-    const color = scenario === 'flood_5yr' ? '#8ecbff' : scenario === 'flood_25yr' ? '#fbbf24' : '#f87171';
+    const color = scenario === 'flood_5yr' ? '#c084fc' : scenario === 'flood_25yr' ? '#fbbf24' : '#f87171';
     map.addLayer({
       id: `noah-flood-${scenario}`,
       type: 'fill-extrusion',
@@ -522,7 +570,7 @@ function buildAllLayers() {
     id: 'stations-layer', type: 'circle', source: 'stations',
     paint: {
       'circle-radius': 8,
-      'circle-color': ['case', ['==', ['get', 'status'], 'alert'], '#f87171', '#4ade80'],
+      'circle-color': ['case', ['==', ['get', 'status'], 'alert'], '#f87171', '#a3e635'],
       'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2
     }
   }, 'background');
@@ -532,7 +580,7 @@ function buildAllLayers() {
 
 function rebuildTerrain() {
   if (!map.getSource('terrain-dem-source')) return;
-  map.getSource('terrain-dem-source').setData(demToGeoJSON());
+  map.getSource('terrain-dem-source').setData(demToGeoJSON(6));
 }
 
 function updateWaterLevel(m) {
