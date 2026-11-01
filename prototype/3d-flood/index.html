@@ -502,9 +502,11 @@ function buildAllLayers() {
     source: 'terrain-dem-source',
     paint: {
       'fill-extrusion-color': [
-        'interpolate', ['linear'], ['zoom'],
-        0, ['rgba', 124, 58, 42, 0.85],
-        256, ['rgba', 217, 119, 6, 0.9]
+        'interpolate', ['linear'], ['get', 'height'],
+        0, ['rgba', 60, 35, 25, 0.9],
+        100, ['rgba', 124, 58, 42, 0.9],
+        256, ['rgba', 160, 82, 45, 0.9],
+        512, ['rgba', 210, 180, 140, 0.9]
       ],
       'fill-extrusion-height': ['*', ['get', 'height'], terrainExag],
       'fill-extrusion-base': 0,
