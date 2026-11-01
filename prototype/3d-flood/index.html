@@ -502,7 +502,7 @@ function buildAllLayers() {
     source: 'terrain-dem-source',
     paint: {
       'fill-extrusion-color': [
-        'interpolate', ['linear'], ['z'],
+        'interpolate', ['linear'], ['zoom'],
         0, ['rgba', 124, 58, 42, 0.85],
         256, ['rgba', 217, 119, 6, 0.9]
       ],
