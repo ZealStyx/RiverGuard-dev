@@ -212,6 +212,7 @@
   <div class="status-line"><span class="status-ok">●</span> <span id="statMap">MapLibre: initializing…</span></div>
   <div class="status-line"><span class="status-warn">○</span> <span id="statDEM">DEM: not loaded</span></div>
   <div class="status-line"><span class="status-warn">○</span> <span id="statTerrain">Terrain: not built</span></div>
+  <div class="status-line"><span class="status-warn">○</span> <span id="statNoah">NOAH flood: not loaded</span></div>
 </div>
 
 <div id="controls">
@@ -274,18 +275,21 @@
 <script type="importmap">
 {
   "imports": {
-    "maplibre-gl": "./node_modules/maplibre-gl/dist/maplibre-gl.mjs"
+    "maplibre-gl": "./node_modules/maplibre-gl/dist/maplibre-gl.mjs",
+    "pmtiles": "./node_modules/pmtiles/dist/esm/index.js"
   }
 }
 </script>
 <script type="module">
 import * as maplibregl from 'maplibre-gl';
+import { Protocol, FetchSource, PMTiles } from 'pmtiles';
 maplibregl.setWorkerUrl('./node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs');
 
 const jsError = document.getElementById('js-error');
 const statMap = document.getElementById('statMap');
 const statDEM = document.getElementById('statDEM');
 const statTerrain = document.getElementById('statTerrain');
+const statNoah = document.getElementById('statNoah');
 
 window.addEventListener('error', (e) => {
   jsError.style.display = 'block';
@@ -401,6 +405,20 @@ const map = new maplibregl.Map({
   antialias: true,
 });
 
+// ============ Project NOAH PMTiles protocol ============
+// Registers the pmtiles:// protocol so MapLibre can load vector tiles
+// from Project NOAH PMTiles archives (Hugging Face).
+const pmtilesProtocol = new Protocol({ metadata: true, errorOnMissingTile: false });
+maplibregl.addProtocol('pmtiles', (params, callback) => {
+  pmtilesProtocol.tilev4(params, (err, data, cacheControl, expires) => {
+    callback(err, { data, cacheControl, expires });
+  });
+});
+
+// PMTiles base URL — Project NOAH hazard maps on Hugging Face
+// https://huggingface.co/datasets/bettergovph/project-noah-hazard-maps/tree/main/PMTiles/layers
+const PMTILES_BASE = 'https://huggingface.co/datasets/bettergovph/project-noah-hazard-maps/resolve/main/PMTiles/layers';
+
 const loadingEl = document.getElementById('loading');
 loadingEl.style.display = 'block';
 
@@ -481,7 +499,74 @@ function demToGeoJSON(stride = 6) {
   return { type: 'FeatureCollection', features };
 }
 
-function buildAllLayers() {
+// ============ Project NOAH PMTiles loader ============
+// Tries to load real NOAH flood hazard polygons from PMTiles archives on Hugging Face.
+// Falls back to placeholder GeoJSON if PMTiles is unreachable.
+async function loadNoahFloodFromPMTiles() {
+  const scenarios = ['flood_5yr', 'flood_25yr', 'flood_100yr'];
+  const colorMap = { flood_5yr: '#c084fc', flood_25yr: '#fbbf24', flood_100yr: '#f87171' };
+  let anyLoaded = false;
+
+  for (const scenario of scenarios) {
+    const pmtilesUrl = `${PMTILES_BASE}/${scenario}.pmtiles`;
+    const sourceId = `noah-flood-${scenario}`;
+
+    try {
+      // Fetch metadata to discover vector layer names
+      const source = new FetchSource(pmtilesUrl);
+      const pt = new PMTiles(source);
+      const meta = await pt.getMetadata();
+      const layers = meta.vector_layers || [];
+
+      if (layers.length === 0) throw new Error('No vector layers in PMTiles');
+
+      // Add vector source via pmtiles protocol
+      map.addSource(sourceId, {
+        type: 'vector',
+        url: `pmtiles://${pmtilesUrl}`,
+        minzoom: 0,
+        maxzoom: 22
+      });
+
+      // Add a fill-extrusion layer for each vector layer in the PMTiles
+      layers.forEach((vl, i) => {
+        const layerId = `${sourceId}-${vl.id || i}`;
+        map.addLayer({
+          id: layerId,
+          type: 'fill-extrusion',
+          source: sourceId,
+          'source-layer': vl.id || `layer_${i}`,
+          paint: {
+            'fill-extrusion-color': colorMap[scenario],
+            'fill-extrusion-height': ['get', 'depth_m'],
+            'fill-extrusion-base': 0,
+            'fill-extrusion-opacity': 0.45,
+            'fill-extrusion-vertical-gradient': true
+          },
+          filter: ['==', ['get', 'scenario'], scenario]
+        }, 'background');
+      });
+
+      anyLoaded = true;
+      console.log(`NOAH ${scenario} loaded from PMTiles:`, layers.map(l => l.id).join(', '));
+    } catch (e) {
+      console.warn(`PMTiles load failed for ${scenario}:`, e.message);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    }
+  }
+
+  if (anyLoaded) {
+    statNoah.innerHTML = '<span class="status-ok">●</span> NOAH flood: PMTiles (Hugging Face)';
+    statNoah.className = 'status-ok';
+  } else {
+    statNoah.innerHTML = '<span class="status-warn">○</span> NOAH flood: placeholder fallback';
+    statNoah.className = 'status-warn';
+  }
+
+  return anyLoaded;
+}
+
+async function buildAllLayers() {
   // Remove existing layers if rebuilding
   ['terrain-dem', 'flood-water', 'noah-flood-5yr', 'noah-flood-25yr', 'noah-flood-100yr', 'stations-layer'].forEach(id => {
     if (map.getLayer(id)) map.removeLayer(id);
@@ -549,42 +634,47 @@ function buildAllLayers() {
     }
   }, 'background');
 
-  // Project NOAH flood polygons (extruded by depth) — placed inside the DEM extent
-  const cx = (west + east) / 2;
-  const cy = (north + south) / 2;
-  const noahPlaceholder = {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: { name: 'SAN-001 flood zone', scenario: 'flood_100yr', depth_m: 3.2 },
-        geometry: { type: 'Polygon', coordinates: [[[cx-0.010, cy+0.006],[cx+0.010, cy+0.006],[cx+0.010, cy-0.006],[cx-0.010, cy-0.006],[cx-0.010, cy+0.006]]] }
-      },
-      {
-        type: 'Feature',
-        properties: { name: 'Bunawan Creek zone', scenario: 'flood_25yr', depth_m: 1.8 },
-        geometry: { type: 'Polygon', coordinates: [[[cx+0.005, cy-0.004],[cx+0.018, cy-0.004],[cx+0.018, cy-0.012],[cx+0.005, cy-0.012],[cx+0.005, cy-0.004]]] }
-      }
-    ]
-  };
-  map.addSource('noah-flood', { type: 'geojson', data: noahPlaceholder });
+  // Project NOAH flood polygons — try real PMTiles from Hugging Face, fall back to placeholder
+  const pmtLoaded = await loadNoahFloodFromPMTiles();
 
-  ['flood_5yr', 'flood_25yr', 'flood_100yr'].forEach(scenario => {
-    const color = scenario === 'flood_5yr' ? '#c084fc' : scenario === 'flood_25yr' ? '#fbbf24' : '#f87171';
-    map.addLayer({
-      id: `noah-flood-${scenario}`,
-      type: 'fill-extrusion',
-      source: 'noah-flood',
-      paint: {
-        'fill-extrusion-color': color,
-        'fill-extrusion-height': ['get', 'depth_m'],
-        'fill-extrusion-base': 0,
-        'fill-extrusion-opacity': 0.45,
-        'fill-extrusion-vertical-gradient': true
-      },
-      filter: ['==', ['get', 'scenario'], scenario]
-    }, 'background');
-  });
+  if (!pmtLoaded) {
+    // Placeholder GeoJSON fallback (inside DEM extent)
+    const cx = (west + east) / 2;
+    const cy = (north + south) / 2;
+    const noahPlaceholder = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { name: 'SAN-001 flood zone', scenario: 'flood_100yr', depth_m: 3.2 },
+          geometry: { type: 'Polygon', coordinates: [[[cx-0.010, cy+0.006],[cx+0.010, cy+0.006],[cx+0.010, cy-0.006],[cx-0.010, cy-0.006],[cx-0.010, cy+0.006]]] }
+        },
+        {
+          type: 'Feature',
+          properties: { name: 'Bunawan Creek zone', scenario: 'flood_25yr', depth_m: 1.8 },
+          geometry: { type: 'Polygon', coordinates: [[[cx+0.005, cy-0.004],[cx+0.018, cy-0.004],[cx+0.018, cy-0.012],[cx+0.005, cy-0.012],[cx+0.005, cy-0.004]]] }
+        }
+      ]
+    };
+    map.addSource('noah-flood', { type: 'geojson', data: noahPlaceholder });
+
+    ['flood_5yr', 'flood_25yr', 'flood_100yr'].forEach(scenario => {
+      const color = scenario === 'flood_5yr' ? '#c084fc' : scenario === 'flood_25yr' ? '#fbbf24' : '#f87171';
+      map.addLayer({
+        id: `noah-flood-${scenario}`,
+        type: 'fill-extrusion',
+        source: 'noah-flood',
+        paint: {
+          'fill-extrusion-color': color,
+          'fill-extrusion-height': ['get', 'depth_m'],
+          'fill-extrusion-base': 0,
+          'fill-extrusion-opacity': 0.45,
+          'fill-extrusion-vertical-gradient': true
+        },
+        filter: ['==', ['get', 'scenario'], scenario]
+      }, 'background');
+    });
+  }
 
   // Station markers
   map.addSource('stations', {
