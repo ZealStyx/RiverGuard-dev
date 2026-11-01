@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>RiverGuard — 3D Flood Prototype</title>
 <link rel="stylesheet" href="node_modules/maplibre-gl/dist/maplibre-gl.css">
 <style>
@@ -36,7 +39,7 @@
   #controls h2 {
     font-size: 1rem;
     margin-bottom: 12px;
-    color: #8ecbff;
+    color: #c084fc;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -70,7 +73,7 @@
     -webkit-appearance: none;
     width: 16px;
     height: 16px;
-    background: #8ecbff;
+    background: #c084fc;
     border-radius: 50%;
     cursor: pointer;
   }
@@ -87,9 +90,9 @@
     text-align: left;
   }
   .toggle-btn.active {
-    background: rgba(142, 203, 255, 0.15);
-    border-color: #8ecbff;
-    color: #8ecbff;
+    background: rgba(192, 132, 252, 0.15);
+    border-color: #c084fc;
+    color: #c084fc;
   }
   .toggle-btn:hover { border-color: rgba(255, 255, 255, 0.3); }
   #info {
@@ -108,7 +111,7 @@
     line-height: 1.5;
   }
   .info-title {
-    color: #8ecbff;
+    color: #c084fc;
     font-weight: 700;
     margin-bottom: 6px;
     font-size: 0.85rem;
@@ -122,9 +125,27 @@
     font-size: 0.78rem;
   }
   .data-val { color: #e8eaf2; font-weight: 600; font-family: 'Courier New', monospace; }
-  .data-val.ok { color: #4ade80; }
+  .data-val.ok { color: #a3e635; }
   .data-val.warn { color: #fbbf24; }
   .data-val.danger { color: #f87171; }
+  #status {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 20;
+    max-width: 300px;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+  .status-line { margin: 3px 0; }
+  .status-ok { color: #a3e635; }
+  .status-warn { color: #fbbf24; }
+  .status-error { color: #f87171; }
   #legend {
     position: absolute;
     bottom: 20px;
@@ -138,14 +159,14 @@
     font-size: 0.75rem;
     color: #cbd5e1;
   }
-  .legend-title { color: #8ecbff; font-weight: 700; margin-bottom: 8px; font-size: 0.8rem; }
+  .legend-title { color: #c084fc; font-weight: 700; margin-bottom: 8px; font-size: 0.8rem; }
   .legend-item { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
   .legend-swatch {
     width: 16px; height: 16px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.2);
   }
-  .swatch-water { background: rgba(142, 203, 255, 0.4); }
+  .swatch-water { background: rgba(192, 132, 252, 0.4); }
   .swatch-terrain { background: linear-gradient(135deg, #7c3a2a, #d97706); }
-  .swatch-flood5 { background: rgba(142, 203, 255, 0.25); border-color: #8ecbff; }
+  .swatch-flood5 { background: rgba(192, 132, 252, 0.25); border-color: #c084fc; }
   .swatch-flood25 { background: rgba(251, 191, 36, 0.3); border-color: #fbbf24; }
   .swatch-flood100 { background: rgba(248, 113, 113, 0.35); border-color: #f87171; }
   .hint {
@@ -160,31 +181,38 @@
     position: absolute;
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    color: #8ecbff;
+    color: #c084fc;
     font-size: 0.9rem;
     display: none;
+  }
+  #js-error {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(239, 68, 68, 0.95);
+    color: #fff;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 0.75rem;
+    max-width: 80vw;
+    z-index: 100;
+    display: none;
+    line-height: 1.5;
   }
 </style>
 </head>
 <body>
 
-<div id="map" style="border: 2px solid #334155;"></div>
+<div id="map"></div>
 
-<div id="js-error" style="
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(239, 68, 68, 0.9);
-  color: #fff;
-  padding: 1rem 1.5rem;
-  border-radius: 8px;
-  font-family: monospace;
-  font-size: 0.75rem;
-  max-width: 80vw;
-  z-index: 100;
-  display: none;
-  line-height: 1.5;
-"></div>
+<div id="js-error"></div>
+
+<div id="status">
+  <div class="status-line"><span class="status-ok">●</span> <span id="statMap">MapLibre: initializing…</span></div>
+  <div class="status-line"><span class="status-warn">○</span> <span id="statDEM">DEM: not loaded</span></div>
+  <div class="status-line"><span class="status-warn">○</span> <span id="statTerrain">Terrain: not built</span></div>
+</div>
 
 <div id="controls">
   <h2>3D Flood Visualization</h2>
@@ -216,7 +244,7 @@
     <button class="toggle-btn active" id="btnWater">Flood: On</button>
   </div>
   <div style="margin-top:14px; font-size:0.72rem; color:#64748b; border-top:1px solid rgba(255,255,255,0.08); padding-top:8px;">
-    <div>Complementary data: DEM (Copernicus GLO-30 COG + synthetic fallback)</div>
+    <div>Complementary data: DEM (Copernicus GLO-30-derived Laguna tile)</div>
     <div>Primary data: Project NOAH PMTiles (Hugging Face)</div>
     <div>MapLibre GL JS — native WebGL 3D</div>
   </div>
@@ -224,9 +252,9 @@
 
 <div id="info">
   <div class="info-title">RiverGuard · 3D Flood Prototype</div>
-  <div class="data-row"><span>DEM source:</span><span class="data-val" id="demSource">synthetic</span></div>
-  <div class="data-row"><span>Station:</span><span class="data-val">SAN-001 San Pablo River</span></div>
-  <div class="data-row"><span>Terrain peak:</span><span class="data-val ok" id="terrainPeak">1050 m</span></div>
+  <div class="data-row"><span>DEM source:</span><span class="data-val" id="demSource">loading…</span></div>
+  <div class="data-row"><span>Station:</span><span class="data-val">SAN-001 San Cristobal River</span></div>
+  <div class="data-row"><span>Terrain peak:</span><span class="data-val ok" id="terrainPeak">— m</span></div>
   <div class="data-row"><span>Water depth:</span><span class="data-val" id="waterDepth">10.0 m</span></div>
   <div class="data-row"><span>Affected area:</span><span class="data-val" id="affectedArea">2.5 km²</span></div>
 </div>
@@ -241,7 +269,7 @@
   <div class="hint">Drag to rotate · Scroll to zoom · Right-click drag to tilt</div>
 </div>
 
-<div id="loading" class="loading">Loading terrain &amp; flood data…</div>
+<div id="loading">Loading terrain &amp; flood data…</div>
 
 <script type="importmap">
 {
@@ -255,6 +283,9 @@ import * as maplibregl from 'maplibre-gl';
 maplibregl.setWorkerUrl('node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs');
 
 const jsError = document.getElementById('js-error');
+const statMap = document.getElementById('statMap');
+const statDEM = document.getElementById('statDEM');
+const statTerrain = document.getElementById('statTerrain');
 
 window.addEventListener('error', (e) => {
   jsError.style.display = 'block';
@@ -274,26 +305,31 @@ if (!maplibregl || !maplibregl.Map) {
 }
 
 // ============ Configuration ============
-const CENTER = [120.9457, 14.0694];
-const ZOOM = 13;
+const CENTER = [121.338339, 14.08375];   // center of the Laguna DEM tile
+const ZOOM = 12;
 
-// ============ Synthetic DEM (complementary data) ============
-// Approximates San Pablo / Mount Makiling elevation.
-// To use real data: set COG_URL to a public Copernicus GLO-30 tile and
-// implement fetch + geotiff parsing in tryLoadCopernicusDEM().
-const DEM_SIZE = 32;
-const DEM_BBOX_PAD = 0.04;
-
+// ============ Real DEM (Copernicus GLO-30 derived, Laguna) with synthetic fallback ============
+// Source: local Erdos Imagine .img (output_hh.img, WGS84, 1 arcsec, bbox
+// 121.28–121.40E, 14.04–14.13N) converted to big-endian Float32 binary +
+// JSON sidecar (dem_laguna.bin / dem_laguna.json). External Copernicus S3 /
+// CDSE fetch is blocked in this sandbox, so the conversion was done offline
+// and the synthetic DEM below is the fallback if the files fail to load.
 let DEM = null;
+const pageStartTime = Date.now();
+let mapLoadResolved = false;
+let mapLoadTime = 0;
+let mapRendered = false;
 
 function generateSyntheticDEM() {
-  const data = new Float32Array(DEM_SIZE * DEM_SIZE);
-  const cx = DEM_SIZE / 2;
-  const cy = DEM_SIZE / 2;
+  // Approximates San Pablo / Mount Makiling elevation (fallback only).
+  const size = 32;
+  const data = new Float32Array(size * size);
+  const cx = size / 2;
+  const cy = size / 2;
   let maxElev = 0;
   let minElev = Infinity;
-  for (let row = 0; row < DEM_SIZE; row++) {
-    for (let col = 0; col < DEM_SIZE; col++) {
+  for (let row = 0; row < size; row++) {
+    for (let col = 0; col < size; col++) {
       const dx = (col - cx) / cx;
       const dy = (row - cy) / cy;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -301,25 +337,54 @@ function generateSyntheticDEM() {
       const cone = Math.max(0, 1 - dist / 1.3) * 900;
       const noise = (Math.sin(col * 0.7) * Math.cos(row * 0.5) + 0.5) * 80;
       const elev = base + cone + noise;
-      data[row * DEM_SIZE + col] = elev;
+      data[row * size + col] = elev;
       maxElev = Math.max(maxElev, elev);
       minElev = Math.min(minElev, elev);
     }
   }
-  return { data, size: DEM_SIZE, minElev, maxElev };
+  return { data, width: size, height: size, west: CENTER[0] - 0.04, north: CENTER[1] + 0.04,
+           pixelSize: 0.08 / (size - 1), minElev, maxElev };
 }
 
-DEM = generateSyntheticDEM();
-document.getElementById('terrainPeak').textContent = DEM.maxElev.toFixed(0) + ' m';
-document.getElementById('demSource').textContent = 'Synthetic (fallback)';
-document.getElementById('demSource').className = 'data-val warn';
-
-// Placeholder for future Copernicus GLO-30 COG integration
-async function tryLoadCopernicusDEM() {
-  console.log('Copernicus DEM: external fetch blocked in sandbox. Using synthetic DEM.');
-  console.log('To use real DEM: set COG_URL to https://copernicus-dem-30m.s3.amazonaws.com/...');
+async function loadRealDEM() {
+  const metaRes = await fetch('dem_laguna.json');
+  if (!metaRes.ok) throw new Error('dem_laguna.json not found (' + metaRes.status + ')');
+  const meta = await metaRes.json();
+  const binRes = await fetch('dem_laguna.bin');
+  if (!binRes.ok) throw new Error('dem_laguna.bin not found (' + binRes.status + ')');
+  const buf = await binRes.arrayBuffer();
+  const dv = new DataView(buf);
+  // .img stores big-endian Float32, row-major, row 0 = north
+  const data = new Float32Array(meta.width * meta.height);
+  for (let i = 0; i < data.length; i++) {
+    data[i] = dv.getFloat32(i * 4, false); // false = big-endian
+  }
+  return {
+    data, width: meta.width, height: meta.height,
+    west: meta.west, north: meta.north, pixelSize: Math.abs(meta.pixelSizeX),
+    minElev: meta.minElev, maxElev: meta.maxElev
+  };
 }
-tryLoadCopernicusDEM();
+
+async function initDEM() {
+  try {
+    DEM = await loadRealDEM();
+    document.getElementById('demSource').textContent = 'Copernicus GLO-30 DEM — Laguna';
+    document.getElementById('demSource').className = 'data-val ok';
+    document.getElementById('terrainPeak').textContent = DEM.maxElev.toFixed(0) + ' m';
+    statDEM.innerHTML = '<span class="status-ok">●</span> DEM: real (' + DEM.width + 'x' + DEM.height + ')';
+    statDEM.className = 'status-ok';
+    console.log('DEM loaded:', DEM.width, 'x', DEM.height, 'elev', DEM.minElev, '..', DEM.maxElev, 'm');
+  } catch (e) {
+    console.warn('Real DEM unavailable, using synthetic fallback:', e.message);
+    DEM = generateSyntheticDEM();
+    document.getElementById('demSource').textContent = 'Synthetic (fallback)';
+    document.getElementById('demSource').className = 'data-val warn';
+    document.getElementById('terrainPeak').textContent = DEM.maxElev.toFixed(0) + ' m';
+    statDEM.innerHTML = '<span class="status-warn">○</span> DEM: synthetic fallback';
+    statDEM.className = 'status-warn';
+  }
+}
 
 // ============ MapLibre GL JS setup ============
 const map = new maplibregl.Map({
@@ -340,32 +405,66 @@ const loadingEl = document.getElementById('loading');
 loadingEl.style.display = 'block';
 
 map.on('load', () => {
-  loadingEl.style.display = 'none';
-  buildAllLayers();
+  mapLoadTime = Date.now();
+  statMap.innerHTML = '<span class="status-ok">●</span> MapLibre: loaded (' + (mapLoadTime - pageStartTime) + 'ms)';
+  statMap.className = 'status-ok';
+  mapLoadResolved = true;
+  initDEM().then(() => {
+    loadingEl.style.display = 'none';
+    buildAllLayers();
+  }).catch((e) => {
+    console.error('initDEM failed:', e);
+    loadingEl.style.display = 'none';
+    buildAllLayers();
+  });
 });
 
-// ============ Terrain layer (synthetic DEM as fill-extrusion) ============
-function demToGeoJSON() {
-  const size = DEM.size;
-  const span = DEM_BBOX_PAD;
-  const cx = CENTER[0];
-  const cy = CENTER[1];
-  const features = [];
-  const cellSize = span / (size - 1);
+map.on('render', () => {
+  if (!mapRendered) {
+    mapRendered = true;
+    console.log('MapLibre: first render');
+  }
+});
 
-  for (let row = 0; row < size - 1; row++) {
-    for (let col = 0; col < size - 1; col++) {
-      const i00 = row * size + col;
-      const i01 = row * size + (col + 1);
-      const i10 = (row + 1) * size + col;
-      const i11 = (row + 1) * size + (col + 1);
+map.on('error', (e) => {
+  console.error('MapLibre error:', e);
+  jsError.style.display = 'block';
+  jsError.textContent = 'MapLibre error: ' + String(e.error || e);
+  statMap.innerHTML = '<span class="status-error">●</span> MapLibre: error';
+  statMap.className = 'status-error';
+});
+
+// Map load timeout — if MapLibre never fires 'load', show a recovery message
+setTimeout(() => {
+  if (!mapLoadResolved) {
+    console.warn('MapLibre load timeout after 10s');
+    statMap.innerHTML = '<span class="status-error">●</span> MapLibre: load timeout — see console';
+    statMap.className = 'status-error';
+    jsError.style.display = 'block';
+    jsError.textContent = 'MapLibre failed to load within 10 seconds. Possible causes: WebGL not supported, worker failed, or CSS not loaded. Try a hard refresh (Ctrl+Shift+R / Cmd+Shift+R).';
+  }
+}, 10000);
+
+// ============ Terrain layer (DEM as fill-extrusion) ============
+function demToGeoJSON(stride = 6) {
+  const { width, height, west, north, pixelSize } = DEM;
+  const features = [];
+
+  for (let row = 0; row < height - 1; row += stride) {
+    for (let col = 0; col < width - 1; col += stride) {
+      const r2 = Math.min(row + stride, height - 1);
+      const c2 = Math.min(col + stride, width - 1);
+      const i00 = row * width + col;
+      const i01 = row * width + c2;
+      const i10 = r2 * width + col;
+      const i11 = r2 * width + c2;
 
       const zAvg = (DEM.data[i00] + DEM.data[i01] + DEM.data[i10] + DEM.data[i11]) / 4;
 
-      const lng0 = cx - span / 2 + col * cellSize;
-      const lat0 = cy - span / 2 + row * cellSize;
-      const lng1 = cx - span / 2 + (col + 1) * cellSize;
-      const lat1 = cy - span / 2 + (row + 1) * cellSize;
+      const lng0 = west + col * pixelSize;
+      const lat0 = north - row * pixelSize;
+      const lng1 = west + c2 * pixelSize;
+      const lat1 = north - r2 * pixelSize;
 
       features.push({
         type: 'Feature',
@@ -394,25 +493,31 @@ function buildAllLayers() {
   // Terrain source & layer (3D extrusion from DEM)
   map.addSource('terrain-dem-source', {
     type: 'geojson',
-    data: demToGeoJSON()
+    data: demToGeoJSON(6)
   });
+  const terrainExag = parseFloat(document.getElementById('terrainExag').value);
   map.addLayer({
     id: 'terrain-dem',
     type: 'fill-extrusion',
     source: 'terrain-dem-source',
     paint: {
       'fill-extrusion-color': [
-        'interpolate', ['linear'], ['zoom'],
-        10, ['rgba', 124, 58, 42, 0.8],
-        14, ['rgba', 124, 58, 42, 0.9]
+        'interpolate', ['linear'], ['z'],
+        0, ['rgba', 124, 58, 42, 0.85],
+        256, ['rgba', 217, 119, 6, 0.9]
       ],
-      'fill-extrusion-height': ['*', ['get', 'height'], 1],
+      'fill-extrusion-height': ['*', ['get', 'height'], terrainExag],
       'fill-extrusion-base': 0,
-      'fill-extrusion-opacity': 0.85
+      'fill-extrusion-opacity': 0.9
     }
   }, 'background');
+  statTerrain.innerHTML = '<span class="status-ok">●</span> Terrain: built (stride 6)';
+  statTerrain.className = 'status-ok';
 
   // Water surface layer (3D extrusion = flood depth)
+  const { west, north, pixelSize } = DEM;
+  const east = west + (DEM.width - 1) * pixelSize;
+  const south = north - (DEM.height - 1) * pixelSize;
   map.addSource('flood-water-source', {
     type: 'geojson',
     data: {
@@ -423,11 +528,7 @@ function buildAllLayers() {
         geometry: {
           type: 'Polygon',
           coordinates: [[
-            [CENTER[0] - DEM_BBOX_PAD / 2, CENTER[1] - DEM_BBOX_PAD / 2],
-            [CENTER[0] + DEM_BBOX_PAD / 2, CENTER[1] - DEM_BBOX_PAD / 2],
-            [CENTER[0] + DEM_BBOX_PAD / 2, CENTER[1] + DEM_BBOX_PAD / 2],
-            [CENTER[0] - DEM_BBOX_PAD / 2, CENTER[1] + DEM_BBOX_PAD / 2],
-            [CENTER[0] - DEM_BBOX_PAD / 2, CENTER[1] - DEM_BBOX_PAD / 2]
+            [west, north], [east, north], [east, south], [west, south], [west, north]
           ]]
         }
       }]
@@ -438,7 +539,7 @@ function buildAllLayers() {
     type: 'fill-extrusion',
     source: 'flood-water-source',
     paint: {
-      'fill-extrusion-color': '#2288ff',
+      'fill-extrusion-color': '#c084fc',
       'fill-extrusion-height': 10,
       'fill-extrusion-base': 0,
       'fill-extrusion-opacity': 0.5,
@@ -446,26 +547,28 @@ function buildAllLayers() {
     }
   }, 'background');
 
-  // Project NOAH flood polygons (extruded by depth)
+  // Project NOAH flood polygons (extruded by depth) — placed inside the DEM extent
+  const cx = (west + east) / 2;
+  const cy = (north + south) / 2;
   const noahPlaceholder = {
     type: 'FeatureCollection',
     features: [
       {
         type: 'Feature',
         properties: { name: 'SAN-001 flood zone', scenario: 'flood_100yr', depth_m: 3.2 },
-        geometry: { type: 'Polygon', coordinates: [[[120.935, 14.075],[120.955, 14.075],[120.955, 14.064],[120.935, 14.064],[120.935, 14.075]]] }
+        geometry: { type: 'Polygon', coordinates: [[[cx-0.010, cy+0.006],[cx+0.010, cy+0.006],[cx+0.010, cy-0.006],[cx-0.010, cy-0.006],[cx-0.010, cy+0.006]]] }
       },
       {
         type: 'Feature',
         properties: { name: 'Bunawan Creek zone', scenario: 'flood_25yr', depth_m: 1.8 },
-        geometry: { type: 'Polygon', coordinates: [[[120.960, 14.060],[120.975, 14.060],[120.975, 14.050],[120.960, 14.050],[120.960, 14.060]]] }
+        geometry: { type: 'Polygon', coordinates: [[[cx+0.005, cy-0.004],[cx+0.018, cy-0.004],[cx+0.018, cy-0.012],[cx+0.005, cy-0.012],[cx+0.005, cy-0.004]]] }
       }
     ]
   };
   map.addSource('noah-flood', { type: 'geojson', data: noahPlaceholder });
 
   ['flood_5yr', 'flood_25yr', 'flood_100yr'].forEach(scenario => {
-    const color = scenario === 'flood_5yr' ? '#8ecbff' : scenario === 'flood_25yr' ? '#fbbf24' : '#f87171';
+    const color = scenario === 'flood_5yr' ? '#c084fc' : scenario === 'flood_25yr' ? '#fbbf24' : '#f87171';
     map.addLayer({
       id: `noah-flood-${scenario}`,
       type: 'fill-extrusion',
@@ -487,8 +590,8 @@ function buildAllLayers() {
     data: {
       type: 'FeatureCollection',
       features: [
-        { type: 'Feature', properties: { name: 'SAN-001', river: 'San Pablo River', status: 'normal', level: '4.82 m' }, geometry: { type: 'Point', coordinates: [120.9457, 14.0694] } },
-        { type: 'Feature', properties: { name: 'SAN-004', river: 'Bunawan Creek', status: 'alert', level: '7.10 m' }, geometry: { type: 'Point', coordinates: [120.9675, 14.0550] } }
+        { type: 'Feature', properties: { name: 'SAN-001', river: 'San Cristobal River', status: 'normal', level: '4.82 m' }, geometry: { type: 'Point', coordinates: [cx, cy] } },
+        { type: 'Feature', properties: { name: 'SAN-004', river: 'Bunawan Creek', status: 'alert', level: '7.10 m' }, geometry: { type: 'Point', coordinates: [cx + 0.008, cy - 0.006] } }
       ]
     }
   });
@@ -496,7 +599,7 @@ function buildAllLayers() {
     id: 'stations-layer', type: 'circle', source: 'stations',
     paint: {
       'circle-radius': 8,
-      'circle-color': ['case', ['==', ['get', 'status'], 'alert'], '#f87171', '#4ade80'],
+      'circle-color': ['case', ['==', ['get', 'status'], 'alert'], '#f87171', '#a3e635'],
       'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2
     }
   }, 'background');
@@ -506,7 +609,7 @@ function buildAllLayers() {
 
 function rebuildTerrain() {
   if (!map.getSource('terrain-dem-source')) return;
-  map.getSource('terrain-dem-source').setData(demToGeoJSON());
+  map.getSource('terrain-dem-source').setData(demToGeoJSON(6));
 }
 
 function updateWaterLevel(m) {
