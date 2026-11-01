@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>RiverGuard — 3D Flood Prototype</title>
 <link rel="stylesheet" href="node_modules/maplibre-gl/dist/maplibre-gl.css">
 <style>
@@ -312,6 +315,10 @@ const ZOOM = 12;
 // CDSE fetch is blocked in this sandbox, so the conversion was done offline
 // and the synthetic DEM below is the fallback if the files fail to load.
 let DEM = null;
+const pageStartTime = Date.now();
+let mapLoadResolved = false;
+let mapLoadTime = 0;
+let mapRendered = false;
 
 function generateSyntheticDEM() {
   // Approximates San Pablo / Mount Makiling elevation (fallback only).
@@ -398,8 +405,10 @@ const loadingEl = document.getElementById('loading');
 loadingEl.style.display = 'block';
 
 map.on('load', () => {
-  statMap.innerHTML = '<span class="status-ok">●</span> MapLibre: loaded';
+  mapLoadTime = Date.now();
+  statMap.innerHTML = '<span class="status-ok">●</span> MapLibre: loaded (' + (mapLoadTime - pageStartTime) + 'ms)';
   statMap.className = 'status-ok';
+  mapLoadResolved = true;
   initDEM().then(() => {
     loadingEl.style.display = 'none';
     buildAllLayers();
@@ -410,11 +419,31 @@ map.on('load', () => {
   });
 });
 
+map.on('render', () => {
+  if (!mapRendered) {
+    mapRendered = true;
+    console.log('MapLibre: first render');
+  }
+});
+
 map.on('error', (e) => {
   console.error('MapLibre error:', e);
   jsError.style.display = 'block';
   jsError.textContent = 'MapLibre error: ' + String(e.error || e);
+  statMap.innerHTML = '<span class="status-error">●</span> MapLibre: error';
+  statMap.className = 'status-error';
 });
+
+// Map load timeout — if MapLibre never fires 'load', show a recovery message
+setTimeout(() => {
+  if (!mapLoadResolved) {
+    console.warn('MapLibre load timeout after 10s');
+    statMap.innerHTML = '<span class="status-error">●</span> MapLibre: load timeout — see console';
+    statMap.className = 'status-error';
+    jsError.style.display = 'block';
+    jsError.textContent = 'MapLibre failed to load within 10 seconds. Possible causes: WebGL not supported, worker failed, or CSS not loaded. Try a hard refresh (Ctrl+Shift+R / Cmd+Shift+R).';
+  }
+}, 10000);
 
 // ============ Terrain layer (DEM as fill-extrusion) ============
 function demToGeoJSON(stride = 6) {
