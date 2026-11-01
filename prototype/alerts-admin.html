@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RiverGuard — Alerts &amp; Administration</title>
+<style>
+  :root{
+    --primary:#0b5f8c;--primary-dark:#084a70;--accent:#2ecc71;--danger:#e74c3c;
+    --warning:#f39c12;--light:#f4f7fa;--dark:#1f2a36;--text:#2c3e50;--muted:#7f8c8d;
+    --border:#dfe6ec;--radius:10px;--shadow:0 4px 12px rgba(11,95,140,0.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--light);color:var(--text);line-height:1.6}
+  a{color:var(--primary);text-decoration:none}
+  .topbar{background:var(--primary);color:#fff;padding:0.85rem 2rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
+  .topbar .brand{display:flex;align-items:center;gap:0.6rem;font-weight:700;font-size:1.1rem}
+  .topbar .mark{width:28px;height:28px;border-radius:7px;background:#fff;color:var(--primary);display:grid;place-items:center;font-weight:900}
+  .topbar nav a{color:rgba(255,255,255,0.95);font-weight:600;font-size:0.9rem;margin-left:1.25rem;padding:0.4rem 0;border-bottom:2px solid transparent}
+  .topbar nav a:hover{color:#fff;border-bottom-color:#fff;text-decoration:none}
+  .topbar .user{font-size:0.85rem;opacity:0.95}
+  .container{max-width:1150px;margin:0 auto;padding:1.5rem}
+  .page-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.25rem;flex-wrap:wrap}
+  .page-header h1{font-size:1.5rem;color:var(--dark)}
+  .page-header .subtitle{color:var(--muted);font-size:0.95rem}
+  .btn-back{display:inline-flex;align-items:center;gap:0.4rem;padding:0.5rem 1rem;background:#fff;color:var(--primary);border:1px solid var(--border);border-radius:var(--radius);font-weight:600;font-size:0.9rem;cursor:pointer}
+  .btn-back:hover{background:#eef4f8}
+
+  .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.25rem}
+  .kpi-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;box-shadow:var(--shadow)}
+  .kpi-card .k{font-size:0.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.35rem}
+  .kpi-card .v{font-size:1.8rem;font-weight:800;color:var(--dark)}
+  .kpi-card .v span{font-weight:500;font-size:1rem;color:var(--muted)}
+  .trend{margin-top:0.4rem;font-size:0.8rem;font-weight:700}
+  .trend.up{color:var(--danger)}.trend.down{color:var(--accent)}.trend.neutral{color:var(--muted)}
+
+  .wrap{display:grid;grid-template-columns:1fr 360px;gap:1.5rem}
+  .panel{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);display:flex;flex-direction:column}
+  .panel-header{padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .panel-header h2{font-size:1.05rem;color:var(--dark);font-weight:700;display:flex;align-items:center;gap:0.5rem}
+  .panel-header .pill{font-size:0.75rem;padding:0.2rem 0.6rem;border-radius:999px;background:var(--light);color:var(--muted);font-weight:600}
+  .panel-body{padding:1rem 1.25rem;flex:1}
+  .full{grid-column:1 / -1}
+
+  /* Form */
+  .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1rem}
+  .field{display:flex;flex-direction:column;gap:0.4rem}
+  .field label{font-size:0.8rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.4px}
+  .field input,.field select{padding:0.6rem 0.8rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:#fff}
+  .field input:focus{outline:none;border-color:var(--primary)}
+  .btn-add{padding:0.72rem 1.4rem;background:var(--primary);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:0.9rem;cursor:pointer;align-self:flex-start;margin-top:0.3rem}
+  .btn-add:hover{background:var(--primary-dark)}
+
+  table{width:100%;border-collapse:collapse;font-size:0.88rem}
+  th{text-align:left;padding:0.75rem;color:var(--muted);font-weight:600;font-size:0.78rem;text-transform:uppercase;border-bottom:1px solid var(--border)}
+  td{padding:0.75rem;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:hover{background:#fbfdfe}
+  .badge{display:inline-block;padding:0.2rem 0.65rem;border-radius:999px;font-size:0.75rem;font-weight:700;color:#fff}
+  .badge.active{background:var(--accent)}.badge.pending{background:var(--warning)}.badge.ack{background:var(--primary)}.badge.closed{background:#bdc3c7}
+  .badge.severe{background:var(--danger)}.badge.high{background:#e67e22}.badge.med{background:var(--warning)}.badge.low{background:var(--accent)}
+
+  .tag{font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:6px;background:#eef4f8;color:var(--primary);font-weight:600;border:1px solid rgba(11,95,140,0.2)}
+
+  .users{padding:1rem 1.25rem}
+  .user-card{display:flex;align-items:center;justify-content:space-between;padding:0.7rem;border:1px solid var(--border);border-radius:8px;margin-bottom:0.6rem;background:#fbfdfe}
+  .user-card .u{flex:1}
+  .user-card .name{font-weight:700;color:var(--dark)}
+  .user-card .role{font-size:0.8rem;color:var(--muted)}
+  .user-card .actions{display:flex;gap:0.4rem}
+  .user-card .actions button{padding:0.35rem 0.7rem;border-radius:6px;border:1px solid var(--border);background:#fff;font-size:0.78rem;cursor:pointer}
+  .user-card .actions button:hover{background:#eef4f8}
+
+  .note{background:#fdecea;border-left:4px solid var(--danger);color:#a9322b;padding:0.7rem 1rem;border-radius:0 var(--radius) var(--radius) 0;font-size:0.82rem;margin-top:1rem}
+
+  @media(max-width:900px){
+    .wrap{grid-template-columns:1fr}
+    .container{padding:1rem}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><div class="mark">RG</div>RiverGuard</div>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="hazard-map.html">Hazard Map</a>
+    <a href="forecast-risk.html">Forecast &amp; Risk</a>
+  </nav>
+  <div class="user">System Administrator &middot; LGU San Pablo</div>
+</div>
+
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1>Alerts &amp; Administration</h1>
+      <div class="subtitle">Alert rules, acknowledgement workflow &amp; user roles</div>
+    </div>
+    <button class="btn-back" onclick="location.href='index.html'">&#8592; Back to Home</button>
+  </div>
+
+  <div class="kpi">
+    <div class="kpi-card">
+      <div class="k">Active Alerts</div>
+      <div class="v">2</div>
+      <div class="trend up">&#9650; from 1</div>
+    </div>
+    <div class="kpi-card">
+      <div class="k">Acknowledged Today</div>
+      <div class="v">4</div>
+      <div class="trend down">&#9660; from 6</div>
+    </div>
+    <div class="kpi-card">
+      <div class="k">Registered Stations</div>
+      <div class="v">14</div>
+      <div class="trend neutral">&#9654; unchanged</div>
+    </div>
+    <div class="kpi-card">
+      <div class="k">LGU Users</div>
+      <div class="v">8</div>
+      <div class="trend up">&#9650; +1</div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <section class="panel">
+      <div class="panel-header"><h2>&#128681; Alert Rules</h2><span class="pill">Configure thresholds</span></div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <div class="field"><label>Station</label><select><option>SAN-001 San Pablo River</option><option>SAN-004 Bunawan Creek</option><option>SAN-007 Molawin Creek</option></select></div>
+          <div class="field"><label>Threshold (m)</label><input type="number" value="6.5" step="0.1"></div>
+          <div class="field"><label>Severity</label><select><option>High</option><option>Medium</option><option>Low</option></select></div>
+          <div class="field"><label>Condition</label><select><option>Level &gt; threshold</option><option>Level &gt;= threshold</option><option>Rapid rise</option></select></div>
+        </div>
+        <button class="btn-add">&#10003; Add Alert Rule</button>
+
+        <table style="margin-top:1rem">
+          <thead><tr><th>Rule</th><th>Station</th><th>Threshold</th><th>Severity</th><th>Enabled</th></tr></thead>
+          <tbody>
+            <tr><td>Bunawan Creek &gt; 6.5 m</td><td>SAN-004</td><td>6.5 m</td><td><span class="badge severe">Severe</span></td><td><span class="badge active">On</span></td></tr>
+            <tr><td>San Pablo River &gt; 5.0 m</td><td>SAN-001</td><td>5.0 m</td><td><span class="badge high">High</span></td><td><span class="badge active">On</span></td></tr>
+            <tr><td>Molawin Creek &gt; 4.0 m</td><td>SAN-007</td><td>4.0 m</td><td><span class="badge med">Medium</span></td><td><span class="badge pending">Off</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header"><h2>&#128100; Alert History</h2><span class="pill">Last 7 days</span></div>
+      <div class="panel-body">
+        <table>
+          <thead><tr><th>Time</th><th>Station</th><th>Message</th><th>Severity</th><th>Ack</th></tr></thead>
+          <tbody>
+            <tr><td>07:12</td><td>SAN-004</td><td>Water level exceeded 6.5 m threshold</td><td><span class="badge severe">Severe</span></td><td><span class="badge ack">Acked &middot; 07:15</span></td></tr>
+            <tr><td>05:40</td><td>SAN-001</td><td>Data freshness warning &mdash; 4h stale</td><td><span class="badge med">Medium</span></td><td><span class="badge pending">Open</span></td></tr>
+            <tr><td>Nov 30</td><td>SAN-011</td><td>Sensor offline &mdash; no readings</td><td><span class="badge high">High</span></td><td><span class="badge pending">Open</span></td></tr>
+            <tr><td>Nov 29</td><td>SAN-014</td><td>Rapid rise detected (+1.8 m / 3h)</td><td><span class="badge med">Medium</span></td><td><span class="badge ack">Acked &middot; 19:02</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="panel-header"><h2>&#128100; User Roles</h2><span class="pill">Access control</span></div>
+      <div class="users">
+        <div class="user-card">
+          <div class="u"><div class="name">Maria Reyes</div><div class="role">LGU Operator &middot; mreyes@lgu.gov.ph</div></div>
+          <div class="actions"><button>Edit</button><button>Deactivate</button></div>
+        </div>
+        <div class="user-card">
+          <div class="u"><div class="name">John Dela Cruz</div><div class="role">System Administrator &middot; jdc@lgu.gov.ph</div></div>
+          <div class="actions"><button>Edit</button><button>Deactivate</button></div>
+        </div>
+        <div class="user-card">
+          <div class="u"><div class="name">Public Portal</div><div class="role">Public User &middot; read-only access</div></div>
+          <div class="actions"><button>Edit</button><button>Deactivate</button></div>
+        </div>
+      </div>
+      <div class="note"><b>Roles:</b> Public users (read-only), LGU personnel (view + acknowledge alerts), System administrators (manage stations, rules, users).</div>
+    </aside>
+
+    <div class="panel full">
+      <div class="panel-header"><h2>&#128187; Acknowledgement Workflow</h2><span class="pill">Alert lifecycle</span></div>
+      <div class="panel-body">
+        <div style="display:flex;gap:1rem;align-items:center;text-align:center;font-size:0.85rem;color:var(--muted)">
+          <div style="flex:1"><div style="width:40px;height:40px;border-radius:50%;background:#fdecea;color:#c0392b;display:grid;place-items:center;font-weight:800;margin:0 auto 0.4rem">1</div><div style="font-weight:700;color:var(--text)">Triggered</div><div>Threshold exceeded; alert created</div></div>
+          <div style="flex:1"><div style="width:40px;height:40px;border-radius:50%;background:#fdf6ec;color:#b9770e;display:grid;place-items:center;font-weight:800;margin:0 auto 0.4rem">2</div><div style="font-weight:700;color:var(--text)">Notified</div><div>LGU operator &amp; stakeholders alerted</div></div>
+          <div style="flex:1"><div style="width:40px;height:40px;border-radius:50%;background:#eef4f8;color:var(--primary);display:grid;place-items:center;font-weight:800;margin:0 auto 0.4rem">3</div><div style="font-weight:700;color:var(--text)">Acknowledged</div><div>Operator confirms receipt &amp; action</div></div>
+          <div style="flex:1"><div style="width:40px;height:40px;border-radius:50%;background:#ebfbee;color:var(--accent);display:grid;place-items:center;font-weight:800;margin:0 auto 0.4rem">4</div><div style="font-weight:700;color:var(--text)">Resolved</div><div>Condition cleared; alert closed</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note"><b>Safety:</b> RiverGuard supports decision-making; it does not issue official evacuation orders or replace LGUs and government agencies. Alert thresholds and escalation rules must be reviewed by responsible authorities.</div>
+</div>
+
+</body>
+</html>

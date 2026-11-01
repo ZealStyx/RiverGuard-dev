@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RiverGuard — Station Dashboard</title>
+<style>
+  :root{
+    --primary:#0b5f8c;--primary-dark:#084a70;--accent:#2ecc71;--danger:#e74c3c;
+    --warning:#f39c12;--light:#f4f7fa;--dark:#1f2a36;--text:#2c3e50;--muted:#7f8c8d;
+    --border:#dfe6ec;--radius:10px;--shadow:0 4px 12px rgba(11,95,140,0.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--light);color:var(--text);line-height:1.6}
+  a{color:var(--primary);text-decoration:none}
+  .topbar{background:var(--primary);color:#fff;padding:0.85rem 2rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
+  .topbar .brand{display:flex;align-items:center;gap:0.6rem;font-weight:700;font-size:1.1rem}
+  .topbar .mark{width:28px;height:28px;border-radius:7px;background:#fff;color:var(--primary);display:grid;place-items:center;font-weight:900}
+  .topbar nav a{color:rgba(255,255,255,0.95);font-weight:600;font-size:0.9rem;margin-left:1.25rem;padding:0.4rem 0;border-bottom:2px solid transparent}
+  .topbar nav a:hover{color:#fff;border-bottom-color:#fff;text-decoration:none}
+  .topbar .user{font-size:0.85rem;opacity:0.95}
+  .container{max-width:1200px;margin:0 auto;padding:1.5rem}
+  .page-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap}
+  .page-header h1{font-size:1.5rem;color:var(--dark)}
+  .page-header .subtitle{color:var(--muted);font-size:0.95rem}
+  .btn-back{display:inline-flex;align-items:center;gap:0.4rem;padding:0.5rem 1rem;background:#fff;color:var(--primary);border:1px solid var(--border);border-radius:var(--radius);font-weight:600;font-size:0.9rem;cursor:pointer}
+  .btn-back:hover{background:#eef4f8}
+
+  /* KPI cards */
+  .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem;margin-bottom:1.5rem}
+  .kpi-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;box-shadow:var(--shadow)}
+  .kpi-card .k{font-size:0.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem}
+  .kpi-card .v{font-size:1.7rem;font-weight:800;color:var(--dark)}
+  .kpi-card .v span{font-weight:500;font-size:1rem;color:var(--muted)}
+  .kpi-card .trend{margin-top:0.4rem;font-size:0.8rem;font-weight:700}
+  .trend.up{color:var(--accent)}.trend.down{color:var(--danger)}.trend.neutral{color:var(--muted)}
+
+  /* Grid layout */
+  .wrap{display:grid;grid-template-columns:3fr 2fr;gap:1.5rem}
+  .panel{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);display:flex;flex-direction:column}
+  .panel-header{padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .panel-header h2{font-size:1.05rem;color:var(--dark);font-weight:700;display:flex;align-items:center;gap:0.5rem}
+  .panel-header .pill{font-size:0.75rem;padding:0.2rem 0.6rem;border-radius:999px;background:var(--light);color:var(--muted);font-weight:600}
+  .panel-body{padding:1rem 1.25rem;flex:1}
+  .full{grid-column:1 / -1}
+
+  /* Station list */
+  table{width:100%;border-collapse:collapse;font-size:0.9rem}
+  th{text-align:left;padding:0.75rem;color:var(--muted);font-weight:600;font-size:0.78rem;text-transform:uppercase;border-bottom:1px solid var(--border)}
+  td{padding:0.75rem;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:hover{background:#fbfdfe}
+  .station-cell{display:flex;align-items:center;gap:0.7rem}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .dot.online{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+  .dot.warn{background:var(--warning)}
+  .dot.off{background:#bdc3c7}
+  .status{font-size:0.78rem;font-weight:700;text-transform:uppercase}
+  .status.ok{color:var(--accent)}.status.alert{color:var(--danger)}.status.info{color:var(--muted)}
+  .fresh{font-size:0.8rem;color:var(--muted)}
+  .fresh.ok{color:var(--accent)}.fresh.stale{color:var(--warning)}
+
+  /* Chart placeholder */
+  .chart-wrap{height:220px;border:1px dashed var(--border);border-radius:var(--radius);background:#fcfdfe;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:0.9rem;margin-bottom:1rem}
+  .chart-wrap b{color:var(--dark);display:block;margin-bottom:0.25rem}
+
+  /* Rain mini list */
+  .mini{margin-top:1rem}
+  .mini-item{display:flex;justify-content:space-between;padding:0.6rem 0;border-bottom:1px solid var(--border);font-size:0.85rem}
+  .mini-item:last-child{border-bottom:none}
+  .mini-item .val{font-weight:700;color:var(--dark)}
+  .mini-item .lbl{color:var(--muted)}
+
+  /* Alert strip */
+  .alert-strip{background:#fdecea;border-left:4px solid var(--danger);color:#c0392b;padding:0.75rem 1rem;border-radius:0 var(--radius) var(--radius) 0;font-size:0.85rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.6rem}
+  .alert-strip b{color:#a93226}
+
+  @media(max-width:768px){
+    .wrap{grid-template-columns:1fr}
+    .container{padding:1rem}
+    .topbar{padding:0.85rem 1rem}
+    .topbar nav{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><div class="mark">RG</div>RiverGuard</div>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="hazard-map.html">Hazard Map</a>
+    <a href="forecast-risk.html">Forecast &amp; Risk</a>
+    <a href="alerts-admin.html">Alerts &amp; Admin</a>
+  </nav>
+  <div class="user">LGU Operator &middot; San Pablo, Calabarzon</div>
+</div>
+
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1>Station Dashboard</h1>
+      <div class="subtitle">Monitoring overview &middot; Data as of 2026-11-01 08:00 PHT</div>
+    </div>
+    <button class="btn-back" onclick="location.href='index.html'">&#8592; Back to Home</button>
+  </div>
+
+  <div class="kpi">
+    <div class="kpi-card">
+      <div class="k">Active Stations</div>
+      <div class="v">12<span>/14</span></div>
+      <div class="trend up">&#9650; 2 vs last week</div>
+    </div>
+    <div class="kpi-card">
+      <div class="k">Stations Above Threshold</div>
+      <div class="v">3</div>
+      <div class="trend down">&#9660; from 5</div>
+    </div>
+    <div class="kpi-card">
+      <div class="k">Avg Water Level</div>
+      <div class="v">4.21<span>m</span></div>
+      <div class="trend neutral">&#9654; stable</div>
+    </div>
+    <div class="kpi-card">
+      <div class="k">Data Freshness</div>
+      <div class="v">92%</div>
+      <div class="trend up">&#9650; within 1h</div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="panel full">
+      <div class="panel-header"><h2>&#128204; Monitoring Stations</h2><span class="pill">14 stations</span></div>
+      <div class="panel-body">
+        <table>
+          <thead><tr><th>Station</th><th>River / Basin</th><th>Level</th><th>Threshold</th><th>Status</th><th>Freshness</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><div class="station-cell"><div class="dot online"></div><div>SAN-001</div></div></td><td>San Pablo River</td><td><b>4.82 m</b></td><td>5.0 m</td><td><span class="status ok">Normal</span></td><td><span class="fresh ok">&#9679; 12 min ago</span></td>
+            </tr>
+            <tr>
+              <td><div class="station-cell"><div class="dot warn"></div><div>SAN-004</div></div></td><td>Bunawan Creek</td><td><b>7.10 m</b></td><td>6.5 m</td><td><span class="status alert">Above</span></td><td><span class="fresh ok">&#9679; 8 min ago</span></td>
+            </tr>
+            <tr>
+              <td><div class="station-cell"><div class="dot online"></div><div>SAN-007</div></div></td><td>Molawin Creek</td><td><b>3.45 m</b></td><td>4.0 m</td><td><span class="status ok">Normal</span></td><td><span class="fresh ok">&#9679; 15 min ago</span></td>
+            </tr>
+            <tr>
+              <td><div class="station-cell"><div class="dot off"></div><div>SAN-011</div></div></td><td>San Cristobal River</td><td><i>--</i></td><td>4.8 m</td><td><span class="status info">Offline</span></td><td><span class="fresh stale">&#9679; 4h ago</span></td>
+            </tr>
+            <tr>
+              <td><div class="station-cell"><div class="dot online"></div><div>SAN-014</div></div></td><td>Palawig River</td><td><b>2.90 m</b></td><td>3.5 m</td><td><span class="status ok">Normal</span></td><td><span class="fresh ok">&#9679; 10 min ago</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header"><h2>&#128197; Water Level (SAN-001)</h2><span class="pill">Last 24h</span></div>
+      <div class="panel-body">
+        <div class="chart-wrap"><b>Chart placeholder</b><span>Recharts water-level line chart renders here</span></div>
+        <div class="mini">
+          <div class="mini-item"><span class="lbl">Current</span><span class="val">4.82 m</span></div>
+          <div class="mini-item"><span class="lbl">Min (24h)</span><span class="val">3.10 m</span></div>
+          <div class="mini-item"><span class="lbl">Max (24h)</span><span class="val">5.05 m</span></div>
+          <div class="mini-item"><span class="lbl">Change</span><span class="val">+1.2 m</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header"><h2>&#127790; Rainfall (SAN-001)</h2><span class="pill">Rolling totals</span></div>
+      <div class="panel-body">
+        <div class="chart-wrap"><b>Chart placeholder</b><span>Recharts rainfall bar chart renders here</span></div>
+        <div class="mini">
+          <div class="mini-item"><span class="lbl">Last 1h</span><span class="val">4.2 mm</span></div>
+          <div class="mini-item"><span class="lbl">Last 3h</span><span class="val">12.8 mm</span></div>
+          <div class="mini-item"><span class="lbl">Last 24h</span><span class="val">48.5 mm</span></div>
+          <div class="mini-item"><span class="lbl">Soil moisture</span><span class="val">62%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel full">
+      <div class="panel-header"><h2>&#128681; Recent Alerts</h2><span class="pill">Last 7 days</span></div>
+      <div class="panel-body">
+        <div class="alert-strip"><b>Active alert:</b> SAN-004 above threshold (7.10 m vs 6.5 m) &mdash; LGU notified at 07:12 PHT.</div>
+        <table style="font-size:0.85rem">
+          <thead><tr><th style="text-align:left">Time</th><th style="text-align:left">Station</th><th style="text-align:left">Message</th><th style="text-align:left">Ack</th></tr></thead>
+          <tbody>
+            <tr><td>07:12</td><td>SAN-004</td><td>Water level exceeded threshold</td><td><span class="status ok">Acked</span></td></tr>
+            <tr><td>05:40</td><td>SAN-001</td><td>Data freshness warning</td><td><span class="status info">Open</span></td></tr>
+            <tr><td>Nov 30</td><td>SAN-011</td><td>Sensor offline</td><td><span class="status info">Open</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
