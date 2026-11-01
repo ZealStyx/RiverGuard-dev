@@ -235,7 +235,8 @@
 }
 </script>
 <script type="module">
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+maplibregl.setWorkerUrl('node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs');
 
 // ============ Configuration ============
 const CENTER = [120.9457, 14.0694];
