@@ -1,0 +1,18 @@
+{
+  "source": "output_hh.img (Copernicus GLO-30 derived, Erdas Imagine .img, EHFA) read with GDAL",
+  "area": "Laguna, Philippines (San Pablo crater lakes / Mount Makiling area)",
+  "crs": "WGS84 Geographic (Lat/Lon)",
+  "width": 421,
+  "height": 326,
+  "west": 121.27986109999998,
+  "north": 14.12902778888889,
+  "east": 121.39680554444442,
+  "south": 14.038472233333335,
+  "pixelSizeX": 0.0002777777777777778,
+  "pixelSizeY": -0.0002777777777777778,
+  "minElev": 26.5,
+  "maxElev": 489.4149475097656,
+  "byteOrder": "big-endian float32",
+  "rowOrder": "north-to-south",
+  "note": "West/north are the outer corner of the top-left pixel. Regenerated directly from the .img; no gap filling needed (all pixels valid)."
+}

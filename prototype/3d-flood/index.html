@@ -212,10 +212,29 @@
   <div class="status-line"><span class="status-ok">●</span> <span id="statMap">MapLibre: initializing…</span></div>
   <div class="status-line"><span class="status-warn">○</span> <span id="statDEM">DEM: not loaded</span></div>
   <div class="status-line"><span class="status-warn">○</span> <span id="statTerrain">Terrain: not built</span></div>
+  <div class="status-line"><span class="status-warn">○</span> <span id="statRaster">Terrain raster: not loaded</span></div>
 </div>
 
 <div id="controls">
   <h2>3D Flood Visualization</h2>
+  <div class="control-group">
+    <label>Large-area terrain raster style</label>
+    <select id="rasterStyle">
+      <option value="color-relief">Color relief (elevation)</option>
+      <option value="hillshade-color">Hillshade + color</option>
+      <option value="hillshade">Hillshade</option>
+      <option value="aspect">Aspect</option>
+      <option value="slope">Slope</option>
+      <option value="roughness">Roughness</option>
+    </select>
+  </div>
+  <div class="control-group">
+    <label>3D elevation model</label>
+    <select id="demSourceSelect">
+      <option value="cop90" selected>COP90 · Full-area coverage (90 m)</option>
+      <option value="glo30">GLO-30 · Local high detail (30 m)</option>
+    </select>
+  </div>
   <div class="control-group">
     <label>Flood Water Level</label>
     <input type="range" id="floodLevel" min="0" max="50" value="10" step="0.5">
@@ -240,18 +259,19 @@
     </select>
   </div>
   <div class="toggle-row">
-    <button class="toggle-btn active" id="btnTerrain">Terrain: On</button>
-    <button class="toggle-btn active" id="btnWater">Flood: On</button>
+    <button class="toggle-btn" id="btnTerrain">Terrain: Off</button>
+    <button class="toggle-btn" id="btnWater">Flood: Off</button>
   </div>
   <div style="margin-top:14px; font-size:0.72rem; color:#64748b; border-top:1px solid rgba(255,255,255,0.08); padding-top:8px;">
-    <div>Complementary data: DEM (Copernicus GLO-30-derived Laguna tile)</div>
-    <div>Primary data: Project NOAH PMTiles (Hugging Face)</div>
-    <div>MapLibre GL JS — native WebGL 3D</div>
+    <div>Large-area data: six full-extent GeoTIFF terrain styles</div>
+    <div>Elevation models: COP90 full area + GLO-30 local detail</div>
+    <div>MapLibre GL JS — WebGL map rendering · WGS84 georeferenced</div>
   </div>
 </div>
 
 <div id="info">
-  <div class="info-title">RiverGuard · 3D Flood Prototype</div>
+  <div class="info-title">RiverGuard · Laguna Terrain Map</div>
+  <div class="data-row"><span>Map area:</span><span class="data-val">Laguna, Philippines</span></div>
   <div class="data-row"><span>DEM source:</span><span class="data-val" id="demSource">loading…</span></div>
   <div class="data-row"><span>Station:</span><span class="data-val">SAN-001 San Cristobal River</span></div>
   <div class="data-row"><span>Terrain peak:</span><span class="data-val ok" id="terrainPeak">— m</span></div>
@@ -269,7 +289,7 @@
   <div class="hint">Drag to rotate · Scroll to zoom · Right-click drag to tilt</div>
 </div>
 
-<div id="loading">Loading terrain &amp; flood data…</div>
+<div id="loading">Loading full-area terrain rasters &amp; elevation data…</div>
 
 <script type="importmap">
 {
@@ -286,6 +306,7 @@ const jsError = document.getElementById('js-error');
 const statMap = document.getElementById('statMap');
 const statDEM = document.getElementById('statDEM');
 const statTerrain = document.getElementById('statTerrain');
+const statRaster = document.getElementById('statRaster');
 
 window.addEventListener('error', (e) => {
   jsError.style.display = 'block';
@@ -305,15 +326,38 @@ if (!maplibregl || !maplibregl.Map) {
 }
 
 // ============ Configuration ============
-const CENTER = [121.338339, 14.08375];   // center of the Laguna DEM tile
-const ZOOM = 12;
+const MAP_BOUNDS = [[120.917916633333, 13.783750033333], [121.571249966405, 14.207083366497]];
+const CENTER = [121.244583299869, 13.995416699915];
+const ZOOM = 9.5;
+const RASTER_BOUNDS = { west: 120.917916633333, south: 13.783750033333, east: 121.571249966405, north: 14.207083366497 };
+const RASTER_IMAGE_COORDS = [
+  [RASTER_BOUNDS.west, RASTER_BOUNDS.north],
+  [RASTER_BOUNDS.east, RASTER_BOUNDS.north],
+  [RASTER_BOUNDS.east, RASTER_BOUNDS.south],
+  [RASTER_BOUNDS.west, RASTER_BOUNDS.south]
+];
+const TERRAIN_RASTER_STYLES = {
+  'color-relief': { label: 'Color relief (elevation)', image: './map-assets/color-relief/full.png' },
+  'hillshade-color': { label: 'Hillshade + color', image: './map-assets/hillshade-color/full.png' },
+  'hillshade': { label: 'Hillshade', image: './map-assets/hillshade/full.png' },
+  'aspect': { label: 'Aspect', image: './map-assets/aspect/full.png' },
+  'slope': { label: 'Slope', image: './map-assets/slope/full.png' },
+  'roughness': { label: 'Roughness', image: './map-assets/roughness/full.png' }
+};
+let terrainRasterLayersAdded = false;
+let currentRasterStyle = 'color-relief';
 
-// ============ Real DEM (Copernicus GLO-30 derived, Laguna) with synthetic fallback ============
-// Source: local Erdos Imagine .img (output_hh.img, WGS84, 1 arcsec, bbox
-// 121.28–121.40E, 14.04–14.13N) converted to big-endian Float32 binary +
-// JSON sidecar (dem_laguna.bin / dem_laguna.json). External Copernicus S3 /
-// CDSE fetch is blocked in this sandbox, so the conversion was done offline
-// and the synthetic DEM below is the fallback if the files fail to load.
+// ============ Elevation models: full-area COP90 and local-detail GLO-30 ============
+const DEM_SOURCES = {
+  cop90: {
+    label: 'Copernicus GLO-90 · full map coverage',
+    metaFile: 'dem_cop90.json', binFile: 'dem_cop90.bin'
+  },
+  glo30: {
+    label: 'Copernicus GLO-30 · local high detail',
+    metaFile: 'dem_glo30.json', binFile: 'dem_glo30.bin'
+  }
+};
 let DEM = null;
 const pageStartTime = Date.now();
 let mapLoadResolved = false;
@@ -321,7 +365,7 @@ let mapLoadTime = 0;
 let mapRendered = false;
 
 function generateSyntheticDEM() {
-  // Approximates San Pablo / Mount Makiling elevation (fallback only).
+  // Fallback only; the supplied COP90 model is the default full-area source.
   const size = 32;
   const data = new Float32Array(size * size);
   const cx = size / 2;
@@ -343,47 +387,88 @@ function generateSyntheticDEM() {
     }
   }
   return { data, width: size, height: size, west: CENTER[0] - 0.04, north: CENTER[1] + 0.04,
-           pixelSize: 0.08 / (size - 1), minElev, maxElev };
+           pixelSize: 0.08 / (size - 1), minElev, maxElev, sourceKey: 'synthetic' };
 }
 
-async function loadRealDEM() {
-  const metaRes = await fetch('dem_laguna.json');
-  if (!metaRes.ok) throw new Error('dem_laguna.json not found (' + metaRes.status + ')');
+async function loadRealDEM(sourceKey) {
+  const source = DEM_SOURCES[sourceKey];
+  if (!source) throw new Error('Unknown DEM source: ' + sourceKey);
+  const metaRes = await fetch(source.metaFile);
+  if (!metaRes.ok) throw new Error(source.metaFile + ' not found (' + metaRes.status + ')');
   const meta = await metaRes.json();
-  const binRes = await fetch('dem_laguna.bin');
-  if (!binRes.ok) throw new Error('dem_laguna.bin not found (' + binRes.status + ')');
+  const binRes = await fetch(source.binFile);
+  if (!binRes.ok) throw new Error(source.binFile + ' not found (' + binRes.status + ')');
   const buf = await binRes.arrayBuffer();
-  const dv = new DataView(buf);
-  // .img stores big-endian Float32, row-major, row 0 = north
-  const data = new Float32Array(meta.width * meta.height);
-  for (let i = 0; i < data.length; i++) {
-    data[i] = dv.getFloat32(i * 4, false); // false = big-endian
+  const expectedBytes = meta.width * meta.height * 4;
+  if (buf.byteLength !== expectedBytes) {
+    throw new Error(source.binFile + ' size mismatch: expected ' + expectedBytes + ', got ' + buf.byteLength);
   }
+  const dv = new DataView(buf);
+  const data = new Float32Array(meta.width * meta.height);
+  for (let i = 0; i < data.length; i++) data[i] = dv.getFloat32(i * 4, false);
   return {
     data, width: meta.width, height: meta.height,
     west: meta.west, north: meta.north, pixelSize: Math.abs(meta.pixelSizeX),
-    minElev: meta.minElev, maxElev: meta.maxElev
+    minElev: meta.minElev, maxElev: meta.maxElev, sourceKey
   };
 }
 
-async function initDEM() {
+async function initDEM(sourceKey = 'cop90') {
   try {
-    DEM = await loadRealDEM();
-    document.getElementById('demSource').textContent = 'Copernicus GLO-30 DEM — Laguna';
+    DEM = await loadRealDEM(sourceKey);
+    document.getElementById('demSource').textContent = DEM_SOURCES[sourceKey].label;
     document.getElementById('demSource').className = 'data-val ok';
     document.getElementById('terrainPeak').textContent = DEM.maxElev.toFixed(0) + ' m';
-    statDEM.innerHTML = '<span class="status-ok">●</span> DEM: real (' + DEM.width + 'x' + DEM.height + ')';
+    statDEM.innerHTML = '<span class="status-ok">●</span> DEM: ' + sourceKey.toUpperCase() + ' (' + DEM.width + '×' + DEM.height + ')';
     statDEM.className = 'status-ok';
-    console.log('DEM loaded:', DEM.width, 'x', DEM.height, 'elev', DEM.minElev, '..', DEM.maxElev, 'm');
+    console.log('DEM loaded:', sourceKey, DEM.width, 'x', DEM.height, 'elev', DEM.minElev, '..', DEM.maxElev, 'm');
   } catch (e) {
-    console.warn('Real DEM unavailable, using synthetic fallback:', e.message);
+    console.warn('DEM unavailable, using synthetic fallback:', e.message);
     DEM = generateSyntheticDEM();
-    document.getElementById('demSource').textContent = 'Synthetic (fallback)';
+    document.getElementById('demSource').textContent = 'Synthetic fallback';
     document.getElementById('demSource').className = 'data-val warn';
     document.getElementById('terrainPeak').textContent = DEM.maxElev.toFixed(0) + ' m';
     statDEM.innerHTML = '<span class="status-warn">○</span> DEM: synthetic fallback';
     statDEM.className = 'status-warn';
   }
+}
+
+// ============ Full-area raster overlays (derived from supplied GeoTIFFs) ============
+// Each source is one 784 x 508 georeferenced image, using the GeoTIFF's WGS84 bounds.
+function addTerrainRasterLayers() {
+  if (terrainRasterLayersAdded) return;
+  Object.keys(TERRAIN_RASTER_STYLES).forEach((styleName) => {
+    const config = TERRAIN_RASTER_STYLES[styleName];
+    const sourceId = `raster-${styleName}-source`;
+    const layerId = `raster-${styleName}`;
+    map.addSource(sourceId, {
+      type: 'image', url: config.image, coordinates: RASTER_IMAGE_COORDS
+    });
+    map.addLayer({
+      id: layerId,
+      type: 'raster',
+      source: sourceId,
+      layout: { visibility: styleName === currentRasterStyle ? 'visible' : 'none' },
+      paint: { 'raster-opacity': 1, 'raster-fade-duration': 0 }
+    });
+  });
+  terrainRasterLayersAdded = true;
+  statRaster.innerHTML = '<span class="status-ok">●</span> Raster: ' + TERRAIN_RASTER_STYLES[currentRasterStyle].label + ' (full-area GeoTIFF)';
+  statRaster.className = 'status-ok';
+}
+
+function setTerrainRasterStyle(styleName) {
+  if (!TERRAIN_RASTER_STYLES[styleName]) return;
+  currentRasterStyle = styleName;
+  if (!terrainRasterLayersAdded) return;
+  Object.keys(TERRAIN_RASTER_STYLES).forEach((key) => {
+    const layerId = `raster-${key}`;
+    if (map.getLayer(layerId)) {
+      map.setLayoutProperty(layerId, 'visibility', key === styleName ? 'visible' : 'none');
+    }
+  });
+  statRaster.innerHTML = '<span class="status-ok">●</span> Raster: ' + TERRAIN_RASTER_STYLES[styleName].label + ' (full-area GeoTIFF)';
+  statRaster.className = 'status-ok';
 }
 
 // ============ MapLibre GL JS setup ============
@@ -409,7 +494,17 @@ map.on('load', () => {
   statMap.innerHTML = '<span class="status-ok">●</span> MapLibre: loaded (' + (mapLoadTime - pageStartTime) + 'ms)';
   statMap.className = 'status-ok';
   mapLoadResolved = true;
-  initDEM().then(() => {
+
+  addTerrainRasterLayers();
+  // Show the full raster coverage on first load, not just the smaller DEM tile.
+  const isWideScreen = window.innerWidth > 760;
+  map.fitBounds(MAP_BOUNDS, {
+    padding: { top: 56, right: 48, bottom: 64, left: isWideScreen ? 356 : 24 },
+    duration: 0,
+    maxZoom: 10.5
+  });
+
+  initDEM('cop90').then(() => {
     loadingEl.style.display = 'none';
     buildAllLayers();
   }).catch((e) => {
@@ -500,6 +595,7 @@ function buildAllLayers() {
     id: 'terrain-dem',
     type: 'fill-extrusion',
     source: 'terrain-dem-source',
+    layout: { visibility: 'none' },
     paint: {
       'fill-extrusion-color': [
         'interpolate', ['linear'], ['get', 'height'],
@@ -512,7 +608,7 @@ function buildAllLayers() {
       'fill-extrusion-base': 0,
       'fill-extrusion-opacity': 0.9
     }
-  }, 'background');
+  });
   statTerrain.innerHTML = '<span class="status-ok">●</span> Terrain: built (stride 6)';
   statTerrain.className = 'status-ok';
 
@@ -540,6 +636,7 @@ function buildAllLayers() {
     id: 'flood-water',
     type: 'fill-extrusion',
     source: 'flood-water-source',
+    layout: { visibility: 'none' },
     paint: {
       'fill-extrusion-color': '#c084fc',
       'fill-extrusion-height': 10,
@@ -547,7 +644,7 @@ function buildAllLayers() {
       'fill-extrusion-opacity': 0.5,
       'fill-extrusion-vertical-gradient': true
     }
-  }, 'background');
+  });
 
   // Project NOAH flood polygons (extruded by depth) — placed inside the DEM extent
   const cx = (west + east) / 2;
@@ -575,6 +672,7 @@ function buildAllLayers() {
       id: `noah-flood-${scenario}`,
       type: 'fill-extrusion',
       source: 'noah-flood',
+      layout: { visibility: 'none' },
       paint: {
         'fill-extrusion-color': color,
         'fill-extrusion-height': ['get', 'depth_m'],
@@ -583,7 +681,7 @@ function buildAllLayers() {
         'fill-extrusion-vertical-gradient': true
       },
       filter: ['==', ['get', 'scenario'], scenario]
-    }, 'background');
+    });
   });
 
   // Station markers
@@ -604,7 +702,7 @@ function buildAllLayers() {
       'circle-color': ['case', ['==', ['get', 'status'], 'alert'], '#f87171', '#a3e635'],
       'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2
     }
-  }, 'background');
+  });
 
   updateWaterLevel(10);
 }
@@ -632,6 +730,8 @@ const floodLevelVal = document.getElementById('floodLevelVal');
 const terrainExagInput = document.getElementById('terrainExag');
 const terrainExagVal = document.getElementById('terrainExagVal');
 const scenarioSelect = document.getElementById('scenario');
+const rasterStyleSelect = document.getElementById('rasterStyle');
+const demSourceSelect = document.getElementById('demSourceSelect');
 const btnTerrain = document.getElementById('btnTerrain');
 const btnWater = document.getElementById('btnWater');
 let currentScenario = 'none';
@@ -665,6 +765,28 @@ terrainExagInput.addEventListener('input', (e) => {
 });
 
 scenarioSelect.addEventListener('change', updateScenario);
+rasterStyleSelect.addEventListener('change', (e) => setTerrainRasterStyle(e.target.value));
+
+demSourceSelect.addEventListener('change', async (e) => {
+  loadingEl.textContent = 'Loading ' + e.target.value.toUpperCase() + ' elevation model…';
+  loadingEl.style.display = 'block';
+  try {
+    await initDEM(e.target.value);
+    buildAllLayers();
+    const west = DEM.west;
+    const north = DEM.north;
+    const east = west + (DEM.width - 1) * DEM.pixelSize;
+    const south = north - (DEM.height - 1) * DEM.pixelSize;
+    map.fitBounds([[west, south], [east, north]], {
+      padding: { top: 56, right: 48, bottom: 64, left: window.innerWidth > 760 ? 356 : 24 },
+      duration: 500, maxZoom: 12
+    });
+  } catch (err) {
+    console.error('DEM switch failed:', err);
+  } finally {
+    loadingEl.style.display = 'none';
+  }
+});
 
 btnTerrain.addEventListener('click', () => {
   const active = btnTerrain.classList.toggle('active');
@@ -682,7 +804,7 @@ window.addEventListener('resize', () => {
   map.resize();
 });
 
-console.log('RiverGuard 3D Flood Prototype ready — MapLibre native WebGL 3D');
+console.log('RiverGuard Laguna Terrain Map ready — full-area GeoTIFF raster overlays + MapLibre GL JS');
 </script>
 </body>
 </html>

@@ -1,0 +1,51 @@
+{
+  "crs": "EPSG:4326",
+  "extent": {
+    "west": 120.917916633333,
+    "south": 13.783750033333,
+    "east": 121.57124996640499,
+    "north": 14.207083366497
+  },
+  "rasterSize": {
+    "width": 784,
+    "height": 508
+  },
+  "rasterStyles": {
+    "color-relief": {
+      "file": "map-assets/color-relief/full.png",
+      "source": "viz.hh_color-relief.tif"
+    },
+    "hillshade-color": {
+      "file": "map-assets/hillshade-color/full.png",
+      "source": "viz.hh_hillshade-color.tif"
+    },
+    "hillshade": {
+      "file": "map-assets/hillshade/full.png",
+      "source": "viz.hh_hillshade.tif"
+    },
+    "aspect": {
+      "file": "map-assets/aspect/full.png",
+      "source": "viz.hh_aspect.tif"
+    },
+    "slope": {
+      "file": "map-assets/slope/full.png",
+      "source": "viz.hh_slope.tif"
+    },
+    "roughness": {
+      "file": "map-assets/roughness/full.png",
+      "source": "viz.hh_roughness.tif"
+    }
+  },
+  "elevationModels": {
+    "cop90": {
+      "meta": "dem_cop90.json",
+      "binary": "dem_cop90.bin",
+      "description": "Full-area Copernicus GLO-90 DEM"
+    },
+    "glo30": {
+      "meta": "dem_glo30.json",
+      "binary": "dem_glo30.bin",
+      "description": "Local high-detail Copernicus GLO-30 DEM"
+    }
+  }
+}
