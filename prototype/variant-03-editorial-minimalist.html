@@ -3,41 +3,41 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RiverGuard — Variant 03 · Quiet</title>
+<title>RiverGuard &mdash; Variant 03 &middot; Quiet</title>
 <style>
   :root{
-    --bg:#fafafa;
+    --bg:#faf9f7;
     --surface:#ffffff;
-    --border:#e5e5e5;
-    --ink:#1a1a1a;
-    --muted:#666666;
-    --primary:#000000;
+    --border:#e0dccf;
+    --ink:#222222;
+    --muted:#7a756b;
     --accent:#4a90e2;
     --danger:#b91c1c;
     --danger-bg:#fbf7f7;
     --ok:#15803d;
     --warn:#b45309;
-    --radius:14px;
-    --shadow:0 4px 20px -4px rgba(0,0,0,0.04);
+    --radius:16px;
+    --shadow:0 6px 24px -6px rgba(0,0,0,0.05);
     --font-serif:'Playfair Display',Georgia,'Noto Serif',Times New Roman,serif;
     --font-sans:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
     --font-mono:'IA Writer Mono',ui-monospace,Menlo,monospace;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:var(--font-sans);background:var(--bg);color:var(--ink);line-height:1.6}
-  a{color:var(--primary);text-decoration:none}
-  .topbar{background:#ffffff;border-bottom:1px solid var(--border);padding:1.1rem 3rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:40}
-  .topbar .brand{display:flex;align-items:center;gap:0.8rem;font-family:var(--font-serif);font-weight:700;font-size:1.4rem;letter-spacing:-0.02em}
-  .topbar .mark{width:30px;height:30px;border-radius:6px;background:var(--primary);color:#fff;display:grid;place-items:center;font-weight:900}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent}
+  a:hover{border-bottom-color:var(--accent)}
+  .topbar{border-bottom:1px solid var(--border);padding:1.1rem 3rem;background:var(--surface);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:40}
+  .topbar .brand{font-family:var(--font-serif);font-weight:700;font-size:1.4rem;letter-spacing:-0.02em;display:flex;align-items:center;gap:0.8rem}
+  .topbar .mark{width:30px;height:30px;border-radius:6px;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:900}
   .topbar nav a{color:var(--muted);font-size:0.85rem;font-weight:500;margin-left:1.8rem;padding:0.4rem 0;border-bottom:1px solid transparent}
-  .topbar nav a:hover{color:var(--primary);border-bottom-color:var(--primary)}
-  .topbar .meta{font-family:var(--font-mono);font-size:0.68rem;color:var(--muted);background:#f5f5f5;padding:0.2rem 0.6rem;border-radius:4px;border:1px solid #e5e5e5}
+  .topbar nav a:hover{color:var(--ink);border-bottom-color:var(--ink)}
+  .topbar .meta{font-family:var(--font-mono);font-size:0.68rem;color:var(--muted);background:#f5f5f0;padding:0.2rem 0.6rem;border-radius:4px;border:1px solid var(--border)}
   .container{max-width:1400px;margin:0 auto;padding:2.5rem 3rem}
   .page-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:2.5rem;flex-wrap:wrap}
   .page-head h1{font-family:var(--font-serif);font-size:2.2rem;color:var(--ink);font-weight:700;letter-spacing:-0.01em}
   .page-head .sub{color:var(--muted);font-size:0.9rem}
-  .btn-back{display:inline-flex;align-items:center;gap:0.4rem;padding:0.5rem 1.1rem;border:1px solid var(--border);background:#fff;color:var(--ink);font-size:0.82rem;font-weight:600;border-radius:var(--radius)}
-  .btn-back:hover{border-color:var(--primary);color:var(--primary)}
+  .btn-back{display:inline-flex;align-items:center;gap:0.4rem;padding:0.5rem 1.1rem;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:0.82rem;font-weight:600;border-radius:var(--radius)}
+  .btn-back:hover{border-color:var(--ink);color:var(--ink)}
   .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:1.4rem;margin-bottom:2.5rem}
   .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.4rem;box-shadow:var(--shadow)}
   .kpi-card .k{font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;display:block;margin-bottom:0.4rem}
@@ -45,7 +45,7 @@
   .kpi-card .v span{font-weight:400;font-size:1rem;color:var(--muted);font-family:var(--font-sans)}
   .kpi-card .t{font-family:var(--font-mono);font-size:0.68rem;color:var(--muted);margin-top:0.4rem}
   .kpi-card .t.ok{color:var(--ok)}.kpi-card .t.up{color:var(--danger)}
-  .kpi-card .bar{width:32px;height:3px;background:var(--primary);margin-top:0.9rem;border-radius:2px}
+  .kpi-card .bar{width:30px;height:3px;background:var(--ink);margin-top:0.9rem;border-radius:2px}
   .wrap{display:grid;grid-template-columns:2.2fr 1.3fr;gap:2rem}
   .full{grid-column:1/-1}
   .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:2rem;overflow:hidden}
@@ -65,10 +65,10 @@
   .dot.off{background:#999}
   .st-name{font-weight:600;color:var(--ink);font-size:0.88rem}
   .st-sub{font-size:0.72rem;color:var(--muted)}
-  .st-lvl{font-family:var(--font-serif);font-weight:600;color:var(--primary)}
+  .st-lvl{font-family:var(--font-serif);font-weight:600;color:var(--accent)}
   .status{font-family:var(--font-mono);font-size:0.68rem;text-transform:uppercase;font-weight:600}
   .status.ok{color:var(--ok)}.status.alert{color:var(--danger)}.status.info{color:var(--muted)}
-  .chart{height:260px;border:1px solid var(--border);border-radius:var(--radius);background:#fbfbfb;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:0.82rem;font-family:var(--font-mono)}
+  .chart{height:260px;border:1px solid var(--border);border-radius:var(--radius);background:#fbfaf7;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:0.82rem;font-family:var(--font-mono)}
   .chart b{color:var(--ink);display:block;margin-bottom:0.2rem;font-family:var(--font-serif)}
   .mini{margin-top:1rem}
   .mini-item{display:flex;justify-content:space-between;padding:0.55rem 0;border-bottom:1px solid #f0f0f0;font-size:0.8rem;font-family:var(--font-mono)}
@@ -77,17 +77,17 @@
   .mini-item .val{color:var(--ink);font-weight:600}
   .risk{background:var(--danger-bg);border:1px solid #f5c6c7;border-radius:var(--radius);padding:1.1rem;font-size:0.85rem;color:#7a1f1f;display:flex;flex-direction:column;gap:0.7rem}
   .risk .top{display:flex;align-items:center;justify-content:space-between}
-  .risk b{color:#7a1f1f;font-weight:700}
+  .risk b{color:#7a1f1f;font-weight:800}
   .risk .big{font-size:2.4rem;font-weight:700;letter-spacing:-0.02em;font-family:var(--font-serif)}
   .risk .big span{font-size:1.1rem;font-weight:400;color:#b91c1c}
   .meter{height:7px;background:#e5e5e5;border-radius:4px;overflow:hidden;position:relative;width:100%}
   .meter .fill{height:100%;background:linear-gradient(90deg,var(--ok),var(--warn));width:62%;border-radius:4px}
-  .meter .mark{position:absolute;left:62%;top:-6px;width:12px;height:19px;background:#fff;border:2px solid #1a1a1a;border-radius:3px;box-shadow:0 2px 6px rgba(0,0,0,0.15)}
+  .meter .mark{position:absolute;left:62%;top:-6px;width:12px;height:19px;background:#fff;border:2px solid #222;border-radius:3px;box-shadow:0 2px 6px rgba(0,0,0,0.15)}
   .risk-actions{display:flex;gap:0.6rem;margin-top:0.3rem}
-  .risk-actions button{flex:1;padding:0.55rem;border-radius:9px;border:1px solid var(--border);background:#fff;color:var(--ink);font-size:0.8rem;font-weight:600;cursor:pointer}
-  .risk-actions button.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
-  .risk-actions button:hover{background:#f5f5f5}
-  .risk-actions button.primary:hover{background:#333}
+  .risk-actions button{flex:1;padding:0.55rem;border-radius:10px;border:1px solid var(--border);background:#fff;color:var(--ink);font-size:0.8rem;font-weight:600;cursor:pointer}
+  .risk-actions button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .risk-actions button:hover{background:#f5f5f0}
+  .risk-actions button.primary:hover{background:#444}
   .alerts-table{font-size:0.8rem}
   .alerts-table td{font-family:var(--font-mono)}
   .badge{display:inline-block;padding:0.15rem 0.55rem;border-radius:4px;font-size:0.68rem;font-weight:600;color:#fff}
@@ -95,17 +95,17 @@
   .footer{border-top:1px solid var(--border);padding:2rem 3rem;color:var(--muted);font-size:0.7rem}
   .footer-inner{max-width:1400px;margin:0 auto;display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
   .disclaimer{max-width:700px;font-size:0.68rem;color:#888;line-height:1.6}
-  @media(max-width:900){.wrap{grid-template-columns:1fr}.container{padding:1.5rem}.kpi{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}.container{padding:1.5rem}.kpi{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
 <div class="topbar">
   <div class="brand"><div class="mark">RG</div>RiverGuard</div>
   <nav>
-    <a href="#dash">Dashboard</a>
-    <a href="#map">Hazard Map</a>
-    <a href="#forecast">Forecast &amp; Risk</a>
-    <a href="#alerts">Alerts &amp; Admin</a>
+    <a href="index.html">Home</a>
+    <a href="variant-01-information-architecture.html">Variant 01 &mdash; Rational</a>
+    <a href="variant-02-modern-saas.html">Variant 02 &mdash; Tool</a>
+    <a href="variant-04-warm-humanist.html">Variant 04 &mdash; Human</a>
   </nav>
   <div class="meta">2026 &middot; 11 &middot; 01</div>
 </div>
@@ -143,7 +143,7 @@
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>Water Level · SAN-001</h2><span class="tag">last 24h</span></div>
+      <div class="panel-head"><h2>Water Level &middot; SAN-001</h2><span class="tag">last 24h</span></div>
       <div class="panel-body">
         <div class="chart"><b>Chart placeholder</b><span>Line + confidence band</span></div>
         <div class="mini">
@@ -155,7 +155,7 @@
       </div>
     </div>
     <div class="panel">
-      <div class="panel-head"><h2>Rainfall · SAN-001</h2><span class="tag">rolling totals</span></div>
+      <div class="panel-head"><h2>Rainfall &middot; SAN-001</h2><span class="tag">rolling totals</span></div>
       <div class="panel-body">
         <div class="chart"><b>Chart placeholder</b><span>Bar: 1h/3h/6h/24h</span></div>
         <div class="mini">
