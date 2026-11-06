@@ -2,6 +2,7 @@
 node_modules/
 .next/
 out/
+prototype/node_modules/
 
 # Environment variables
 .env

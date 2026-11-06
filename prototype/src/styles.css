@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
+
+  --color-paper: #f3efe6;
+  --color-ink: #1c2622;
+  --color-muted: #52605a;
+  --color-line: #d9d0c2;
+  --color-card: #fffdf8;
+  --color-water: #0e6b66;
+  --color-water-deep: #0a4f4c;
+  --color-water-soft: #e5f3f1;
+  --color-clay: #9d3422;
+  --color-clay-soft: #f8ece7;
+
+  --shadow-card: 0 0 0 1px rgb(28 38 34 / 0.08), 0 1px 2px rgb(28 38 34 / 0.04);
+  --shadow-card-hover: 0 0 0 1px rgb(28 38 34 / 0.14), 0 8px 20px rgb(28 38 34 / 0.06);
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-water);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-water-soft);
+    color: var(--color-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
