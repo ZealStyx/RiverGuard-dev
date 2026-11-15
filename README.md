@@ -16,22 +16,28 @@ The current supplied development dataset contains daily records for four NCR cit
 
 RiverGuard is a decision-support research prototype. It does not replace PAGASA advisories, LGU procedures, professional hydrological assessments, or official evacuation instructions.
 
+### Current application roles
+
+The local prototype uses three application roles: Resident, LGU operator, and Administrator. Research workflows are Administrator tools under `/admin/research/*`; there is no separate Researcher account in the current product model. Older `/researcher/*` URLs redirect to the corresponding Administrator route for compatibility.
+
+See [`docs/architecture/role-consolidation.md`](docs/architecture/role-consolidation.md) for the role, capability, route, and onboarding decision.
+
 ---
 
 ## 1. Current scope and execution policy
 
 The website and Python ML service run on the developer's computer. Convex is the only hosted application backend/database dependency. The local application makes outbound requests to a weather forecast API when a user requests a forecast.
 
-| Component | Where it runs | Responsibility |
-|---|---|---|
-| Next.js web application | Local computer (`localhost`) | Dashboard, maps, charts, and user interactions |
-| Next.js route handlers | Local Next.js process | Weather API requests and local ML orchestration |
-| Python + FastAPI ML service | Local computer (`127.0.0.1`) | Feature validation and model inference |
-| ML training and preprocessing | Local computer | Data preparation, training, validation, and evaluation |
-| Model artifacts and development datasets | Local filesystem | Raw/processed data, geographic assets, and trained models |
-| Convex | Convex development deployment | Application database, queries, mutations, and reactive updates |
-| Weather forecast provider | External API | Forecast inputs retrieved on explicit user request |
-| Geographic layers | Local files | NCR boundaries, rivers, catchments, terrain derivatives, and hazard layers |
+| Component                                | Where it runs                 | Responsibility                                                             |
+| ---------------------------------------- | ----------------------------- | -------------------------------------------------------------------------- |
+| Next.js web application                  | Local computer (`localhost`)  | Dashboard, maps, charts, and user interactions                             |
+| Next.js route handlers                   | Local Next.js process         | Weather API requests and local ML orchestration                            |
+| Python + FastAPI ML service              | Local computer (`127.0.0.1`)  | Feature validation and model inference                                     |
+| ML training and preprocessing            | Local computer                | Data preparation, training, validation, and evaluation                     |
+| Model artifacts and development datasets | Local filesystem              | Raw/processed data, geographic assets, and trained models                  |
+| Convex                                   | Convex development deployment | Application database, queries, mutations, and reactive updates             |
+| Weather forecast provider                | External API                  | Forecast inputs retrieved on explicit user request                         |
+| Geographic layers                        | Local files                   | NCR boundaries, rivers, catchments, terrain derivatives, and hazard layers |
 
 ### Explicitly out of scope
 
@@ -65,39 +71,39 @@ The application may be designed to support all NCR cities/municipalities, but it
 
 The uploaded `archive (2)(1).zip` contains one file: `Flood_Prediction_NCR_Philippines.csv`.
 
-| Property | Inspected result |
-|---|---|
-| Rows | 7,308 |
-| Columns | 7 |
-| Date range | 2016-01-01 through 2020-12-31 |
-| Temporal frequency | One daily record per location/date in the file |
-| Locations | Quezon City, Marikina, Manila, Pasig |
-| Rows per location | 1,827 |
-| Missing values | None found in the inspected file |
-| Duplicate date/location pairs | None found |
-| `FloodOccurrence = 1` | 132 rows |
-| `FloodOccurrence = 0` | 7,176 rows |
+| Property                      | Inspected result                               |
+| ----------------------------- | ---------------------------------------------- |
+| Rows                          | 7,308                                          |
+| Columns                       | 7                                              |
+| Date range                    | 2016-01-01 through 2020-12-31                  |
+| Temporal frequency            | One daily record per location/date in the file |
+| Locations                     | Quezon City, Marikina, Manila, Pasig           |
+| Rows per location             | 1,827                                          |
+| Missing values                | None found in the inspected file               |
+| Duplicate date/location pairs | None found                                     |
+| `FloodOccurrence = 1`         | 132 rows                                       |
+| `FloodOccurrence = 0`         | 7,176 rows                                     |
 
 Columns:
 
-| Column | Apparent meaning | Important caveat |
-|---|---|---|
-| `Date` | Daily record date | No time-of-day or timezone is supplied |
-| `Location` | City label | No station ID, barangay ID, or coordinates |
-| `Rainfall_mm` | Rainfall amount | Aggregation interval and measurement source are undocumented |
-| `WaterLevel_m` | Water-level value | Gauge/site, datum, observation method, and time are undocumented |
-| `SoilMoisture_pct` | Soil-moisture percentage | Sensor/product, depth, and measurement method are undocumented |
-| `Elevation_m` | Elevation value | Constant within each city in this file; reference point/source are undocumented |
-| `FloodOccurrence` | Binary flood label | Event definition, reporting source, and spatial/temporal meaning are undocumented |
+| Column             | Apparent meaning         | Important caveat                                                                  |
+| ------------------ | ------------------------ | --------------------------------------------------------------------------------- |
+| `Date`             | Daily record date        | No time-of-day or timezone is supplied                                            |
+| `Location`         | City label               | No station ID, barangay ID, or coordinates                                        |
+| `Rainfall_mm`      | Rainfall amount          | Aggregation interval and measurement source are undocumented                      |
+| `WaterLevel_m`     | Water-level value        | Gauge/site, datum, observation method, and time are undocumented                  |
+| `SoilMoisture_pct` | Soil-moisture percentage | Sensor/product, depth, and measurement method are undocumented                    |
+| `Elevation_m`      | Elevation value          | Constant within each city in this file; reference point/source are undocumented   |
+| `FloodOccurrence`  | Binary flood label       | Event definition, reporting source, and spatial/temporal meaning are undocumented |
 
 Flood-label counts in the supplied file:
 
-| Location | Positive rows | Total rows |
-|---|---:|---:|
-| Quezon City | 41 | 1,827 |
-| Marikina | 32 | 1,827 |
-| Manila | 21 | 1,827 |
-| Pasig | 38 | 1,827 |
+| Location    | Positive rows | Total rows |
+| ----------- | ------------: | ---------: |
+| Quezon City |            41 |      1,827 |
+| Marikina    |            32 |      1,827 |
+| Manila      |            21 |      1,827 |
+| Pasig       |            38 |      1,827 |
 
 **Critical provenance limitation:** The ZIP contains no data dictionary, source citation, station metadata, collection methodology, or validation documentation. The values may be synthetic, aggregated, or otherwise unsuitable as observed measurements. Do not assume they are official measurements or verified flood-event labels. Treat the file as a preliminary schema/pipeline smoke-test dataset until its source and semantics are independently verified. Do not report model metrics from it as real-world NCR flood-prediction performance.
 

@@ -4,60 +4,60 @@ This document records the connected frontend prototype implemented from the Rive
 
 ## Public and account routes
 
-| Route | Purpose |
-|---|---|
-| `/welcome` | Public project entry and role access information |
-| `/about` | Purpose, coverage, and deployment scope |
-| `/methodology` | Definitions, evidence rules, and limitations |
-| `/official-sources` | Official-source reminder and verified-link area |
-| `/auth/login` | Provider-neutral login form |
-| `/auth/signup` | Resident registration prototype |
-| `/auth/request-access` | Researcher/LGU access request |
-| `/auth/verify` | Identity verification state |
-| `/auth/pending` | Pending administrator approval |
-| `/auth/forgot-password` | Neutral recovery request |
-| `/auth/reset-password` | Reset form and completion state |
-| `/auth/mfa` | MFA challenge prototype |
-| `/auth/invitation` | Invitation acceptance |
-| `/auth/rejected` | Rejected access state |
-| `/auth/suspended` | Suspended account state |
-| `/auth/locked` | Locked account state |
-| `/auth/unauthorized` | Permission-required state |
-| `/auth/unavailable` | Authentication-provider error state |
-| `/auth/session-expired` | Session recovery state |
-| `/auth/invitation-expired` | Expired invitation state |
-| `/auth/verification-expired` | Expired verification state |
-| `/auth/logout` | Logout success |
+| Route                        | Purpose                                                              |
+| ---------------------------- | -------------------------------------------------------------------- |
+| `/welcome`                   | Public project entry and role access information                     |
+| `/about`                     | Purpose, coverage, and deployment scope                              |
+| `/methodology`               | Definitions, evidence rules, and limitations                         |
+| `/official-sources`          | Official-source reminder and verified-link area                      |
+| `/auth/login`                | Provider-neutral login form                                          |
+| `/auth/signup`               | Resident registration prototype                                      |
+| `/auth/request-access`       | LGU operator access request; administrator access is invitation-only |
+| `/auth/verify`               | Identity verification state                                          |
+| `/auth/pending`              | Pending administrator approval                                       |
+| `/auth/forgot-password`      | Neutral recovery request                                             |
+| `/auth/reset-password`       | Reset form and completion state                                      |
+| `/auth/mfa`                  | MFA challenge prototype                                              |
+| `/auth/invitation`           | Invitation acceptance                                                |
+| `/auth/rejected`             | Rejected access state                                                |
+| `/auth/suspended`            | Suspended account state                                              |
+| `/auth/locked`               | Locked account state                                                 |
+| `/auth/unauthorized`         | Permission-required state                                            |
+| `/auth/unavailable`          | Authentication-provider error state                                  |
+| `/auth/session-expired`      | Session recovery state                                               |
+| `/auth/invitation-expired`   | Expired invitation state                                             |
+| `/auth/verification-expired` | Expired verification state                                           |
+| `/auth/logout`               | Logout success                                                       |
 
 ## Onboarding routes
 
 - `/onboarding/resident`
-- `/onboarding/researcher`
 - `/onboarding/lgu`
 - `/onboarding/admin`
 
-Each route uses a role-specific connected flow: Resident (welcome, locations, preferences, safety), Researcher (profile, coverage, models, tour, responsible use, ready), LGU (assignment, authority, review, notes, notifications, safety, ready), and Administrator (assignment, MFA, policy, configuration, audit, security, ready).
+Each route uses a role-specific connected flow: Resident (welcome, locations, preferences, safety), LGU (assignment, authority, review, notes, notifications, safety, ready), and Administrator (assignment, MFA, research tools, methodology, configuration, audit, security, ready).
 
-## Researcher workspace
+## Administrator research workspace
 
-| Route | Purpose |
-|---|---|
-| `/` and `/researcher` | Research dashboard |
-| `/researcher/map` | Map and accessible location list |
-| `/researcher/locations/marikina` | Location details and evidence |
-| `/researcher/history` | Historical-data filters, chart, and table |
-| `/researcher/forecast/new` | Forecast configuration |
-| `/researcher/forecast/review` | Input review |
-| `/researcher/forecast/progress` | Simulated progress |
-| `/researcher/runs` | Forecast history |
-| `/researcher/runs/RG-NCR-041` | Forecast result |
-| `/researcher/runs/RG-NCR-041/day/2026-11-11` | Forecast-day detail |
-| `/researcher/compare` | Run comparison |
-| `/researcher/data-sources` | Source catalogue |
-| `/researcher/data-sources/daily-rainfall` | Source metadata |
-| `/researcher/data-sources/new` | Metadata form |
-| `/researcher/models` | Models and evaluation |
-| `/researcher/models/rg-ncr-04` | Model card |
+| Route                                              | Purpose                                   |
+| -------------------------------------------------- | ----------------------------------------- |
+| `/`                                                | Public Welcome page                       |
+| `/admin/research`                                  | Research tools overview                   |
+| `/admin/research/map`                              | Map and accessible location list          |
+| `/admin/locations/:slug?view=research`             | Location details and evidence             |
+| `/admin/research/history`                          | Historical-data filters, chart, and table |
+| `/admin/research/forecast/new`                     | Forecast configuration                    |
+| `/admin/research/forecast/review`                  | Input review                              |
+| `/admin/research/forecast/progress`                | Simulated progress                        |
+| `/admin/research/runs`                             | Forecast history                          |
+| `/admin/research/runs/RG-NCR-041`                  | Forecast result                           |
+| `/admin/research/runs/RG-NCR-041/day/2026-11-11`   | Forecast-day detail                       |
+| `/admin/research/compare`                          | Run comparison                            |
+| `/admin/data-sources?view=research`                | Source catalogue and provenance           |
+| `/admin/data-sources/daily-rainfall?view=research` | Source metadata                           |
+| `/admin/data-sources/new?view=research`            | Metadata form                             |
+| `/admin/models?view=research`                      | Models and evaluation                     |
+| `/admin/models/rg-ncr-04?view=research`            | Model card                                |
 
 ## Resident workspace
 
@@ -85,13 +85,15 @@ Each route uses a role-specific connected flow: Resident (welcome, locations, pr
 - `/admin/requests` — access requests
 - `/admin/requests/marco-santos` — role/location decision form
 - `/admin/users` — users and roles
-- `/admin/locations` — supported-location configuration
-- `/admin/data-sources` — data-source configuration
+- `/admin/locations` — supported-location configuration; research detail tab
+- `/admin/data-sources` — data-source configuration; source explorer tab
 - `/admin/provider` — weather-provider configuration
-- `/admin/models` — model-version configuration
+- `/admin/models` — model-version configuration; evaluation tab
 - `/admin/hazard-layers` — hazard-layer configuration
 - `/admin/audit` — redacted audit history
 - `/admin/settings` — safety and deferred-capability settings
+
+Legacy `/researcher/*` URLs redirect to the corresponding administrator research or configuration route. They are compatibility aliases, not a separate role workspace.
 
 ## Shared settings
 

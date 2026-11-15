@@ -4,10 +4,10 @@
 
 - Dashboard density reference: `C:\Users\ta1yi\AppData\Local\Temp\codex-clipboard-46c5becd-727e-489c-85f7-aeb151144561.png`
 - Settings and sidebar structure reference: `C:\Users\ta1yi\Downloads\original-62f9a1c33cd80ebda33507ec847ccddb.webp`
-- Source state: researcher dashboard shown at 80% browser zoom; settings image used as structural inspiration with its outer presentation frame excluded
+- Source state: administrator research workspace shown at 80% browser zoom; settings image used as structural inspiration with its outer presentation frame excluded
 - Source pixels: 1885 × 990
 - Implementation: `http://localhost:3000/`
-- Implementation screenshot: Codex in-app browser capture of the root researcher dashboard at a 1885 × 990 viewport override
+- Implementation screenshot: Codex in-app browser capture of the administrator research workspace at a 1885 × 990 viewport override
 - Implementation CSS viewport after scrollbar normalization: 1870 × 975
 - Density normalization: the source’s apparent 80% scale was implemented through compact typography, spacing, control-height, radius, panel, and shell tokens; CSS `zoom` and transform scaling were not used
 - Theme: light
@@ -119,7 +119,7 @@ These differences support the approved multi-role frontend plan and do not chang
 
 ### Pass 5
 
-- Verified Researcher login → verification → pending approval → simulated approval → six-step onboarding → dashboard.
+- Verified Administrator login → MFA → nine-step onboarding → research workspace.
 - Verified Resident signup → verification → four-step onboarding → resident outlook.
 - Verified LGU and Administrator MFA paths reach their distinct seven-step onboarding flows.
 - Verified settings gear popover opens all six settings destinations, closes after navigation, and removes the redundant inner settings sidebar.
