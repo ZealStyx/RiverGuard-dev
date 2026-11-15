@@ -2,10 +2,15 @@
 
 **Project:** RiverGuard  
 **Folder:** `docs/plan/phase-03-application-foundation.md`  
-**Status:** Planned  
-**Dependencies:** Phase 2 complete (baseline models + evaluation documented)
+**Status:** Planned — dataset ready, models not  
+**Dependencies:** Phase 2 baseline models + evaluation documented (dataset contract already satisfied)
 
 ---
+
+> **Dataset note (2026-11-15):** dataset v2 (`data/RiverGuard_NCR_Dataset_v2.xlsx`, 2016-01-01 → 2026-11-14,
+> 15,884 rows) exists and is usable for schema and pipeline work. `WaterLevel_m`, `SoilMoisture_pct`,
+> and `FloodOccurrence` are **derived from rainfall**, so anything built on them demonstrates plumbing,
+> not validated hydrology — the UI must label them as such. See [`docs/data-sources.md`](../data-sources.md).
 
 ## Objective
 
