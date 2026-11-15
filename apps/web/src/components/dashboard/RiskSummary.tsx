@@ -55,6 +55,19 @@ export function RiskSummary({ selectedDay, onDayChange }: RiskSummaryProps) {
             >
               <span className="text-metadata block">{day.day}</span>
               <span className="text-button mt-0.5 block">{day.date}</span>
+              <span
+                className={`text-metadata mt-1 block font-medium ${
+                  active
+                    ? "text-white"
+                    : day.label === "Elevated"
+                      ? "text-warning"
+                      : day.label === "Moderate"
+                        ? "text-brand-secondary"
+                        : "text-muted"
+                }`}
+              >
+                {day.label}
+              </span>
             </button>
           );
         })}

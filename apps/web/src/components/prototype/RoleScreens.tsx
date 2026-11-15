@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   UserPlus,
   Warning,
+  X,
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -59,24 +60,6 @@ function ResidentHome() {
         RiverGuard does not replace PAGASA advisories, LGU instructions, or
         evacuation guidance.
       </Notice>
-      <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <RiskSummary selectedDay={selectedDay} onDayChange={setSelectedDay} />
-        <Surface title="What this means">
-          <p className="text-body text-muted">
-            The elevated index indicates that the experimental model would flag
-            this date for closer review. It does not describe household, street,
-            or barangay conditions.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <ActionLink href="/resident/outlook">
-              View all seven days
-            </ActionLink>
-            <ActionLink href="/resident/locations?view=hazard" variant="quiet">
-              View hazard context
-            </ActionLink>
-          </div>
-        </Surface>
-      </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           label="Saved city"
@@ -97,6 +80,24 @@ function ResidentHome() {
           detail="No RiverGuard warning"
           tone="primary"
         />
+      </div>
+      <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        <RiskSummary selectedDay={selectedDay} onDayChange={setSelectedDay} />
+        <Surface title="What this means">
+          <p className="text-body text-muted">
+            The elevated index indicates that the experimental model would flag
+            this date for closer review. It does not describe household, street,
+            or barangay conditions.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <ActionLink href="/resident/outlook">
+              View all seven days
+            </ActionLink>
+            <ActionLink href="/resident/locations?view=hazard" variant="quiet">
+              View hazard context
+            </ActionLink>
+          </div>
+        </Surface>
       </div>
     </>
   );
@@ -236,7 +237,7 @@ function ResidentOutlook() {
         description="Experimental daily categories with a consistent official-source reminder."
       />
       <RiskSummary selectedDay={day} onDayChange={setDay} />
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+      <div className="mt-3 grid gap-3">
         <RainfallChart />
         <Surface title="Selected-day guidance">
           <p className="text-body text-muted">
@@ -515,18 +516,14 @@ function LguOutlook({
         </div>
       ) : (
         <>
-          <div className="grid gap-3 xl:grid-cols-2">
-            <RiskSummary selectedDay={day} onDayChange={setDay} />
-            <RainfallChart />
-          </div>
-          <Notice
-            title="Official assessment required"
-            tone="warning"
-            className="mt-4"
-          >
+          <Notice title="Official assessment required" tone="warning">
             Escalate concerns through the established LGU process. Do not
             publish this experimental output as an official advisory.
           </Notice>
+          <div className="mt-3 grid gap-3">
+            <RiskSummary selectedDay={day} onDayChange={setDay} />
+            <RainfallChart />
+          </div>
         </>
       )}
     </>
@@ -1044,7 +1041,7 @@ function RequestReview() {
       />
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Surface title="Decision">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <SelectControl id="approved-role" label="Approved role">
               <option>LGU operator</option>
               <option>Researcher</option>
@@ -1064,14 +1061,15 @@ function RequestReview() {
               label="Optional review date"
               type="date"
             />
-            <TextAreaField
-              id="decision-note"
-              label="Decision note"
-              placeholder="Record verification and scope rationale…"
-              className="sm:col-span-2"
-            />
+            <div className="sm:col-span-2">
+              <TextAreaField
+                id="decision-note"
+                label="Decision note"
+                placeholder="Record verification and scope rationale…"
+              />
+            </div>
           </div>
-          <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
             <Button
               size="small"
               variant="quiet"
@@ -1124,6 +1122,10 @@ function RequestReview() {
 
 function UsersRoles() {
   const [message, setMessage] = useState("");
+  const [modal, setModal] = useState<
+    "invite" | (typeof systemUsers)[number] | null
+  >(null);
+  const editingUser = modal !== "invite" && modal ? modal : null;
   return (
     <>
       <PageHeading
@@ -1133,7 +1135,10 @@ function UsersRoles() {
         actions={
           <Button
             size="small"
-            onClick={() => setMessage("Invitation form opened")}
+            onClick={() => {
+              setMessage("");
+              setModal("invite");
+            }}
           >
             <UserPlus size={14} /> Invite user
           </Button>
@@ -1155,7 +1160,12 @@ function UsersRoles() {
             <Button
               size="small"
               variant="quiet"
-              onClick={() => setMessage(`Access editor opened for ${row.name}`)}
+              onClick={() => {
+                setMessage("");
+                setModal(
+                  systemUsers.find((user) => user.name === row.name) ?? null,
+                );
+              }}
             >
               Edit
             </Button>
@@ -1166,6 +1176,126 @@ function UsersRoles() {
         <p className="text-metadata mt-2 text-success" role="status">
           {message}.
         </p>
+      ) : null}
+      {modal ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-start justify-center bg-ink/25 px-4 pt-[10vh] backdrop-blur-[2px]"
+          role="presentation"
+          onMouseDown={() => setModal(null)}
+        >
+          <section
+            className="w-full max-w-xl rounded-panel border border-line bg-canvas p-5 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="user-modal-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-line pb-3">
+              <div>
+                <h2 id="user-modal-title" className="text-section">
+                  {editingUser ? "Edit user access" : "Invite user"}
+                </h2>
+                <p className="text-metadata mt-0.5 text-muted">
+                  {editingUser
+                    ? "Update role, assigned locations, and account controls."
+                    : "Send an invitation for a RiverGuard workspace account."}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close dialog"
+                className="inline-flex size-8 items-center justify-center rounded-control text-muted hover:bg-canvas-soft hover:text-ink"
+                onClick={() => setModal(null)}
+              >
+                <X size={17} />
+              </button>
+            </div>
+            <form
+              className="mt-4 grid gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setModal(null);
+                setMessage(
+                  editingUser
+                    ? `${editingUser.name} access updated`
+                    : "Invitation sent",
+                );
+              }}
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TextField
+                  id="user-modal-name"
+                  label="Full name"
+                  defaultValue={editingUser?.name}
+                  required
+                />
+                <TextField
+                  id="user-modal-email"
+                  label="Email"
+                  type="email"
+                  defaultValue={
+                    editingUser
+                      ? `${editingUser.name.toLowerCase().replaceAll(" ", ".")}@riverguard.local`
+                      : ""
+                  }
+                  required
+                />
+                <TextField
+                  id="user-modal-organization"
+                  label="Organization"
+                  defaultValue={editingUser?.organization}
+                  required
+                />
+                <SelectControl
+                  id="user-modal-role"
+                  label="Role"
+                  defaultValue={editingUser?.role ?? "Researcher"}
+                >
+                  <option>Resident</option>
+                  <option>Researcher</option>
+                  <option>LGU operator</option>
+                  <option>Administrator</option>
+                </SelectControl>
+                <SelectControl
+                  id="user-modal-location"
+                  label="Assigned locations"
+                  defaultValue={
+                    editingUser?.locations ?? "Supported NCR cities"
+                  }
+                >
+                  <option>Supported NCR cities</option>
+                  <option>Marikina</option>
+                  <option>Quezon City</option>
+                  <option>Manila</option>
+                  <option>Pasig</option>
+                  <option>All</option>
+                </SelectControl>
+                <SelectControl
+                  id="user-modal-mfa"
+                  label="MFA requirement"
+                  defaultValue={editingUser?.mfa ?? "Optional"}
+                >
+                  <option>Optional</option>
+                  <option>Enabled</option>
+                  <option>Required</option>
+                </SelectControl>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-line pt-4">
+                <Button
+                  type="button"
+                  size="small"
+                  variant="quiet"
+                  onClick={() => setModal(null)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" size="small">
+                  {editingUser ? "Save changes" : "Send invitation"}
+                </Button>
+              </div>
+            </form>
+          </section>
+        </div>
       ) : null}
     </>
   );
@@ -1249,8 +1379,11 @@ function ConfigurationScreen({ kind }: { kind: string }) {
         eyebrow="System configuration"
         description={current.description}
       />
+      <Notice title="Configuration security" className="mb-3">
+        Secrets are never displayed or stored in this form.
+      </Notice>
       <Surface title="Configuration record">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-5 sm:grid-cols-2">
           {current.fields.map(([label, value], index) => (
             <TextField
               key={label}
@@ -1260,10 +1393,7 @@ function ConfigurationScreen({ kind }: { kind: string }) {
             />
           ))}
         </div>
-        <Notice title="Configuration security" className="mt-4">
-          Secrets are never displayed or stored in this form.
-        </Notice>
-        <Button className="mt-4" size="small" onClick={() => setSaved(true)}>
+        <Button className="mt-5" size="small" onClick={() => setSaved(true)}>
           <FloppyDisk size={14} /> Save configuration
         </Button>
         {saved ? (
