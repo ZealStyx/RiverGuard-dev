@@ -4,6 +4,12 @@ This folder contains the project documentation for RiverGuard, an explainable ma
 
 See the project root [`README.md`](../README.md) for the overall project overview, architecture, technology stack, and development setup.
 
+## Data and modelling
+
+- [`data-sources.md`](data-sources.md) — catalogue of every rainfall/flood source used, with coverage, units, licence, and limits; the gap table records what is still missing.
+- [`ml-methodology.md`](ml-methodology.md) — features, leakage rules, chronological and leave-one-event-out validation, metrics, calibration, explainability, and the **circularity warning** that governs any result produced from the current dataset.
+- [`../data/README.md`](../data/README.md) — the delivered dataset: workbook, CSVs, generator, and the reliability table that separates observed from derived columns.
+
 ## Product design
 
 - [`designs/ui-ux-design-cheat-sheet.md`](designs/ui-ux-design-cheat-sheet.md) — Complete role, authentication, onboarding, screen, form, permission, system-state, and end-to-end UI/UX flow reference.
@@ -31,3 +37,17 @@ See the project root [`README.md`](../README.md) for the overall project overvie
 ## Project status
 
 Early development / architecture and implementation scaffold. Features described as planned are not necessarily implemented. No prediction, probability, or warning should be treated as operational or validated until the underlying data and models have been tested for their intended use.
+
+**As of 2026-11-15**
+
+| Area | State |
+|---|---|
+| Development dataset | v2 delivered — 15,884 daily rows, 2016-01-01 → 2026-11-14, four cities, chronological train/validation/test split with positives in every split |
+| Real component of the dataset | Rainfall only, and only for 2025-11-15 → 2026-11-14 (ERA5 reanalysis). Everything earlier is synthetic and labelled `RainSource = synthetic` |
+| Water level, soil moisture, flood labels | **Derived from rainfall by documented formulas** — not observations, not gauge readings |
+| Model A (water-level forecast) | **No-Go** — no gauge series with a documented datum exists |
+| Model B (flood probability) | **No-Go** as calibrated probability; Conditional Go only as an experimental index |
+| Engineering / pipeline work | **Go** — Phase 2 may proceed on the dataset as a plumbing fixture |
+| Web app and Convex ingest | Scaffolded; dashboard reads illustrative data |
+
+Dataset decision record: [`plan/MASTER_PLAN_ROADMAP.md`](plan/MASTER_PLAN_ROADMAP.md#decisions). Phase detail: [`plan/phase-01-data-acquisition-exploration.md`](plan/phase-01-data-acquisition-exploration.md), [`plan/phase-02-local-ml-prototyping.md`](plan/phase-02-local-ml-prototyping.md).

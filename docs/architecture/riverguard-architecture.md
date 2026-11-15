@@ -118,6 +118,15 @@ The archive does not contain a data dictionary, provenance, source organization,
 
 Treat the CSV as a schema/pipeline smoke-test dataset only until provenance and semantics are independently verified. A model trained on it may be used to test code paths, but its performance must not be represented as evidence of real-world NCR flood-prediction capability.
 
+> **Update 2026-11-15 — dataset v2 supersedes this CSV for development.** The repository now ships
+> `data/RiverGuard_NCR_Dataset_v2.xlsx` and `data/daily_observations.csv`: 15,884 daily rows for the
+> same four cities from 2016-01-01 to 2026-11-14, with an explicit provenance column per row. Only
+> rainfall is real, and only for 2025-11-15 → 2026-11-14 (ERA5 reanalysis); water level, soil
+> moisture, and flood labels are derived from rainfall by documented formulas. The ingest path,
+> schema, and dashboard must therefore label those columns as modelled values, and the audit above
+> still governs how the original 7,308-row CSV may be described. See
+> [`docs/data-sources.md`](../data-sources.md) and [`data/README.md`](../../data/README.md).
+
 ## 4. Recommended technology stack
 
 | Layer | Technology | Responsibility | Execution |
