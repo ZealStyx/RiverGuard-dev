@@ -9,6 +9,8 @@ import {
   UserPlus,
   Warning,
 } from "@phosphor-icons/react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { RainfallChart } from "@/components/charts/RainfallChart";
@@ -69,7 +71,7 @@ function ResidentHome() {
             <ActionLink href="/resident/outlook">
               View all seven days
             </ActionLink>
-            <ActionLink href="/resident/hazard-context" variant="quiet">
+            <ActionLink href="/resident/locations?view=hazard" variant="quiet">
               View hazard context
             </ActionLink>
           </div>
@@ -100,42 +102,128 @@ function ResidentHome() {
   );
 }
 
-function ResidentLocations() {
+function ResidentWorkspaceViewSwitcher({
+  activeView,
+}: {
+  activeView: "hazard" | "locations";
+}) {
+  return (
+    <div
+      className="mb-4 inline-flex rounded-control border border-line bg-canvas-soft p-1"
+      role="tablist"
+      aria-label="Resident locations workspace view"
+    >
+      <Link
+        href="/resident/locations"
+        role="tab"
+        aria-selected={activeView === "locations"}
+        className={`text-button rounded-control px-3 py-1.5 transition-colors ${
+          activeView === "locations"
+            ? "bg-brand-primary text-white"
+            : "text-muted hover:bg-canvas hover:text-ink"
+        }`}
+      >
+        Locations
+      </Link>
+      <Link
+        href="/resident/locations?view=hazard"
+        role="tab"
+        aria-selected={activeView === "hazard"}
+        className={`text-button rounded-control px-3 py-1.5 transition-colors ${
+          activeView === "hazard"
+            ? "bg-brand-primary text-white"
+            : "text-muted hover:bg-canvas hover:text-ink"
+        }`}
+      >
+        Hazard context
+      </Link>
+    </div>
+  );
+}
+
+function ResidentLocationsWorkspace({
+  initialView = "locations",
+}: {
+  initialView?: "hazard" | "locations";
+}) {
   const [saved, setSaved] = useState("Marikina");
+  const [layer, setLayer] = useState<MapLayerId>("base");
+  const searchParams = useSearchParams();
+  const requestedView = searchParams.get("view");
+  const activeView =
+    requestedView === "hazard" ||
+    (initialView === "hazard" && requestedView !== "locations")
+      ? "hazard"
+      : "locations";
+
   return (
     <>
       <PageHeading
-        title="Saved locations"
-        eyebrow="Resident preferences"
-        description="Choose a supported city for the simplified outlook."
+        title="Locations & hazard"
+        eyebrow="Resident spatial context"
+        description="Choose a supported city and review long-term hazard context separately from the experimental outlook."
       />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {supportedLocations.map((location) => (
+      <ResidentWorkspaceViewSwitcher activeView={activeView} />
+      {activeView === "hazard" ? (
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_320px]">
+          <RiverMap activeLayer={layer} onLayerChange={setLayer} />
           <Surface
-            key={location.name}
-            title={location.name}
-            description={location.support}
+            title="How to read this map"
+            description="Static context only"
+            className="h-fit self-start"
           >
-            <StatusBadge tone={location.name === saved ? "success" : "neutral"}>
-              {location.name === saved ? "Primary location" : "Available"}
-            </StatusBadge>
-            <Button
-              size="small"
-              variant={location.name === saved ? "quiet" : "secondary"}
-              className="mt-4 w-full"
-              onClick={() => setSaved(location.name)}
+            <p className="text-body text-muted">
+              Static susceptibility describes long-term context. It does not say
+              whether flooding will occur today.
+            </p>
+            <Notice
+              title="Verified GIS layer required"
+              tone="warning"
+              className="mt-3"
             >
-              {location.name === saved ? "Selected" : "Set as primary"}
-            </Button>
+              No RiverGuard hazard geometry is loaded. A verified local GIS
+              boundary and susceptibility layer must be supplied before this
+              view can show static hazard context.
+            </Notice>
           </Surface>
-        ))}
-      </div>
-      <Notice title="Coverage limitation" className="mt-4">
-        Current coverage includes Quezon City, Marikina, Manila, and Pasig.
-        Unsupported areas must never be shown as low risk.
-      </Notice>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {supportedLocations.map((location) => (
+              <Surface
+                key={location.name}
+                title={location.name}
+                description={location.support}
+              >
+                <StatusBadge
+                  tone={location.name === saved ? "success" : "neutral"}
+                >
+                  {location.name === saved ? "Primary location" : "Available"}
+                </StatusBadge>
+                <Button
+                  size="small"
+                  variant={location.name === saved ? "quiet" : "secondary"}
+                  className="mt-4 w-full"
+                  onClick={() => setSaved(location.name)}
+                >
+                  {location.name === saved ? "Selected" : "Set as primary"}
+                </Button>
+              </Surface>
+            ))}
+          </div>
+          <Notice title="Coverage limitation" className="mt-4">
+            Current coverage includes Quezon City, Marikina, Manila, and Pasig.
+            Unsupported areas must never be shown as low risk.
+          </Notice>
+        </>
+      )}
     </>
   );
+}
+
+function ResidentLocations() {
+  return <ResidentLocationsWorkspace />;
 }
 
 function ResidentOutlook() {
@@ -165,31 +253,7 @@ function ResidentOutlook() {
 }
 
 function HazardContext() {
-  const [layer, setLayer] = useState<MapLayerId>("base");
-  return (
-    <>
-      <PageHeading
-        title="Hazard context"
-        eyebrow="Long-term susceptibility"
-        description="The real basemap is ready; verified static susceptibility data is still pending."
-      />
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_320px]">
-        <RiverMap activeLayer={layer} onLayerChange={setLayer} />
-        <Surface title="How to read this map">
-          <p className="text-body text-muted">
-            Static susceptibility describes long-term context. It does not say
-            whether flooding will occur today, and it must not be combined with
-            forecast categories in one ambiguous legend.
-          </p>
-          <Notice title="Verified GIS layer required" tone="warning">
-            No RiverGuard hazard geometry is loaded. A verified local GIS
-            boundary and susceptibility layer must be supplied before this view
-            can show static hazard context.
-          </Notice>
-        </Surface>
-      </div>
-    </>
-  );
+  return <ResidentLocationsWorkspace initialView="hazard" />;
 }
 
 function ResidentPreferences() {
@@ -301,7 +365,7 @@ function LguHome() {
           </div>
           <div className="mt-4 flex gap-2">
             <ActionLink href="/lgu/outlook">Review forecast</ActionLink>
-            <ActionLink href="/lgu/map" variant="quiet">
+            <ActionLink href="/lgu/outlook?view=map" variant="quiet">
               Open map
             </ActionLink>
           </div>
@@ -317,31 +381,6 @@ function LguHome() {
               .slice(0, 2)
               .map(({ run, review, updated }) => ({ run, review, updated }))}
           />
-        </Surface>
-      </div>
-    </>
-  );
-}
-
-function LguMap() {
-  const [layer, setLayer] = useState<MapLayerId>("base");
-  return (
-    <>
-      <PageHeading
-        title="Assigned-area risk map"
-        eyebrow="Marikina"
-        description="Review dated experimental output and static hazard context through separate layers."
-      />
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_320px]">
-        <RiverMap activeLayer={layer} onLayerChange={setLayer} />
-        <Surface title="Assigned location">
-          <p className="text-major-status">Marikina</p>
-          <p className="text-body mt-1 text-muted">
-            City-level research coverage · One run needs review
-          </p>
-          <ActionLink href="/lgu/reviews/RG-NCR-041" className="mt-4">
-            Start review
-          </ActionLink>
         </Surface>
       </div>
     </>
@@ -378,32 +417,118 @@ function LguLocations() {
   );
 }
 
-function LguOutlook() {
+function LguWorkspaceViewSwitcher({
+  activeView,
+}: {
+  activeView: "map" | "outlook";
+}) {
+  return (
+    <div
+      className="mb-4 inline-flex rounded-control border border-line bg-canvas-soft p-1"
+      role="tablist"
+      aria-label="Marikina workspace view"
+    >
+      <Link
+        href="/lgu/outlook"
+        role="tab"
+        aria-selected={activeView === "outlook"}
+        className={`text-button rounded-control px-3 py-1.5 transition-colors ${
+          activeView === "outlook"
+            ? "bg-brand-primary text-white"
+            : "text-muted hover:bg-canvas hover:text-ink"
+        }`}
+      >
+        Outlook
+      </Link>
+      <Link
+        href="/lgu/outlook?view=map"
+        role="tab"
+        aria-selected={activeView === "map"}
+        className={`text-button rounded-control px-3 py-1.5 transition-colors ${
+          activeView === "map"
+            ? "bg-brand-primary text-white"
+            : "text-muted hover:bg-canvas hover:text-ink"
+        }`}
+      >
+        Map
+      </Link>
+    </div>
+  );
+}
+
+function LguOutlook({
+  initialView = "outlook",
+}: {
+  initialView?: "map" | "outlook";
+}) {
   const [day, setDay] = useState(0);
+  const [layer, setLayer] = useState<MapLayerId>("base");
+  const searchParams = useSearchParams();
+  const requestedView = searchParams.get("view");
+  const activeView =
+    requestedView === "map" ||
+    (initialView === "map" && requestedView !== "outlook")
+      ? "map"
+      : "outlook";
+
   return (
     <>
       <PageHeading
-        title="Forecast outlook"
+        title="Forecast outlook & map"
         eyebrow="Marikina · RG-NCR-041"
-        description="Review the latest seven-day outlook, evidence quality, and day-level details."
+        description="Review the latest seven-day outlook and assigned-area map in one workspace."
         actions={
           <ActionLink href="/lgu/reviews/RG-NCR-041">
             Review this run
           </ActionLink>
         }
       />
-      <div className="grid gap-3 xl:grid-cols-2">
-        <RiskSummary selectedDay={day} onDayChange={setDay} />
-        <RainfallChart />
-      </div>
-      <Notice
-        title="Official assessment required"
-        tone="warning"
-        className="mt-4"
-      >
-        Escalate concerns through the established LGU process. Do not publish
-        this experimental output as an official advisory.
-      </Notice>
+      <LguWorkspaceViewSwitcher activeView={activeView} />
+      {activeView === "map" ? (
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_320px]">
+          <RiverMap activeLayer={layer} onLayerChange={setLayer} />
+          <Surface
+            title="Assigned location"
+            description="Current LGU workspace context"
+            className="h-fit self-start"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-major-status">Marikina</p>
+                <p className="text-body mt-1 text-muted">
+                  City-level research coverage
+                </p>
+              </div>
+              <StatusBadge tone="warning">Needs review</StatusBadge>
+            </div>
+            <dl className="text-body mt-4 grid gap-2 border-t border-line pt-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div>
+                <dt className="text-metadata text-muted">Latest run</dt>
+                <dd>RG-NCR-041 · Nov 11, 2026</dd>
+              </div>
+              <div>
+                <dt className="text-metadata text-muted">Map coverage</dt>
+                <dd>OpenStreetMap basemap</dd>
+              </div>
+            </dl>
+          </Surface>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-3 xl:grid-cols-2">
+            <RiskSummary selectedDay={day} onDayChange={setDay} />
+            <RainfallChart />
+          </div>
+          <Notice
+            title="Official assessment required"
+            tone="warning"
+            className="mt-4"
+          >
+            Escalate concerns through the established LGU process. Do not
+            publish this experimental output as an official advisory.
+          </Notice>
+        </>
+      )}
     </>
   );
 }
@@ -485,12 +610,13 @@ function ReviewForm() {
               label="Follow-up owner"
               placeholder="Assign when required"
             />
-            <TextAreaField
-              id="review-notes"
-              label="Internal notes"
-              placeholder="Describe evidence checked, limitations, and next steps…"
-              className="sm:col-span-2"
-            />
+            <div className="sm:col-span-2">
+              <TextAreaField
+                id="review-notes"
+                label="Internal notes"
+                placeholder="Describe evidence checked, limitations, and next steps…"
+              />
+            </div>
             <TextField
               id="support-reference"
               label="Supporting reference"
@@ -779,7 +905,7 @@ function AlertDraft() {
 export function LguScreen({ segments }: { segments: string[] }) {
   const [screen, detail] = segments;
   if (!screen) return <LguHome />;
-  if (screen === "map") return <LguMap />;
+  if (screen === "map") return <LguOutlook initialView="map" />;
   if (screen === "locations") return <LguLocations />;
   if (screen === "outlook") return <LguOutlook />;
   if (screen === "reviews") return <ReviewQueue detail={detail} />;
@@ -1123,7 +1249,7 @@ function ConfigurationScreen({ kind }: { kind: string }) {
         eyebrow="System configuration"
         description={current.description}
       />
-      <Surface className="mx-auto max-w-5xl" title="Configuration record">
+      <Surface title="Configuration record">
         <div className="grid gap-3 sm:grid-cols-2">
           {current.fields.map(([label, value], index) => (
             <TextField

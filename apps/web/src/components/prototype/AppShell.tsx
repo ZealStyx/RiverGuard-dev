@@ -111,7 +111,8 @@ function isActive(pathname: string, href: string) {
     href === "/researcher/runs" &&
     (pathname.startsWith("/researcher/runs") ||
       pathname.startsWith("/researcher/forecast") ||
-      pathname.startsWith("/researcher/compare"))
+      pathname.startsWith("/researcher/compare") ||
+      pathname.startsWith("/researcher/history"))
   )
     return true;
   if (
@@ -156,7 +157,6 @@ function isActive(pathname: string, href: string) {
     href === "/researcher/map" &&
     (pathname.startsWith("/researcher/map") ||
       pathname.startsWith("/researcher/locations") ||
-      pathname.startsWith("/researcher/history") ||
       pathname.startsWith("/researcher/data-sources"))
   )
     return true;
