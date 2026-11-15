@@ -115,6 +115,53 @@ Before making operational-sounding predictions, obtain and document:
 
 Keep provenance, license, geographic coverage, temporal coverage, measurement method, and known limitations in a data catalog.
 
+#### 2.3.1 Current status of that priority list (2026-11-15)
+
+Items 1 and 3 are **partially** covered, item 2 is not covered at all. The development dataset in
+`data/` therefore has a clearly marked real/synthetic boundary rather than a uniform provenance.
+
+### 2.4 Development dataset v2 (`data/`)
+
+| Property | Value |
+|---|---|
+| Workbook | `data/RiverGuard_NCR_Dataset_v2.xlsx` (11 sheets) |
+| Flattened table | `data/daily_observations.csv` |
+| Rows | 15,884 daily records × 23 columns |
+| Date range | 2016-01-01 → 2026-11-14 (3,971 days × 4 cities) |
+| Locations | Quezon City, Marikina, Manila, Pasig |
+| Flood positives | 328 (2.06 %): Manila 86, Marikina 78, Pasig 83, Quezon City 81 |
+| Split | train 2016–2023 (11,688 rows / 256 positives), validation 2024 (1,464 / 19), test 2025-01-01 → 2026-11-14 (2,732 / 53) |
+| Rainfall provenance | `synthetic` 14,416 rows · `ERA5-reanalysis` 1,460 rows · `ERA5-anchor` 8 rows |
+
+Every row carries a `RainSource` value and a `DataSource`/`Notes` explanation, so the synthetic and
+real parts are separable without guessing.
+
+**What is real:** daily rainfall for 2025-11-15 → 2026-11-14, taken from ERA5 reanalysis
+(Open-Meteo archive API) for the four city centroids, checked against PAGASA climatological
+normals 1991–2020 for seasonality and magnitude. Documented historical events (Ondoy 2009,
+Habagat 2012, Ulysses 2020, Carina 2024) anchor the extremes.
+
+**What is derived, not observed:** `WaterLevel_m` comes from an explicit reservoir-style formula
+over antecedent and daily rainfall, calibrated so that alarm-level crossings land near documented
+events. `SoilMoisture_pct` is a water-balance bucket. `FloodOccurrence` is a rule over water level
+and rainfall totals. No gauge reading, sensor value, or official flood report backs these columns.
+
+**Consequence for modelling:** a model trained on this table can recover the generator. Metrics
+from it validate the pipeline, not NCR hydrology. See
+[`docs/ml-methodology.md`](docs/ml-methodology.md) §2 and the Go/No-Go record in
+[`docs/plan/phase-01-data-acquisition-exploration.md`](docs/plan/phase-01-data-acquisition-exploration.md).
+
+**Reproducing it:**
+
+```bash
+python3 data/era5_recent_rainfall.py   # real ERA5 window (already cached in the script)
+python3 data/generate_dataset.py       # synthetic backfill + workbook + CSVs
+python3 data/build_preview.py          # data/dataset_preview.html
+```
+
+Source catalogue: [`docs/data-sources.md`](docs/data-sources.md). Dataset detail and reliability
+table: [`data/README.md`](data/README.md). Full licence, units, and per-column caveats live there.
+
 ## 3. Main capabilities
 
 ### 3.1 Geographic hazard visualization

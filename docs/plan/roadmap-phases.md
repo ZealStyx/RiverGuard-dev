@@ -5,6 +5,8 @@ This roadmap defines the delivery sequence for RiverGuard's NCR research prototy
 > **Deployment constraint:** Never deploy the website, FastAPI service, or models publicly under the current project scope. Do not provision AWS infrastructure, Vercel hosting, container registries, object storage, external map tiles, or other managed compute services. If this constraint changes, revise the architecture and roadmap before creating resources.
 
 > **Study area:** NCR. The currently supplied dataset covers only Quezon City, Marikina, Manila, and Pasig. It does not establish coverage for all NCR LGUs or barangays.
+>
+> **Development dataset (2026-11-15):** `data/RiverGuard_NCR_Dataset_v2.xlsx` and `data/daily_observations.csv` provide 15,884 daily rows (2016-01-01 → 2026-11-14) for those four cities, with a real ERA5 rainfall tail for the last 12 months. Rainfall before that is synthetic calibrated to PAGASA normals; water level, soil moisture, and flood labels are **derived**. It is an engineering fixture, not observed data — see [`docs/data-sources.md`](../data-sources.md) and the Phase 1 decision below.
 
 RiverGuard is a research and demonstration system. Its predictions are not operational warnings and must not be presented as official evacuation guidance.
 
@@ -47,6 +49,19 @@ RiverGuard is a research and demonstration system. Its predictions are not opera
 10. Evaluate seven-day weather forecast coverage for each selected location using verified representative coordinates. Record the provider's spatial resolution and variables.
 11. Seek historical weather forecast snapshots if available so that training features reproduce what would have been known at each forecast issue time.
 12. Create `docs/data-sources.md` with source, download date, provider, license, geography, time coverage, sampling interval, spatial resolution, units, and limitations.
+
+### Current status (2026-11-15)
+
+| Model | Decision | Basis |
+|---|---|---|
+| Model A (water level) | **No-Go** for training/operational use | No timestamped gauge observations with a documented datum. The development dataset derives water level from rainfall, which the Model A gate below explicitly forbids training on. |
+| Model B (flood occurrence) | **No-Go** for calibrated probabilities; **Conditional Go** for an experimental flagged index | Labels are a documented rule-based proxy over PAGASA thresholds and alarm levels, not LGU-verified events. |
+| Engineering use | **Go** | Schema, ingest, features, API wiring, and UI states can be built and tested against dataset v2 now. Any surface showing it must label it development data. |
+
+Delivered so far: 15,884 daily rows for the four initial cities (2016-01-01 → 2026-11-14);
+real ERA5 rainfall for 2025-11-15 → 2026-11-14; chronological train/validation/test split;
+data catalogue and quality checks. Outstanding: PAGASA/EFCOS gauge series, LGU flood-event
+records, NCR boundary/barangay/DEM layers, weather-forecast archive.
 
 ### Supplied CSV audit to record
 
@@ -91,6 +106,13 @@ Treat the file as a schema/pipeline smoke-test dataset until independently verif
 
 **Objective:** Build reproducible local datasets and establish honest baselines for each model and supported NCR location.
 
+> **Status 2026-11-15:** the shared data pipeline's first artifact exists (dataset v2, see
+> [`data/README.md`](../../data/README.md)). Feature definitions are frozen in the
+> `Data_Dictionary` tab; reuse them instead of recomputing rolling sums differently. Two
+> cautionary rules apply while this dataset is in use: (a) metrics are pipeline validation, not
+> flood-prediction skill, because water level and labels are derived from the same rainfall;
+> (b) use the supplied `Split` column and add a leave-one-event-out check rather than shuffling.
+
 ### Entry criteria
 
 - Phase 1 data-feasibility decisions are documented.
@@ -112,10 +134,10 @@ Treat the file as a schema/pipeline smoke-test dataset until independently verif
 
 #### Model A — Hydrological forecasting
 
-1. Define targets at horizons supported by observations. Begin with daily targets if only daily records are verified; use hourly targets only with hourly observations.
+1. Define targets at horizons supported by observations. Begin with daily targets if only daily records are verified; use hourly targets only with hourly observations. Today only **daily** resolution exists, so D+1 daily is the only defensible target; D+2–D+7 requires finer inputs.
 2. Build lagged water-level, water-level-change, rolling rainfall, antecedent rainfall, forecast rainfall, and available upstream features.
 3. Establish persistence and simple statistical baselines.
-4. Train XGBoost or another baseline regressor only when the Model A data gate is met.
+4. Train XGBoost or another baseline regressor only when the Model A data gate is met. Training against the derived `WaterLevel_m` column is acceptable **only** as a code-path test, and must be reported as such (the column is a formula over rainfall).
 5. Evaluate MAE, RMSE, bias, and error by station and lead time.
 6. Add uncertainty intervals only when the method is defined and empirically evaluated.
 
