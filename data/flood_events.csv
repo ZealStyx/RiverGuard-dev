@@ -1,0 +1,7 @@
+Date,Event,Area,Rainfall_mm,Duration,Marikina_Peak_m,Impact,Notes
+2009-09-26,Typhoon Ondoy (Ketsana),NCR-wide (Marikina/Pasig worst),455.0,24h,21.0,Marikina River >21 m (UP NOAH),464-671 deaths; ~P11B damage. Reference event (outside 2016-2020 window).
+2012-08-07,Habagat + Typhoon Haikui,NCR-wide,1007.0,3 days,,Marikina exceeded danger level,1007.4 mm/3 days (PAGASA via press). Reference event (outside window).
+2020-11-12,Typhoon Ulysses (Vamco),Marikina/Pasig/NCR,178.4,1 day (ERA5 Manila),,Worst NCR flooding since 2009,98 deaths; P20.3B damage. IN DATASET: Manila rain = ERA5 real values.
+2024-07-24,Typhoon Carina + Habagat,Marikina/NCR,217.0,24h,20.6,Marikina 20.5-20.6 m (3rd alarm),Reference event (outside window; for threshold validation).
+2018-08-06,Synthetic calibration storm A,NCR-wide,280.0,3 days,,— (synthetic),Habagat-type magnitude; flagged in Daily_Observations. NOT an observation.
+2019-09-14,Synthetic calibration storm B,NCR-wide,190.0,2 days,,— (synthetic),Flagged in Daily_Observations. NOT an observation.
