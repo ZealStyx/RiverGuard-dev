@@ -1,0 +1,104 @@
+{
+  "generated_at": "2026-11-15T03:34:46+00:00",
+  "dataset": "data/daily_observations.csv (dataset v2)",
+  "samples": {
+    "total": 15872,
+    "train": 11684,
+    "validation": 1460,
+    "test": 2728,
+    "positives": {
+      "train": 256,
+      "validation": 19,
+      "test": 53
+    },
+    "positive_rate_test": 0.0194
+  },
+  "classifier": {
+    "average_precision_test": 0.786,
+    "roc_auc_test": 0.9937,
+    "brier_test": 0.0087,
+    "operating_threshold": 0.3439,
+    "at_operating_threshold_test": {
+      "threshold": 0.3439,
+      "precision": 0.775,
+      "recall": 0.5849,
+      "f1": 0.6667,
+      "tp": 31,
+      "fp": 9,
+      "fn": 22,
+      "tn": 2666,
+      "false_alarm_rate": 0.0034
+    },
+    "at_0.5_test": {
+      "threshold": 0.5,
+      "precision": 0.8529,
+      "recall": 0.5472,
+      "f1": 0.6667,
+      "tp": 29,
+      "fp": 5,
+      "fn": 24,
+      "tn": 2670,
+      "false_alarm_rate": 0.0019
+    },
+    "calibration_test": [
+      {
+        "n": 546,
+        "predicted": 0.0003,
+        "observed": 0.0
+      },
+      {
+        "n": 546,
+        "predicted": 0.0003,
+        "observed": 0.0
+      },
+      {
+        "n": 546,
+        "predicted": 0.0003,
+        "observed": 0.0
+      },
+      {
+        "n": 545,
+        "predicted": 0.0003,
+        "observed": 0.0
+      },
+      {
+        "n": 545,
+        "predicted": 0.0702,
+        "observed": 0.0972
+      }
+    ],
+    "baselines": [
+      {
+        "name": "antecedent 7-day rain >= 150 mm",
+        "recall": 0.585,
+        "precision": 0.24,
+        "flagged": 129
+      },
+      {
+        "name": "forecast rain >= 50 mm",
+        "recall": 0.208,
+        "precision": 0.55,
+        "flagged": 20
+      },
+      {
+        "name": "dataset rule: rain >= 100 and ant7 >= 150",
+        "recall": 0.0,
+        "precision": 0.0,
+        "flagged": 0
+      }
+    ]
+  },
+  "regressor": {
+    "mae_test_m": 0.0936,
+    "rmse_test_m": 0.1194,
+    "r2_test": 0.991,
+    "persistence_mae_test_m": 0.1725,
+    "per_city_mae_test_m": {
+      "Quezon City": 0.0969,
+      "Marikina": 0.0955,
+      "Manila": 0.0923,
+      "Pasig": 0.0895
+    }
+  },
+  "caveat": "WaterLevel_m and FloodOccurrence are derived from Rainfall_mm in dataset v2, so these scores measure how well the model recovers the generator, not forecast skill. See docs/ml-methodology.md section 2."
+}
