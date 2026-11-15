@@ -42,10 +42,21 @@ function PublicShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const sourceReturn = searchParams.get("from");
+  const preservedReturn = searchParams.get("return");
+  const isInformationPage = [
+    "/about",
+    "/methodology",
+    "/official-sources",
+  ].includes(pathname);
+  const informationParent = isInformationPage ? pathname : sourceReturn;
   const informationReturn =
-    pathname === "/methodology" ? "/methodology" : sourceReturn;
-  const informationQuery = informationReturn
-    ? `?from=${encodeURIComponent(informationReturn)}`
+    pathname === "/methodology" ? sourceReturn : preservedReturn;
+  const informationQuery = informationParent
+    ? `?from=${encodeURIComponent(informationParent)}${
+        informationReturn
+          ? `&return=${encodeURIComponent(informationReturn)}`
+          : ""
+      }`
     : "";
 
   return (
@@ -1089,18 +1100,32 @@ export function PublicInfoScreen({
 }) {
   const params = useSearchParams();
   const requestedReturn = params.get("from");
-  const returnHref =
+  const preservedReturn = params.get("return");
+  const validWorkspaceReturn =
+    preservedReturn && /^\/(resident|lgu|admin)(?:\/.*)?$/.test(preservedReturn)
+      ? preservedReturn
+      : null;
+  const informationReturn =
     requestedReturn &&
-    (requestedReturn === "/methodology" ||
-      /^\/(resident|lgu|admin)(?:\/.*)?$/.test(requestedReturn))
+    ["/about", "/methodology", "/official-sources"].includes(requestedReturn)
+      ? `${requestedReturn}${validWorkspaceReturn ? `?from=${encodeURIComponent(validWorkspaceReturn)}` : ""}`
+      : null;
+  const returnHref =
+    informationReturn ??
+    (requestedReturn &&
+    /^\/(resident|lgu|admin)(?:\/.*)?$/.test(requestedReturn)
       ? requestedReturn
-      : "/welcome";
+      : "/welcome");
   const returnLabel =
     returnHref === "/welcome"
       ? "Back"
-      : returnHref === "/methodology"
+      : requestedReturn === "/methodology"
         ? "Back to methodology"
-        : "Back to dashboard";
+        : requestedReturn === "/about"
+          ? "Back to About"
+          : requestedReturn === "/official-sources"
+            ? "Back to official sources"
+            : "Back to dashboard";
   const content = {
     about: {
       title: "About RiverGuard",
