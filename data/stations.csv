@@ -1,0 +1,9 @@
+Station_ID,Station_Name,City,River,Latitude,Longitude,Elevation_m,Operator,Measures,Status,Notes
+PAGASA-SG-QC,PAGASA Science Garden (Quezon City),Quezon City,— (climate),14.6509,121.0486,55.0,PAGASA,Climate (rain/temp),Active,Representative climate point; WL is modeled proxy.
+PAGASA-PA-MNL,PAGASA Port Area (Manila),Manila,— (climate),14.587,120.979,15.0,PAGASA,Climate (rain/temp),Active,"PAGASA PDF: 14°35'13""N, 120°58'43""E, 15 m."
+EFCOS-STO-NINO,EFCOS Sto. Nino (Marikina River),Marikina,Marikina River,14.65,121.1,24.0,PAGASA/EFCOS,Water level,Active,Alarms 15/16/18 m (PAGASA/Marikina MDRRMO).
+EFCOS-ROSARIO,EFCOS Rosario (Pasig River),Pasig,Pasig River,14.59,121.07,20.0,PAGASA/EFCOS,Water level,Active,Alarms indicative 12.0/12.5/13.0 m.
+EFCOS-MONTALBAN,"EFCOS Montalban (Marikina River, upstream)",Marikina (upstream),Marikina River,14.74,121.15,60.0,PAGASA/EFCOS,Water level,Active,Upstream boundary; coords approximate.
+EFCOS-TUMANA,EFCOS Tumana (Marikina River),Marikina,Marikina River,14.67,121.09,25.0,PAGASA/EFCOS,Water level,Active,Validation station (NOAH HEC-RAS study).
+PAGASA-FFWS-PANDACAN,PAGASA FFWS Pandacan (Pasig River),Manila,Pasig River,14.595,121.0,10.0,PAGASA FFWS,Water level,Active,Pasig alarms indicative.
+PAGASA-FFWS-NAPINDAN,PAGASA FFWS Napindan (Napindan Channel),Pasig,Napindan Channel,14.54,121.08,8.0,PAGASA FFWS,Water level,Active,Tidal influence; alarms indicative.

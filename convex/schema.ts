@@ -12,6 +12,20 @@ import {
 } from "./validators";
 
 export default defineSchema({
+  locations: defineTable({
+    cityCode: v.string(),
+    name: v.string(),
+    locationType: v.literal("city"),
+    latitude: v.number(),
+    longitude: v.number(),
+    timezone: v.string(),
+    coverageStatus: v.union(v.literal("supported"), v.literal("unavailable")),
+    source: v.string(),
+    updatedAt: v.number(),
+  })
+    .index("by_city_code", ["cityCode"])
+    .index("by_coverage_status", ["coverageStatus", "name"]),
+
   users: defineTable({
     externalId: v.optional(v.string()),
     email: v.string(),
@@ -26,6 +40,7 @@ export default defineSchema({
   lguProfiles: defineTable({
     userId: v.id("users"),
     cityCode: v.string(),
+    assignedLocationCodes: v.optional(v.array(v.string())),
     organization: v.string(),
     position: v.optional(v.string()),
     createdAt: v.number(),
@@ -56,11 +71,20 @@ export default defineSchema({
 
   sensorReadings: defineTable({
     stationId: v.id("stations"),
+    locationCode: v.optional(v.string()),
     observedAt: v.number(),
     ingestedAt: v.number(),
     rainfallMm: v.optional(v.number()),
     waterLevelM: v.optional(v.number()),
     soilMoisturePercent: v.optional(v.number()),
+    antecedentRain3dMm: v.optional(v.number()),
+    antecedentRain7dMm: v.optional(v.number()),
+    antecedentRain30dMm: v.optional(v.number()),
+    floodOccurrence: v.optional(v.boolean()),
+    riskLabel: v.optional(v.string()),
+    rainSource: v.optional(v.string()),
+    datasetId: v.optional(v.string()),
+    split: v.optional(v.string()),
     source: v.string(),
     sourceRecordId: v.optional(v.string()),
     qualityStatus: dataQualityValidator,
@@ -68,6 +92,7 @@ export default defineSchema({
     notes: v.optional(v.string()),
   })
     .index("by_station_observed_at", ["stationId", "observedAt"])
+    .index("by_location_observed_at", ["locationCode", "observedAt"])
     .index("by_source_record", ["source", "sourceRecordId"])
     .index("by_ingested_at", ["ingestedAt"]),
 
@@ -159,4 +184,37 @@ export default defineSchema({
   })
     .index("by_slug", ["slug"])
     .index("by_active_kind", ["active", "kind"]),
+
+  floodEvents: defineTable({
+    eventDate: v.string(),
+    name: v.string(),
+    area: v.string(),
+    rainfallMm: v.optional(v.number()),
+    duration: v.optional(v.string()),
+    marikinaPeakM: v.optional(v.number()),
+    impact: v.string(),
+    notes: v.optional(v.string()),
+    source: v.string(),
+    datasetId: v.optional(v.string()),
+  })
+    .index("by_event_date", ["eventDate"])
+    .index("by_dataset_event", ["datasetId", "eventDate"]),
+
+  historicalImports: defineTable({
+    datasetId: v.string(),
+    datasetVersion: v.string(),
+    sourceFile: v.string(),
+    sourceSha256: v.string(),
+    rowCount: v.number(),
+    importedRows: v.number(),
+    dateMin: v.string(),
+    dateMax: v.string(),
+    status: v.union(
+      v.literal("validated"),
+      v.literal("importing"),
+      v.literal("complete"),
+      v.literal("failed"),
+    ),
+    updatedAt: v.number(),
+  }).index("by_dataset_id", ["datasetId"]),
 });
