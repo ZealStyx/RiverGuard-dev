@@ -9,6 +9,7 @@ See the project root [`README.md`](../README.md) for the overall project overvie
 - [`data-sources.md`](data-sources.md) — catalogue of every rainfall/flood source used, with coverage, units, licence, and limits; the gap table records what is still missing.
 - [`ml-methodology.md`](ml-methodology.md) — features, leakage rules, chronological and leave-one-event-out validation, metrics, calibration, explainability, and the **circularity warning** that governs any result produced from the current dataset.
 - [`../data/README.md`](../data/README.md) — the delivered dataset: workbook, CSVs, generator, and the reliability table that separates observed from derived columns.
+- [`../ml/README.md`](../ml/README.md) — the test model trained on that dataset, its held-out metrics, and the interactive predictor page.
 
 ## Product design
 
