@@ -1,20 +1,76 @@
 "use client";
 
 import {
-  Bar,
+  Area,
+  AreaChart,
   CartesianGrid,
-  ComposedChart,
-  Legend,
   Line,
-  Tooltip,
+  ReferenceLine,
   XAxis,
   YAxis,
 } from "recharts";
+import { useEffect, useState } from "react";
 
-import { StatusLabel } from "@/components/ui";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  StatusLabel,
+} from "@/components/ui";
 import { historicalReadings } from "@/data/dashboard";
 
-export function RainfallChart() {
+export function RainfallChart({
+  endDate,
+  location = "Marikina",
+  startDate,
+}: {
+  endDate?: string;
+  location?: string;
+  startDate?: string;
+} = {}) {
+  const [readings, setReadings] = useState(historicalReadings);
+  const [datasetLabel, setDatasetLabel] = useState("Dataset v2 · loading");
+  const [state, setState] = useState<
+    "loading" | "ready" | "fallback" | "empty"
+  >("loading");
+
+  useEffect(() => {
+    let active = true;
+    const params = new URLSearchParams({ location, limit: "14" });
+    if (startDate) params.set("start", startDate);
+    if (endDate) params.set("end", endDate);
+    fetch(`/api/historical?${params.toString()}`)
+      .then(async (response) => {
+        if (response.status === 404) return { empty: true as const };
+        if (!response.ok) throw new Error("Historical dataset unavailable");
+        return (await response.json()) as {
+          dataset: string;
+          readings: typeof historicalReadings;
+        };
+      })
+      .then((payload) => {
+        if (!active) return;
+        if ("empty" in payload) {
+          setReadings([]);
+          setDatasetLabel("Dataset v2 · no records");
+          setState("empty");
+          return;
+        }
+        setReadings(payload.readings);
+        setDatasetLabel("Dataset v2 · historical");
+        setState("ready");
+      })
+      .catch(() => {
+        if (active) {
+          setDatasetLabel("Dataset v2 · fallback preview");
+          setState("fallback");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [endDate, location, startDate]);
+
   return (
     <section
       id="historical-context"
@@ -28,78 +84,192 @@ export function RainfallChart() {
             Historical context
           </h2>
           <p className="text-metadata mt-0.5 text-muted">
-            Recent rainfall and water level · Marikina River
+            Daily rainfall and documented derived water-level proxy · {location}
           </p>
         </div>
         <StatusLabel className="border-line bg-canvas text-muted">
-          Research data
+          {datasetLabel}
         </StatusLabel>
       </div>
 
-      <div
-        className="mt-3 h-[165px] w-full overflow-hidden"
-        aria-label="Historical sample chart"
-      >
-        <ComposedChart
-          width={520}
-          height={165}
-          className="h-full! w-full!"
-          data={historicalReadings}
-          margin={{ top: 8, right: 4, bottom: 0, left: -18 }}
-        >
-          <CartesianGrid stroke="var(--color-chart-grid)" vertical={false} />
-          <XAxis
-            dataKey="date"
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: "var(--color-muted)", fontSize: 10 }}
-          />
-          <YAxis
-            yAxisId="rainfall"
-            domain={[0, 100]}
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: "var(--color-muted)", fontSize: 10 }}
-          />
-          <YAxis yAxisId="water" orientation="right" domain={[14, 17]} hide />
-          <Tooltip
-            contentStyle={{
-              background: "var(--color-canvas-soft)",
-              border: "1px solid var(--color-line)",
-              borderRadius: 8,
-              color: "var(--color-ink)",
-              fontSize: 11,
-            }}
-            labelStyle={{ color: "var(--color-ink)" }}
-          />
-          <Legend
-            iconSize={9}
-            wrapperStyle={{ color: "var(--color-muted)", fontSize: 10 }}
-          />
-          <Bar
-            yAxisId="rainfall"
-            name="Rainfall (mm)"
-            dataKey="rainfall"
-            fill="var(--color-chart-bar)"
-            radius={[2, 2, 0, 0]}
-          />
-          <Line
-            yAxisId="water"
-            name="Water level (m)"
-            dataKey="waterLevel"
-            type="monotone"
-            stroke="var(--color-brand-secondary)"
-            strokeWidth={3}
-            dot={{
-              fill: "var(--color-brand-secondary)",
-              stroke: "var(--color-chart-surface)",
-              strokeWidth: 2,
-              r: 4,
-            }}
-            activeDot={{ r: 5, fill: "var(--color-brand-secondary-hover)" }}
-          />
-        </ComposedChart>
+      <div className="mt-3 grid gap-3" aria-label="Historical context charts">
+        {state === "loading" ? (
+          <p className="text-metadata flex h-full items-center justify-center text-muted">
+            Loading historical records…
+          </p>
+        ) : state === "empty" ? (
+          <p className="text-metadata flex h-full items-center justify-center text-muted">
+            No Dataset v2 records match this date range.
+          </p>
+        ) : (
+          <>
+            <div>
+              <p className="text-metadata mb-1 font-semibold text-ink">
+                Daily rainfall · mm
+              </p>
+              <div className="h-[135px]">
+                <ChartContainer
+                  config={{
+                    rainfall: {
+                      label: "Rainfall (mm)",
+                      color: "var(--color-brand-secondary)",
+                    },
+                  }}
+                >
+                  <AreaChart
+                    data={readings}
+                    margin={{ top: 4, right: 4, bottom: 0, left: -18 }}
+                  >
+                    <defs>
+                      <linearGradient
+                        id="dashboard-rainfall-fill"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="var(--color-brand-secondary)"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="var(--color-brand-secondary)"
+                          stopOpacity={0.03}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      vertical={false}
+                      stroke="var(--color-chart-grid)"
+                    />
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 9 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 9 }}
+                      unit=" mm"
+                    />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Area
+                      type="monotone"
+                      dataKey="rainfall"
+                      name="Rainfall (mm)"
+                      stroke="var(--color-rainfall)"
+                      fill="url(#dashboard-rainfall-fill)"
+                      strokeWidth={2}
+                      connectNulls={false}
+                    />
+                  </AreaChart>
+                </ChartContainer>
+              </div>
+            </div>
+            <div>
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-metadata font-semibold text-ink">
+                  Derived water-level proxy · m
+                </p>
+                <p className="text-metadata text-warning">
+                  Not a direct gauge observation
+                </p>
+              </div>
+              <div className="h-[135px]">
+                <ChartContainer
+                  config={{
+                    waterLevel: {
+                      label: "Derived proxy (m)",
+                      color: "var(--color-brand-primary)",
+                    },
+                  }}
+                >
+                  <AreaChart
+                    data={readings}
+                    margin={{ top: 4, right: 4, bottom: 0, left: -18 }}
+                  >
+                    <CartesianGrid
+                      vertical={false}
+                      stroke="var(--color-chart-grid)"
+                    />
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 9 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 9 }}
+                      unit=" m"
+                    />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    {location === "Marikina" ? (
+                      <>
+                        <ReferenceLine
+                          y={15}
+                          stroke="var(--color-warning)"
+                          strokeDasharray="4 4"
+                          label={{
+                            value: "1st alarm 15 m",
+                            fontSize: 9,
+                            fill: "var(--color-warning)",
+                          }}
+                        />
+                        <ReferenceLine
+                          y={16}
+                          stroke="var(--color-danger)"
+                          strokeDasharray="4 4"
+                          label={{
+                            value: "2nd alarm 16 m",
+                            fontSize: 9,
+                            fill: "var(--color-danger)",
+                          }}
+                        />
+                        <ReferenceLine
+                          y={18}
+                          stroke="var(--color-danger)"
+                          strokeDasharray="4 4"
+                          label={{
+                            value: "3rd alarm 18 m",
+                            fontSize: 9,
+                            fill: "var(--color-danger)",
+                          }}
+                        />
+                      </>
+                    ) : null}
+                    <Line
+                      type="monotone"
+                      dataKey="waterLevel"
+                      name="Derived proxy (m)"
+                      stroke="var(--color-waterLevel)"
+                      strokeWidth={2.25}
+                      dot={{
+                        fill: "var(--color-waterLevel)",
+                        stroke: "var(--color-chart-surface)",
+                        strokeWidth: 2,
+                        r: 3,
+                      }}
+                      connectNulls={false}
+                    />
+                  </AreaChart>
+                </ChartContainer>
+              </div>
+            </div>
+          </>
+        )}
       </div>
+      {state === "fallback" ? (
+        <p className="text-metadata mt-2 text-warning">
+          Live Dataset v2 records were unavailable, so the compact preview is
+          shown.
+        </p>
+      ) : null}
     </section>
   );
 }

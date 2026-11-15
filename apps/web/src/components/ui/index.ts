@@ -1,4 +1,5 @@
 export { Button } from "./Button";
+export { ChartContainer, ChartTooltip, ChartTooltipContent } from "./chart";
 export { Divider } from "./Divider";
 export {
   EmptyState,
