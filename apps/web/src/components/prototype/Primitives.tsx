@@ -513,36 +513,79 @@ export function Stepper({
   current: number;
   steps: string[];
 }) {
+  const progress =
+    steps.length > 1 ? (current / (steps.length - 1)) * 100 : 100;
   return (
-    <ol className="grid gap-2 sm:grid-cols-4" aria-label="Progress">
-      {steps.map((step, index) => {
-        const complete = index < current;
-        const active = index === current;
-        return (
-          <li key={step} className="flex items-center gap-2">
-            <span
-              className={cx(
-                "text-metadata inline-flex size-6 shrink-0 items-center justify-center rounded-full border",
-                complete
-                  ? "border-brand-secondary bg-brand-secondary text-white"
-                  : active
-                    ? "border-brand-primary bg-brand-primary text-white"
-                    : "border-line bg-canvas-soft text-muted",
-              )}
-            >
-              {complete ? <CheckCircle size={13} weight="fill" /> : index + 1}
-            </span>
-            <span
-              className={cx(
-                "text-metadata",
-                active || complete ? "text-ink" : "text-muted",
-              )}
-            >
-              {step}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+    <div aria-label="Onboarding progress">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className="text-metadata font-medium text-ink">
+          Step {current + 1} of {steps.length}: {steps[current]}
+        </span>
+        <span className="text-metadata text-muted">
+          {Math.round(progress)}% complete
+        </span>
+      </div>
+      <div
+        className="h-1.5 overflow-hidden rounded-full bg-canvas-soft"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={steps.length - 1}
+        aria-valuenow={current}
+        aria-label={`${steps[current]} step`}
+      >
+        <div
+          className="h-full rounded-full bg-brand-primary transition-[width] duration-300"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+      <div className="mt-4 overflow-x-auto pb-1">
+        <ol className="flex min-w-[680px]" aria-label="Onboarding steps">
+          {steps.map((step, index) => {
+            const complete = index < current;
+            const active = index === current;
+            return (
+              <li
+                key={step}
+                className="relative flex flex-1 flex-col items-center gap-1.5"
+              >
+                {index < steps.length - 1 ? (
+                  <span
+                    aria-hidden="true"
+                    className={cx(
+                      "absolute left-1/2 right-[-50%] top-3 h-px",
+                      index < current ? "bg-brand-secondary" : "bg-line",
+                    )}
+                  />
+                ) : null}
+                <span
+                  className={cx(
+                    "text-metadata relative z-10 inline-flex size-6 shrink-0 items-center justify-center rounded-full border",
+                    complete
+                      ? "border-brand-secondary bg-brand-secondary text-white"
+                      : active
+                        ? "border-brand-primary bg-brand-primary text-white ring-4 ring-brand-primary/10"
+                        : "border-line bg-canvas text-muted",
+                  )}
+                >
+                  {complete ? (
+                    <CheckCircle size={13} weight="fill" />
+                  ) : (
+                    index + 1
+                  )}
+                </span>
+                <span
+                  className={cx(
+                    "text-metadata whitespace-nowrap",
+                    active || complete ? "font-medium text-ink" : "text-muted",
+                  )}
+                >
+                  {step}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </div>
   );
 }
