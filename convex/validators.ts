@@ -1,8 +1,7 @@
 import { v } from "convex/values";
 
 export const userRoleValidator = v.union(
-  v.literal("public"),
-  v.literal("researcher"),
+  v.literal("resident"),
   v.literal("lgu"),
   v.literal("admin"),
 );

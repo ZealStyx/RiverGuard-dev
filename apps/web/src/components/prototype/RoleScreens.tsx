@@ -18,6 +18,7 @@ import { RainfallChart } from "@/components/charts/RainfallChart";
 import { RiskSummary } from "@/components/dashboard/RiskSummary";
 import { RiverMap } from "@/components/map/RiverMap";
 import { Button } from "@/components/ui";
+import { cx } from "@/lib/classnames";
 import {
   accessRequests,
   auditEvents,
@@ -41,6 +42,12 @@ import {
   TextAreaField,
   TextField,
 } from "./Primitives";
+import {
+  DataSourceCatalog,
+  LocationDetails,
+  Models,
+  ResearcherScreen,
+} from "./ResearcherScreens";
 
 function ResidentHome() {
   const [selectedDay, setSelectedDay] = useState(0);
@@ -935,7 +942,7 @@ function AdminHome() {
         <Metric
           label="Active users"
           value="3"
-          detail="Across three roles"
+          detail="Across resident, LGU, and admin"
           tone="primary"
         />
         <Metric
@@ -1044,7 +1051,6 @@ function RequestReview() {
           <div className="grid gap-4 sm:grid-cols-2">
             <SelectControl id="approved-role" label="Approved role">
               <option>LGU operator</option>
-              <option>Researcher</option>
             </SelectControl>
             <SelectControl id="approved-location" label="Permitted locations">
               <option>Marikina only</option>
@@ -1249,10 +1255,9 @@ function UsersRoles() {
                 <SelectControl
                   id="user-modal-role"
                   label="Role"
-                  defaultValue={editingUser?.role ?? "Researcher"}
+                  defaultValue={editingUser?.role ?? "LGU operator"}
                 >
                   <option>Resident</option>
-                  <option>Researcher</option>
                   <option>LGU operator</option>
                   <option>Administrator</option>
                 </SelectControl>
@@ -1301,8 +1306,87 @@ function UsersRoles() {
   );
 }
 
-function ConfigurationScreen({ kind }: { kind: string }) {
+function ConfigurationTabs({
+  kind,
+  researchView,
+}: {
+  kind: string;
+  researchView: boolean;
+}) {
+  if (!["locations", "data-sources", "models"].includes(kind)) return null;
+  const researchLabel =
+    kind === "locations"
+      ? "Research detail"
+      : kind === "data-sources"
+        ? "Source explorer"
+        : "Evaluation";
+  return (
+    <nav
+      aria-label={`${kind} views`}
+      className="mb-3 flex flex-wrap gap-1 border-b border-line"
+    >
+      <Link
+        href={`/admin/${kind}`}
+        className={cx(
+          "text-button border-b-2 px-3 py-2",
+          !researchView
+            ? "border-brand-primary text-brand-primary"
+            : "border-transparent text-muted hover:text-ink",
+        )}
+      >
+        Configuration
+      </Link>
+      <Link
+        href={`/admin/${kind}?view=research`}
+        className={cx(
+          "text-button border-b-2 px-3 py-2",
+          researchView
+            ? "border-brand-primary text-brand-primary"
+            : "border-transparent text-muted hover:text-ink",
+        )}
+      >
+        {researchLabel}
+      </Link>
+    </nav>
+  );
+}
+
+function ConfigurationScreen({
+  kind,
+  detail,
+}: {
+  kind: string;
+  detail?: string;
+}) {
   const [saved, setSaved] = useState(false);
+  const searchParams = useSearchParams();
+  const researchView =
+    searchParams.get("view") === "research" || Boolean(detail);
+
+  if (researchView && kind === "locations") {
+    return (
+      <>
+        <ConfigurationTabs kind={kind} researchView />
+        <LocationDetails />
+      </>
+    );
+  }
+  if (researchView && kind === "data-sources") {
+    return (
+      <>
+        <ConfigurationTabs kind={kind} researchView />
+        <DataSourceCatalog detail={detail} basePath="/admin/data-sources" />
+      </>
+    );
+  }
+  if (researchView && kind === "models") {
+    return (
+      <>
+        <ConfigurationTabs kind={kind} researchView />
+        <Models detail={detail} basePath="/admin/models" />
+      </>
+    );
+  }
   const config: Record<
     string,
     { title: string; description: string; fields: Array<[string, string]> }
@@ -1379,6 +1463,7 @@ function ConfigurationScreen({ kind }: { kind: string }) {
         eyebrow="System configuration"
         description={current.description}
       />
+      <ConfigurationTabs kind={kind} researchView={false} />
       <Notice title="Configuration security" className="mb-3">
         Secrets are never displayed or stored in this form.
       </Notice>
@@ -1497,6 +1582,8 @@ function AdminSettings() {
 export function AdminScreen({ segments }: { segments: string[] }) {
   const [screen, detail] = segments;
   if (!screen) return <AdminHome />;
+  if (screen === "research")
+    return <ResearcherScreen segments={segments.slice(1)} />;
   if (screen === "requests") return <AccessRequests detail={detail} />;
   if (screen === "users") return <UsersRoles />;
   if (
@@ -1508,7 +1595,7 @@ export function AdminScreen({ segments }: { segments: string[] }) {
       "hazard-layers",
     ].includes(screen)
   )
-    return <ConfigurationScreen kind={screen} />;
+    return <ConfigurationScreen kind={screen} detail={detail} />;
   if (screen === "audit") return <AuditLog />;
   if (screen === "settings") return <AdminSettings />;
   return <AdminHome />;

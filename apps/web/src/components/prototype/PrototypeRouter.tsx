@@ -11,7 +11,7 @@ import {
 import { AdminScreen, LguScreen, ResidentScreen } from "./RoleScreens";
 import { ResearcherScreen } from "./ResearcherScreens";
 
-const productRoles: ProductRole[] = ["researcher", "lgu", "resident", "admin"];
+const productRoles: ProductRole[] = ["lgu", "resident", "admin"];
 
 export function isProductRole(value: string): value is ProductRole {
   return productRoles.includes(value as ProductRole);
@@ -35,14 +35,23 @@ export function PrototypeRouter({
   if (section === "onboarding") {
     const role = isProductRole(segments[0] ?? "")
       ? (segments[0] as ProductRole)
-      : "researcher";
+      : "resident";
     return <OnboardingScreen role={role} />;
   }
   if (section === "settings") {
     return (
-      <AppShell role="researcher">
+      <AppShell role="admin">
         <main className="p-4 sm:p-5">
           <SettingsScreen screen={segments[0] ?? "profile"} />
+        </main>
+      </AppShell>
+    );
+  }
+  if (section === "researcher") {
+    return (
+      <AppShell role="admin">
+        <main className="p-4 sm:p-5">
+          <ResearcherScreen segments={segments} />
         </main>
       </AppShell>
     );
@@ -51,9 +60,6 @@ export function PrototypeRouter({
     return (
       <AppShell role={section}>
         <main className="p-4 sm:p-5">
-          {section === "researcher" ? (
-            <ResearcherScreen segments={segments} />
-          ) : null}
           {section === "resident" ? (
             <ResidentScreen segments={segments} />
           ) : null}

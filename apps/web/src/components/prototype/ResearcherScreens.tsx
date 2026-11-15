@@ -8,9 +8,7 @@ import {
   Play,
   Plus,
 } from "@phosphor-icons/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { RainfallChart } from "@/components/charts/RainfallChart";
@@ -67,12 +65,12 @@ function DashboardOverview() {
   return (
     <>
       <PageHeading
-        title="Researcher dashboard"
-        eyebrow="Research workspace"
+        title="Research workspace"
+        eyebrow="Administrator tools"
         description={`NCR experimental flood-risk workspace · ${refreshNote}`}
         actions={
           <>
-            <ActionLink href="/researcher/forecast/new">
+            <ActionLink href="/admin/research/forecast/new">
               <Play size={14} weight="fill" /> Run forecast
             </ActionLink>
             <Button
@@ -101,59 +99,8 @@ function DashboardOverview() {
   );
 }
 
-function ResearcherWorkspaceViewSwitcher({
-  activeView,
-}: {
-  activeView: "data" | "map";
-}) {
-  return (
-    <div
-      className="mb-4 inline-flex rounded-control border border-line bg-canvas-soft p-1"
-      role="tablist"
-      aria-label="Researcher data workspace view"
-    >
-      <Link
-        href="/researcher/map"
-        role="tab"
-        aria-selected={activeView === "map"}
-        className={`text-button rounded-control px-3 py-1.5 transition-colors ${
-          activeView === "map"
-            ? "bg-brand-primary text-white"
-            : "text-muted hover:bg-canvas hover:text-ink"
-        }`}
-      >
-        Map
-      </Link>
-      <Link
-        href="/researcher/map?view=data"
-        role="tab"
-        aria-selected={activeView === "data"}
-        className={`text-button rounded-control px-3 py-1.5 transition-colors ${
-          activeView === "data"
-            ? "bg-brand-primary text-white"
-            : "text-muted hover:bg-canvas hover:text-ink"
-        }`}
-      >
-        Data sources
-      </Link>
-    </div>
-  );
-}
-
-function MapWorkspace({
-  initialView = "map",
-}: {
-  initialView?: "data" | "map";
-}) {
+function MapWorkspace() {
   const [activeLayer, setActiveLayer] = useState<MapLayerId>("base");
-  const searchParams = useSearchParams();
-  const requestedView = searchParams.get("view");
-  const activeView =
-    requestedView === "data" ||
-    (initialView === "data" && requestedView !== "map")
-      ? "data"
-      : "map";
-
   return (
     <>
       <PageHeading
@@ -161,70 +108,63 @@ function MapWorkspace({
         eyebrow="Spatial explorer"
         description="Explore supported locations and review the data sources behind the research workspace."
         actions={
-          <ActionLink href="/researcher/locations/marikina">
+          <ActionLink href="/admin/locations/marikina?view=research">
             View Marikina details <ArrowRight size={14} />
           </ActionLink>
         }
       />
-      <ResearcherWorkspaceViewSwitcher activeView={activeView} />
-      {activeView === "data" ? (
-        <DataSourceCatalog embedded />
-      ) : (
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_320px]">
-          <RiverMap activeLayer={activeLayer} onLayerChange={setActiveLayer} />
-          <div className="grid content-start gap-3 xl:flex xl:h-full xl:flex-col">
-            <Surface
-              title="Location list"
-              description="Accessible alternative to the map"
-              className="xl:flex-1"
-            >
-              <div className="grid gap-2">
-                {supportedLocations.map((location) => (
-                  <div
-                    key={location.name}
-                    className="rounded-control border border-line p-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-button flex items-center gap-1">
-                          <MapPin size={14} /> {location.name}
-                        </p>
-                        <p className="text-metadata mt-1 text-muted">
-                          {location.support} · Updated {location.updated}
-                        </p>
-                      </div>
-                      <StatusBadge
-                        tone={
-                          location.status === "Elevated" ? "warning" : "info"
-                        }
-                      >
-                        {location.status}
-                      </StatusBadge>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_320px]">
+        <RiverMap activeLayer={activeLayer} onLayerChange={setActiveLayer} />
+        <div className="grid content-start gap-3 xl:flex xl:h-full xl:flex-col">
+          <Surface
+            title="Location list"
+            description="Accessible alternative to the map"
+            className="xl:flex-1"
+          >
+            <div className="grid gap-2">
+              {supportedLocations.map((location) => (
+                <div
+                  key={location.name}
+                  className="rounded-control border border-line p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-button flex items-center gap-1">
+                        <MapPin size={14} /> {location.name}
+                      </p>
+                      <p className="text-metadata mt-1 text-muted">
+                        {location.support} · Updated {location.updated}
+                      </p>
                     </div>
-                    <ActionLink
-                      href={`/researcher/locations/${location.name.toLowerCase().replace(" ", "-")}`}
-                      variant="quiet"
-                      className="mt-3 w-full"
+                    <StatusBadge
+                      tone={location.status === "Elevated" ? "warning" : "info"}
                     >
-                      Open details
-                    </ActionLink>
+                      {location.status}
+                    </StatusBadge>
                   </div>
-                ))}
-              </div>
-            </Surface>
-            <Notice title="Map limitation" className="xl:shrink-0">
-              This is a real OpenStreetMap basemap. RiverGuard boundaries,
-              monitoring stations, hazard layers, and predictions are not loaded
-              until verified local GIS and model data are supplied.
-            </Notice>
-          </div>
+                  <ActionLink
+                    href={`/admin/locations/${location.name.toLowerCase().replace(" ", "-")}?view=research`}
+                    variant="quiet"
+                    className="mt-3 w-full"
+                  >
+                    Open details
+                  </ActionLink>
+                </div>
+              ))}
+            </div>
+          </Surface>
+          <Notice title="Map limitation" className="xl:shrink-0">
+            This is a real OpenStreetMap basemap. RiverGuard boundaries,
+            monitoring stations, hazard layers, and predictions are not loaded
+            until verified local GIS and model data are supplied.
+          </Notice>
         </div>
-      )}
+      </div>
     </>
   );
 }
 
-function LocationDetails() {
+export function LocationDetails() {
   return (
     <>
       <PageHeading
@@ -233,10 +173,10 @@ function LocationDetails() {
         description="City-level experimental evidence, historical sample readings, and source limitations."
         actions={
           <>
-            <ActionLink href="/researcher/forecast/new">
+            <ActionLink href="/admin/research/forecast/new">
               Run forecast
             </ActionLink>
-            <ActionLink href="/researcher/map" variant="quiet">
+            <ActionLink href="/admin/research/map" variant="quiet">
               Back to map
             </ActionLink>
           </>
@@ -284,7 +224,7 @@ function LocationDetails() {
             <dd>No barangay or street-level inference</dd>
           </dl>
           <ActionLink
-            href="/researcher/data-sources/daily-rainfall"
+            href="/admin/data-sources/daily-rainfall?view=research"
             variant="quiet"
             className="mt-4"
           >
@@ -349,7 +289,7 @@ function HistoricalData() {
         eyebrow="Evidence explorer"
         description="Filter the available readings without converting missing values into zero."
         actions={
-          <ActionLink href="/researcher/data-sources" variant="quiet">
+          <ActionLink href="/admin/data-sources?view=research" variant="quiet">
             Review sources
           </ActionLink>
         }
@@ -581,14 +521,14 @@ function ForecastForm() {
           Confirm the selected location, horizon, provider, and model version.
         </Notice>
         <div className="mt-4 flex justify-end gap-2">
-          <ActionLink href="/researcher" variant="quiet">
+          <ActionLink href="/admin/research" variant="quiet">
             Cancel
           </ActionLink>
           <Button
             size="small"
             onClick={() =>
               router.push(
-                `/researcher/forecast/review?location=${encodeURIComponent(location)}&explain=${includeExplanation}`,
+                `/admin/research/forecast/review?location=${encodeURIComponent(location)}&explain=${includeExplanation}`,
               )
             }
           >
@@ -629,10 +569,10 @@ function ForecastReview() {
           official warning.
         </Notice>
         <div className="mt-4 flex justify-between gap-2">
-          <ActionLink href="/researcher/forecast/new" variant="quiet">
+          <ActionLink href="/admin/research/forecast/new" variant="quiet">
             Edit inputs
           </ActionLink>
-          <ActionLink href="/researcher/forecast/progress">
+          <ActionLink href="/admin/research/forecast/progress">
             <Play size={14} /> Run experimental forecast
           </ActionLink>
         </div>
@@ -653,7 +593,7 @@ function ForecastProgress() {
   useEffect(() => {
     if (step >= steps.length) {
       const destination = window.setTimeout(
-        () => router.push("/researcher/runs/RG-NCR-041"),
+        () => router.push("/admin/research/runs/RG-NCR-041"),
         650,
       );
       return () => window.clearTimeout(destination);
@@ -703,10 +643,10 @@ function ForecastResults() {
         description="Experimental seven-day city-level result created Nov 11, 2026 at 09:40 PHT."
         actions={
           <>
-            <ActionLink href="/researcher/runs/RG-NCR-041/day/2026-11-11">
+            <ActionLink href="/admin/research/runs/RG-NCR-041/day/2026-11-11">
               View selected day
             </ActionLink>
-            <ActionLink href="/researcher/compare" variant="quiet">
+            <ActionLink href="/admin/research/compare" variant="quiet">
               Compare run
             </ActionLink>
           </>
@@ -748,7 +688,7 @@ function DayDetail() {
         eyebrow="Forecast day detail"
         description="Day-level explanation, uncertainty, quality notes, and separately labeled hazard context."
         actions={
-          <ActionLink href="/researcher/runs/RG-NCR-041" variant="quiet">
+          <ActionLink href="/admin/research/runs/RG-NCR-041" variant="quiet">
             Back to run
           </ActionLink>
         }
@@ -789,7 +729,7 @@ function DayDetail() {
             describes model behavior, not a physical causal claim.
           </p>
           <ActionLink
-            href="/researcher/models/rg-ncr-04"
+            href="/admin/models/rg-ncr-04?view=research"
             variant="quiet"
             className="mt-3"
           >
@@ -801,7 +741,11 @@ function DayDetail() {
             Long-term susceptibility belongs to a separate layer and does not
             change this dated forecast result.
           </p>
-          <ActionLink href="/researcher/map" variant="quiet" className="mt-3">
+          <ActionLink
+            href="/admin/research/map"
+            variant="quiet"
+            className="mt-3"
+          >
             View separate layers
           </ActionLink>
         </Surface>
@@ -819,7 +763,7 @@ function RunHistory() {
         eyebrow="Research history"
         description="Filter, inspect, and compare forecast runs without hiding partial or failed results."
         actions={
-          <ActionLink href="/researcher/forecast/new">
+          <ActionLink href="/admin/research/forecast/new">
             <Plus size={14} /> New forecast
           </ActionLink>
         }
@@ -856,14 +800,14 @@ function RunHistory() {
           ]}
           rows={rows}
           actions={(row) => (
-            <ActionLink href={`/researcher/runs/${row.id}`} variant="quiet">
+            <ActionLink href={`/admin/research/runs/${row.id}`} variant="quiet">
               View
             </ActionLink>
           )}
         />
       </Surface>
       <div className="mt-3 flex justify-end">
-        <ActionLink href="/researcher/compare" variant="secondary">
+        <ActionLink href="/admin/research/compare" variant="secondary">
           Compare selected
         </ActionLink>
       </div>
@@ -879,7 +823,7 @@ function CompareRuns() {
         eyebrow="Model comparison"
         description="Compare two illustrative runs with aligned locations, valid dates, inputs, and quality warnings."
         actions={
-          <ActionLink href="/researcher/runs" variant="quiet">
+          <ActionLink href="/admin/research/runs" variant="quiet">
             Back to history
           </ActionLink>
         }
@@ -931,20 +875,22 @@ function CompareRuns() {
   );
 }
 
-function DataSourceCatalog({
+export function DataSourceCatalog({
   detail,
   embedded = false,
+  basePath = "/admin/data-sources",
 }: {
   detail?: string;
   embedded?: boolean;
+  basePath?: string;
 }) {
-  if (detail === "new") return <DataSourceForm />;
-  if (detail) return <DataSourceDetail />;
+  if (detail === "new") return <DataSourceForm basePath={basePath} />;
+  if (detail) return <DataSourceDetail basePath={basePath} />;
   const catalog = (
     <Surface
       title="Source catalogue"
       action={
-        <ActionLink href="/researcher/data-sources/new">
+        <ActionLink href={`${basePath}/new?view=research`}>
           <Plus size={14} /> Add metadata
         </ActionLink>
       }
@@ -959,7 +905,7 @@ function DataSourceCatalog({
         rows={dataSources.map((source) => ({ ...source }))}
         actions={(row) => (
           <ActionLink
-            href={`/researcher/data-sources/${dataSources.find((source) => source.name === row.name)?.id ?? "daily-rainfall"}`}
+            href={`${basePath}/${dataSources.find((source) => source.name === row.name)?.id ?? "daily-rainfall"}?view=research`}
             variant="quiet"
           >
             View
@@ -982,7 +928,11 @@ function DataSourceCatalog({
   );
 }
 
-function DataSourceDetail() {
+function DataSourceDetail({
+  basePath = "/admin/data-sources",
+}: {
+  basePath?: string;
+}) {
   return (
     <>
       <PageHeading
@@ -991,10 +941,13 @@ function DataSourceDetail() {
         description="Unverified research dataset used for experimental forecast analysis."
         actions={
           <>
-            <ActionLink href="/researcher/data-sources/new" variant="secondary">
+            <ActionLink
+              href={`${basePath}/new?view=research`}
+              variant="secondary"
+            >
               Edit metadata
             </ActionLink>
-            <ActionLink href="/researcher/data-sources" variant="quiet">
+            <ActionLink href={`${basePath}?view=research`} variant="quiet">
               Back
             </ActionLink>
           </>
@@ -1028,7 +981,11 @@ function DataSourceDetail() {
   );
 }
 
-function DataSourceForm() {
+function DataSourceForm({
+  basePath = "/admin/data-sources",
+}: {
+  basePath?: string;
+}) {
   const [saved, setSaved] = useState(false);
   return (
     <>
@@ -1083,7 +1040,7 @@ function DataSourceForm() {
           />
         </div>
         <div className="mt-4 flex justify-end gap-2">
-          <ActionLink href="/researcher/data-sources" variant="quiet">
+          <ActionLink href={`${basePath}?view=research`} variant="quiet">
             Cancel
           </ActionLink>
           <Button size="small" onClick={() => setSaved(true)}>
@@ -1103,8 +1060,14 @@ function DataSourceForm() {
   );
 }
 
-function Models({ detail }: { detail?: string }) {
-  if (detail) return <ModelDetail />;
+export function Models({
+  detail,
+  basePath = "/admin/models",
+}: {
+  detail?: string;
+  basePath?: string;
+}) {
+  if (detail) return <ModelDetail basePath={basePath} />;
   return (
     <>
       <PageHeading
@@ -1136,7 +1099,7 @@ function Models({ detail }: { detail?: string }) {
               </div>
             </dl>
             <ActionLink
-              href={`/researcher/models/${model.id}`}
+              href={`${basePath}/${model.id}?view=research`}
               variant="quiet"
               className="mt-4 w-full"
             >
@@ -1149,7 +1112,7 @@ function Models({ detail }: { detail?: string }) {
   );
 }
 
-function ModelDetail() {
+function ModelDetail({ basePath = "/admin/models" }: { basePath?: string }) {
   return (
     <>
       <PageHeading
@@ -1157,7 +1120,7 @@ function ModelDetail() {
         eyebrow="Experimental model card"
         description="Model responsibility, feature contract, evaluation status, and known limitations."
         actions={
-          <ActionLink href="/researcher/models" variant="quiet">
+          <ActionLink href={`${basePath}?view=research`} variant="quiet">
             Back to models
           </ActionLink>
         }
@@ -1214,8 +1177,6 @@ export function ResearcherScreen({ segments }: { segments: string[] }) {
   if (first === "runs" && second && third === "day") return <DayDetail />;
   if (first === "runs" && second) return <ForecastResults />;
   if (first === "compare") return <CompareRuns />;
-  if (first === "data-sources" && !second)
-    return <MapWorkspace initialView="data" />;
   if (first === "data-sources") return <DataSourceCatalog detail={second} />;
   if (first === "models") return <Models detail={second} />;
   return <DashboardOverview />;
