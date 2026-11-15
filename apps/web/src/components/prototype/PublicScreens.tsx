@@ -12,7 +12,7 @@ import {
   WaveSine,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   type FormEvent,
   type ReactNode,
@@ -38,7 +38,33 @@ import {
   TextField,
 } from "./Primitives";
 
-function PublicShell({ children }: { children: ReactNode }) {
+function PublicShell({
+  children,
+  showPublicLinks = false,
+}: {
+  children: ReactNode;
+  showPublicLinks?: boolean;
+}) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const sourceReturn = searchParams.get("from");
+  const preservedReturn = searchParams.get("return");
+  const isInformationPage = [
+    "/about",
+    "/methodology",
+    "/official-sources",
+  ].includes(pathname);
+  const informationParent = isInformationPage ? pathname : sourceReturn;
+  const informationReturn =
+    pathname === "/methodology" ? sourceReturn : preservedReturn;
+  const informationQuery = informationParent
+    ? `?from=${encodeURIComponent(informationParent)}${
+        informationReturn
+          ? `&return=${encodeURIComponent(informationReturn)}`
+          : ""
+      }`
+    : "";
+
   return (
     <div className="min-h-screen bg-canvas text-ink">
       <header className="flex min-h-16 items-center border-b border-line px-4 sm:px-6">
@@ -46,13 +72,17 @@ function PublicShell({ children }: { children: ReactNode }) {
           <WaveSine size={30} weight="bold" />
           <span className="text-section">RiverGuard</span>
         </Link>
-        <nav
-          className="text-navigation ml-auto hidden items-center gap-4 sm:flex"
-          aria-label="Public navigation"
-        >
-          <Link href="/about">About</Link>
-          <Link href="/official-sources">Official sources</Link>
-        </nav>
+        {showPublicLinks ? (
+          <nav
+            className="text-navigation ml-auto hidden items-center gap-4 sm:flex"
+            aria-label="Public navigation"
+          >
+            <Link href={`/about${informationQuery}`}>About</Link>
+            <Link href={`/official-sources${informationQuery}`}>
+              Official sources
+            </Link>
+          </nav>
+        ) : null}
       </header>
       {children}
     </div>
@@ -61,7 +91,7 @@ function PublicShell({ children }: { children: ReactNode }) {
 
 export function WelcomeScreen() {
   return (
-    <PublicShell>
+    <PublicShell showPublicLinks>
       <main className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-7xl items-center gap-8 px-5 py-10 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
           <p className="text-metadata font-semibold uppercase tracking-[0.14em] text-brand-secondary">
@@ -142,8 +172,6 @@ function LoginForm() {
         router.push("/auth/mfa?role=lgu&source=login");
       } else if (email === "admin@riverguard.local") {
         router.push("/auth/mfa?role=admin&source=login");
-      } else if (email === "researcher@riverguard.local") {
-        router.push("/auth/verify?role=researcher&source=login");
       } else {
         setError(
           "Use a registered RiverGuard account or request access before signing in.",
@@ -160,7 +188,7 @@ function LoginForm() {
         name="login-email"
         autoComplete="email"
         required
-        defaultValue="researcher@riverguard.local"
+        defaultValue="admin@riverguard.local"
       />
       <PasswordField
         id="login-password"
@@ -222,7 +250,6 @@ function ResidentSignup() {
         onChange={(event) => setRole(event.target.value)}
       >
         <option value="resident">Resident</option>
-        <option value="researcher">Researcher</option>
         <option value="lgu">LGU operator</option>
       </SelectControl>
       <TextField id="signup-name" label="Full name" required />
@@ -298,28 +325,20 @@ function AccessRequest() {
       className="grid gap-3"
       onSubmit={(event) => {
         event.preventDefault();
-        const role = String(
-          new FormData(event.currentTarget as HTMLFormElement).get(
-            "access-role",
-          ),
-        ).toLowerCase();
-        router.push(
-          `/auth/verify?role=${role === "lgu operator" ? "lgu" : "researcher"}&source=access`,
-        );
+        router.push("/auth/verify?role=lgu&source=access");
       }}
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <TextField id="access-name" label="Full name" required />
         <TextField id="access-email" label="Work email" type="email" required />
         <TextField id="access-org" label="Organization" required />
-        <SelectControl
+        <TextField
           id="access-role"
           name="access-role"
           label="Requested role"
-        >
-          <option>Researcher</option>
-          <option>LGU operator</option>
-        </SelectControl>
+          value="LGU operator"
+          readOnly
+        />
         <SelectControl id="access-location" label="Requested area">
           <option>Marikina</option>
           <option>Quezon City</option>
@@ -360,7 +379,7 @@ function Verification() {
   const [code, setCode] = useState("");
   const [secondsRemaining, setSecondsRemaining] = useState(60);
   const codeInputs = useRef<Array<HTMLInputElement | null>>([]);
-  const role = params.get("role") ?? "researcher";
+  const role = params.get("role") ?? "lgu";
   const source = params.get("source") ?? "access";
   useEffect(() => {
     if (secondsRemaining <= 0) return;
@@ -470,7 +489,7 @@ function Verification() {
 function PendingApproval() {
   const router = useRouter();
   const params = useSearchParams();
-  const role = params.get("role") ?? "researcher";
+  const role = params.get("role") ?? "lgu";
   const [approved, setApproved] = useState(false);
   if (approved)
     return (
@@ -489,7 +508,7 @@ function PendingApproval() {
         </span>
       </div>
       <div className="text-center">
-        <p className="text-section">Researcher access requested</p>
+        <p className="text-section">LGU operator access requested</p>
         <p className="text-body mt-1 text-muted">
           Submitted Nov 11, 2026 · Verification complete
         </p>
@@ -706,7 +725,7 @@ function AccountProblem({ screen }: { screen: string }) {
         <p className="text-body mt-1 text-muted">{description}</p>
       </div>
       <ActionLink
-        href={screen === "unauthorized" ? "/researcher" : "/auth/login"}
+        href={screen === "unauthorized" ? "/admin/research" : "/auth/login"}
       >
         {action}
       </ActionLink>
@@ -768,7 +787,7 @@ export function AuthScreen({ screen }: { screen: string }) {
     ],
     "request-access": [
       "Request staff access",
-      "Researcher and LGU roles require administrator approval.",
+      "LGU operator access requires administrator approval. Administrator access is invitation-only.",
     ],
     verify: ["Verify identity", "Confirm the account destination."],
     pending: [
@@ -822,11 +841,6 @@ const onboardingContent: Record<
     destination: "/resident",
     steps: ["Welcome", "Locations", "Preferences", "Safety"],
   },
-  researcher: {
-    title: "Researcher onboarding",
-    destination: "/researcher",
-    steps: ["Profile", "Coverage", "Models", "Tour", "Use", "Ready"],
-  },
   lgu: {
     title: "LGU operator onboarding",
     destination: "/lgu",
@@ -847,6 +861,8 @@ const onboardingContent: Record<
       "Assignment",
       "MFA",
       "Role policy",
+      "Research tools",
+      "Methodology",
       "Configuration",
       "Audit",
       "Security",
@@ -970,116 +986,84 @@ export function OnboardingScreen({ role }: { role: ProductRole }) {
             />
           </div>,
         ]
-      : role === "researcher"
+      : role === "lgu"
         ? [
             profileStep,
-            coverageStep,
-            <div key="models" className="grid gap-3 sm:grid-cols-2">
-              <Surface title="Experimental model A">
-                <p className="text-body text-muted">
-                  Forecast rainfall and basin response for supported cities.
-                </p>
-              </Surface>
-              <Surface title="Static hazard context">
-                <p className="text-body text-muted">
-                  Long-term susceptibility is shown separately from forecasts.
-                </p>
-              </Surface>
-            </div>,
-            tourStep,
+            <Notice
+              key="lgu-authority"
+              title="Review is not warning authority"
+              tone="warning"
+            >
+              RiverGuard cannot issue official warnings or evacuation
+              instructions.
+            </Notice>,
+            <Surface key="lgu-review" title="Review workflow">
+              <p className="text-body text-muted">
+                Inspect the latest outlook, review quality warnings, record an
+                internal assessment, and escalate for authorized action.
+              </p>
+            </Surface>,
             <CheckControl
-              key="researcher-use"
-              id="researcher-responsible-use"
-              label="I understand the experimental-use limitations"
+              key="lgu-notes"
+              id="lgu-notes"
+              label="Enable internal review notes"
+            />,
+            <CheckControl
+              key="lgu-notifications"
+              id="lgu-notifications"
+              label="Receive assigned-area review notifications"
+            />,
+            <CheckControl
+              key="lgu-safety"
+              id="lgu-authorized-use"
+              label="I understand the authorized-use limitations"
+              required
+            />,
+            <Notice key="lgu-ready" title="Ready for review" tone="success">
+              Your assigned-area dashboard and review queue are ready.
+            </Notice>,
+          ]
+        : [
+            profileStep,
+            <Notice key="admin-mfa" title="Secure administrator access">
+              Complete multi-factor authentication before managing users or
+              system configuration.
+            </Notice>,
+            <CheckControl
+              key="admin-policy"
+              id="admin-role-policy"
+              label="I understand role and location assignment policy"
+              required
+            />,
+            tourStep,
+            coverageStep,
+            <Surface key="admin-configuration" title="Configuration readiness">
+              <p className="text-body text-muted">
+                Review supported locations, provider status, model versions, and
+                data-source readiness.
+              </p>
+            </Surface>,
+            <Surface key="admin-audit" title="Audit responsibilities">
+              <p className="text-body text-muted">
+                Access changes and configuration updates are recorded for
+                authorized review.
+              </p>
+            </Surface>,
+            <CheckControl
+              key="admin-security"
+              id="admin-security"
+              label="I understand administrator security responsibilities"
               required
             />,
             <Notice
-              key="researcher-ready"
-              title="Ready for research"
+              key="admin-ready"
+              title="Ready for administration"
               tone="success"
             >
-              Your dashboard, data sources, forecast workflow, and model cards
-              are ready to explore.
+              Research tools, user requests, configuration, and audit tools are
+              ready.
             </Notice>,
-          ]
-        : role === "lgu"
-          ? [
-              profileStep,
-              <Notice
-                key="lgu-authority"
-                title="Review is not warning authority"
-                tone="warning"
-              >
-                RiverGuard cannot issue official warnings or evacuation
-                instructions.
-              </Notice>,
-              <Surface key="lgu-review" title="Review workflow">
-                <p className="text-body text-muted">
-                  Inspect the latest outlook, review quality warnings, record an
-                  internal assessment, and escalate for authorized action.
-                </p>
-              </Surface>,
-              <CheckControl
-                key="lgu-notes"
-                id="lgu-notes"
-                label="Enable internal review notes"
-              />,
-              <CheckControl
-                key="lgu-notifications"
-                id="lgu-notifications"
-                label="Receive assigned-area review notifications"
-              />,
-              <CheckControl
-                key="lgu-safety"
-                id="lgu-authorized-use"
-                label="I understand the authorized-use limitations"
-                required
-              />,
-              <Notice key="lgu-ready" title="Ready for review" tone="success">
-                Your assigned-area dashboard and review queue are ready.
-              </Notice>,
-            ]
-          : [
-              profileStep,
-              <Notice key="admin-mfa" title="Secure administrator access">
-                Complete multi-factor authentication before managing users or
-                system configuration.
-              </Notice>,
-              <CheckControl
-                key="admin-policy"
-                id="admin-role-policy"
-                label="I understand role and location assignment policy"
-                required
-              />,
-              <Surface
-                key="admin-configuration"
-                title="Configuration readiness"
-              >
-                <p className="text-body text-muted">
-                  Review supported locations, provider status, model versions,
-                  and data-source readiness.
-                </p>
-              </Surface>,
-              <Surface key="admin-audit" title="Audit responsibilities">
-                <p className="text-body text-muted">
-                  Access changes and configuration updates are recorded for
-                  authorized review.
-                </p>
-              </Surface>,
-              <CheckControl
-                key="admin-security"
-                id="admin-security"
-                label="I understand administrator security responsibilities"
-                required
-              />,
-              <Notice
-                key="admin-ready"
-                title="Ready for administration"
-                tone="success"
-              >
-                User requests, configuration, and audit tools are ready.
-              </Notice>,
-            ];
+          ];
   return (
     <PublicShell>
       <main className="mx-auto max-w-5xl px-5 py-8">
@@ -1124,12 +1108,32 @@ export function PublicInfoScreen({
 }) {
   const params = useSearchParams();
   const requestedReturn = params.get("from");
-  const returnHref =
+  const preservedReturn = params.get("return");
+  const validWorkspaceReturn =
+    preservedReturn && /^\/(resident|lgu|admin)(?:\/.*)?$/.test(preservedReturn)
+      ? preservedReturn
+      : null;
+  const informationReturn =
     requestedReturn &&
-    /^\/(researcher|resident|lgu|admin)$/.test(requestedReturn)
+    ["/about", "/methodology", "/official-sources"].includes(requestedReturn)
+      ? `${requestedReturn}${validWorkspaceReturn ? `?from=${encodeURIComponent(validWorkspaceReturn)}` : ""}`
+      : null;
+  const returnHref =
+    informationReturn ??
+    (requestedReturn &&
+    /^\/(resident|lgu|admin)(?:\/.*)?$/.test(requestedReturn)
       ? requestedReturn
-      : "/welcome";
-  const returnLabel = returnHref === "/welcome" ? "Back" : "Back to dashboard";
+      : "/welcome");
+  const returnLabel =
+    returnHref === "/welcome"
+      ? "Back"
+      : requestedReturn === "/methodology"
+        ? "Back to methodology"
+        : requestedReturn === "/about"
+          ? "Back to About"
+          : requestedReturn === "/official-sources"
+            ? "Back to official sources"
+            : "Back to dashboard";
   const content = {
     about: {
       title: "About RiverGuard",
@@ -1298,28 +1302,28 @@ export function SettingsScreen({ screen }: { screen: string }) {
           <TextField
             id="profile-last-name"
             label="Last name"
-            defaultValue="Researcher"
+            defaultValue="Administrator"
           />
           <TextField
             id="profile-org"
             label="Organization"
-            defaultValue="University research team"
+            defaultValue="RiverGuard research"
           />
           <TextField
             id="profile-role"
             label="Role"
-            value="Researcher"
+            value="Administrator"
             readOnly
           />
           <TextField
             id="profile-email"
             label="Contact email"
-            defaultValue="researcher@riverguard.local"
+            defaultValue="admin@riverguard.local"
           />
           <TextField
             id="profile-locations"
             label="Assigned locations"
-            value="NCR research workspace"
+            value="All supported locations"
             readOnly
           />
         </div>
@@ -1331,7 +1335,7 @@ export function SettingsScreen({ screen }: { screen: string }) {
               <div className="min-w-0 flex-1">
                 <p className="text-button">Email address</p>
                 <p className="text-body mt-0.5 text-muted">
-                  researcher@riverguard.local
+                  admin@riverguard.local
                 </p>
               </div>
               <Button size="small" variant="quiet">

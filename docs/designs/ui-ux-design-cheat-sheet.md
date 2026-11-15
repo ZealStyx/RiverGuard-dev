@@ -6,6 +6,8 @@
 >
 > **Initial study coverage:** Quezon City, Marikina, Manila, and Pasig.
 
+> **Current role consolidation (November 2026):** The active prototype uses three product roles: Resident, LGU operator, and Administrator. Research workflows are administrator tools under `/admin/research/*`; the older Researcher role and `/researcher/*` routes are retained only as compatibility aliases.
+
 ## 1. How to use this document
 
 Use this cheat sheet when creating the sitemap, user flows, low-fidelity wireframes, design system, and high-fidelity Figma screens. It answers:
@@ -19,11 +21,11 @@ Use this cheat sheet when creating the sitemap, user flows, low-fidelity wirefra
 
 ### Design-status labels
 
-| Label | Meaning |
-|---|---|
-| **Prototype** | Appropriate for the initial local research demonstration. |
-| **Optional** | Useful for a richer prototype, but not necessary for the first usable design. |
-| **Future** | May be designed now, but requires more data, validation, authentication, infrastructure, or governance before implementation. |
+| Label         | Meaning                                                                                                                       |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Prototype** | Appropriate for the initial local research demonstration.                                                                     |
+| **Optional**  | Useful for a richer prototype, but not necessary for the first usable design.                                                 |
+| **Future**    | May be designed now, but requires more data, validation, authentication, infrastructure, or governance before implementation. |
 
 ## 2. Product rules that affect every screen
 
@@ -42,13 +44,12 @@ Use this cheat sheet when creating the sitemap, user flows, low-fidelity wirefra
 
 ### 3.1 Product roles
 
-| Role | Primary goal | Initial availability |
-|---|---|---|
-| **Guest / Public Visitor** | View general project information and, in a future public version, supported public outlooks | **Future public experience** |
-| **Resident / Public User** | View a simplified location outlook, save preferences, and find official sources | **Future** |
-| **Researcher / Data Analyst** | Inspect data, run experimental forecasts, compare runs, and evaluate models | **Prototype primary role** |
-| **LGU / DRRMO Operator** | Review forecasts, record assessments, acknowledge items, and prepare controlled alert drafts | **Optional/Future** |
-| **System Administrator** | Approve users, assign roles, configure supported locations/providers/models, and review audit history | **Optional/Future** |
+| Role                       | Primary goal                                                                                                              | Initial availability         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| **Guest / Public Visitor** | View general project information and, in a future public version, supported public outlooks                               | **Future public experience** |
+| **Resident / Public User** | View a simplified location outlook, save preferences, and read official-source reminders                                  | **Future**                   |
+| **LGU / DRRMO Operator**   | Review forecasts, record assessments, acknowledge items, and prepare controlled alert drafts                              | **Optional/Future**          |
+| **Administrator**          | Use research tools, approve users, assign roles, configure supported locations/providers/models, and review audit history | **Prototype primary role**   |
 
 Product Owner, Scrum Master, and Development Team are project-delivery roles. They do not automatically need separate application roles. If they use the application, they receive one of the product roles above.
 
@@ -56,25 +57,36 @@ Product Owner, Scrum Master, and Development Team are project-delivery roles. Th
 
 - Public information may be browsed without an account in a future hosted version.
 - Residents may self-register only for resident features such as saved locations or notification preferences.
-- A person must **not** gain Researcher, LGU, or Administrator permissions merely by selecting that role during sign-up.
-- Privileged access uses an invitation or an access request that an administrator approves.
+- A person must **not** gain LGU or Administrator permissions merely by selecting that role during sign-up.
+- LGU access uses an access request that an administrator approves. Administrator access is invitation-only.
 - The first administrator is created through a controlled setup process, not public sign-up.
 - LGU and Administrator accounts should use multi-factor authentication when authentication is implemented.
 - The authentication provider has not yet been selected. Designs should remain provider-neutral.
 - Because the current application is local, login/sign-up may remain a designed future flow until account infrastructure is implemented.
 
+### 3.4 Administrator capabilities
+
+The Administrator role is intentionally broad for the current small-team prototype, but its UI is divided into capabilities so a dedicated Researcher role can be restored later without redesigning the workspace:
+
+- `research.read`
+- `research.runForecast`
+- `research.reviewModels`
+- `governance.manageUsers`
+- `governance.configureSystem`
+- `governance.viewAudit`
+
 ### 3.3 Account states
 
-| State | Meaning | User experience |
-|---|---|---|
-| Guest | Not signed in | Public pages only |
-| Unverified | Registered but email/identity not verified | Verification screen; resend option |
-| Pending approval | Privileged-role request is awaiting review | Pending page; no protected workspace access |
-| Active | Verified and approved where required | Role workspace access |
-| Rejected | Access request declined | Neutral status page and support/contact option |
-| Suspended | Temporarily blocked by an administrator | Sign-in blocked with a non-sensitive explanation |
-| Deactivated | Account access removed | Sign-in blocked; contact administrator |
-| Locked | Too many failed attempts or security event | Recovery/unlock guidance |
+| State            | Meaning                                    | User experience                                  |
+| ---------------- | ------------------------------------------ | ------------------------------------------------ |
+| Guest            | Not signed in                              | Public pages only                                |
+| Unverified       | Registered but email/identity not verified | Verification screen; resend option               |
+| Pending approval | Privileged-role request is awaiting review | Pending page; no protected workspace access      |
+| Active           | Verified and approved where required       | Role workspace access                            |
+| Rejected         | Access request declined                    | Neutral status page and support/contact option   |
+| Suspended        | Temporarily blocked by an administrator    | Sign-in blocked with a non-sensitive explanation |
+| Deactivated      | Account access removed                     | Sign-in blocked; contact administrator           |
+| Locked           | Too many failed attempts or security event | Recovery/unlock guidance                         |
 
 ## 4. Complete entry, authentication, and onboarding flow
 
@@ -94,7 +106,7 @@ flowchart TD
     F --> L[Verify email or identity]
     L --> M{Requested role}
     M -->|Resident| N[Resident onboarding]
-    M -->|Researcher / LGU / Admin| O[Pending administrator approval]
+    M -->|LGU operator| O[Pending administrator approval]
     O -->|Approved| P[Role-specific onboarding]
     O -->|Rejected| Q[Access request result]
     K -->|Active, first visit| R[Role-specific onboarding]
@@ -133,11 +145,11 @@ flowchart TD
 
 **Inputs:**
 
-| Field | Type | Requirements |
-|---|---|---|
-| Email | Email | Required; normalize whitespace/case safely |
-| Password | Password | Required; show/hide control |
-| Remember this device | Checkbox | Optional; explain session effect |
+| Field                | Type     | Requirements                               |
+| -------------------- | -------- | ------------------------------------------ |
+| Email                | Email    | Required; normalize whitespace/case safely |
+| Password             | Password | Required; show/hide control                |
+| Remember this device | Checkbox | Optional; explain session effect           |
 
 **Buttons and links:**
 
@@ -163,15 +175,15 @@ flowchart TD
 
 **Inputs:**
 
-| Field | Type | Notes |
-|---|---|---|
-| Full name | Text | Required |
-| Email | Email | Required |
-| Password | Password | Required; display requirements before submission |
-| Confirm password | Password | Must match |
-| Primary city | Select | Optional preference; show supported/unsupported status |
-| Accept Terms and Privacy Notice | Checkbox | Required when policies exist |
-| Receive notifications | Checkbox | Optional; off by default and separate from account consent |
+| Field                           | Type     | Notes                                                      |
+| ------------------------------- | -------- | ---------------------------------------------------------- |
+| Full name                       | Text     | Required                                                   |
+| Email                           | Email    | Required                                                   |
+| Password                        | Password | Required; display requirements before submission           |
+| Confirm password                | Password | Must match                                                 |
+| Primary city                    | Select   | Optional preference; show supported/unsupported status     |
+| Accept Terms and Privacy Notice | Checkbox | Required when policies exist                               |
+| Receive notifications           | Checkbox | Optional; off by default and separate from account consent |
 
 **Buttons:** `Create Account`, `Already have an account? Log In`, and `Continue as Guest`.
 
@@ -179,20 +191,20 @@ flowchart TD
 
 ### AUTH-04 — Staff access request
 
-**Status:** Future. Used for Researcher and LGU access. Administrator access is invitation-only.
+**Status:** Future. Used for LGU access. Administrator access is invitation-only.
 
 **Inputs:**
 
-| Field | Type | Notes |
-|---|---|---|
-| Full name | Text | Required |
-| Work email | Email | Required |
-| Organization | Text/select | Required for LGU; optional for researcher |
-| Requested role | Select | Researcher or LGU Operator only |
-| Assigned city/area | Multi-select | Request only; does not grant access |
-| Reason for access | Text area | Required; include character guidance |
-| Reference/contact | Text | Optional; avoid unnecessary sensitive data |
-| Terms, privacy, and authorized-use acknowledgement | Checkbox | Required |
+| Field                                              | Type         | Notes                                                      |
+| -------------------------------------------------- | ------------ | ---------------------------------------------------------- |
+| Full name                                          | Text         | Required                                                   |
+| Work email                                         | Email        | Required                                                   |
+| Organization                                       | Text/select  | Required for LGU                                           |
+| Requested role                                     | Fixed field  | LGU Operator only; administrator access is invitation-only |
+| Assigned city/area                                 | Multi-select | Request only; does not grant access                        |
+| Reason for access                                  | Text area    | Required; include character guidance                       |
+| Reference/contact                                  | Text         | Optional; avoid unnecessary sensitive data                 |
+| Terms, privacy, and authorized-use acknowledgement | Checkbox     | Required                                                   |
 
 **Buttons:** `Submit Access Request`, `Save and Continue Later` — optional, `Cancel`, and `Log In`.
 
@@ -284,7 +296,7 @@ Each screen must explain what happened without exposing security details and pro
 
 **Skip behavior:** preference steps may be skipped; safety/limitations acknowledgement should not be hidden.
 
-### ONB-02 — Researcher onboarding
+### ONB-02 — Administrator research orientation
 
 1. Confirm profile and organization
 2. Explain supported geography and data limitations
@@ -315,16 +327,16 @@ Each screen must explain what happened without exposing security details and pro
 
 ## 7. Shared application shell
 
-| Element | Purpose | Required behavior |
-|---|---|---|
-| Product identity | Return to role home | Show “Research Prototype” |
-| Role/workspace label | Clarify current permissions | Example: `LGU Operator · Marikina` |
-| Primary navigation | Access allowed sections | Hide inaccessible destinations; do not rely only on hiding for authorization |
-| Location selector | Change active location | Display support status |
-| Global status | Show data/model/service condition | Text plus icon/color |
-| Notifications | Show relevant system/review items | **Optional/Future** |
-| Help and limitations | Open definitions/methodology | Available from every result page |
-| Account menu | Profile, preferences, security, logout | Available after login |
+| Element              | Purpose                                | Required behavior                                                            |
+| -------------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
+| Product identity     | Return to role home                    | Show “Research Prototype”                                                    |
+| Role/workspace label | Clarify current permissions            | Example: `LGU Operator · Marikina`                                           |
+| Primary navigation   | Access allowed sections                | Hide inaccessible destinations; do not rely only on hiding for authorization |
+| Location selector    | Change active location                 | Display support status                                                       |
+| Global status        | Show data/model/service condition      | Text plus icon/color                                                         |
+| Notifications        | Show relevant system/review items      | **Optional/Future**                                                          |
+| Help and limitations | Open definitions/methodology           | Available from every result page                                             |
+| Account menu         | Profile, preferences, security, logout | Available after login                                                        |
 
 ### Account-menu items
 
@@ -345,20 +357,8 @@ Each screen must explain what happened without exposing security details and pro
 - Locations
 - Seven-Day Outlook
 - Hazard Context
-- Official Advisories
 - Saved Preferences
-- About and Limitations
-
-### Researcher
-
-- Overview
-- Map and Locations
-- Run Forecast
-- Forecast Runs
-- Historical Data
-- Data Sources
-- Models and Evaluation
-- Methodology and Limitations
+- Help and Limitations
 
 ### LGU operator
 
@@ -368,11 +368,12 @@ Each screen must explain what happened without exposing security details and pro
 - Forecast Outlook
 - Review Queue
 - Alerts and Notes — future
-- Official Sources
 
 ### Administrator
 
 - System Overview
+- Research tools
+- Forecasts
 - User Requests
 - Users and Roles
 - Supported Locations
@@ -393,11 +394,11 @@ If public hosting does not exist, this flow remains a future wireframe only.
 
 ### 9.2 Resident flow
 
-Create account → Verify → Resident onboarding → Select/save city → View seven-day outlook → Open a day → Read experimental status and limitations → View static hazard context separately → Follow link to official advisories → Adjust preferences → Log out.
+Create account → Verify → Resident onboarding → Select/save city → View seven-day outlook → Open a day → Read experimental status and limitations → View static hazard context separately → Review the official-source reminder → Adjust preferences → Log out.
 
-### 9.3 Researcher flow
+### 9.3 Administrator research flow
 
-Receive invitation or request access → Verify → Administrator approval → Log in → Researcher onboarding → Review dashboard and data quality → Inspect data source → Configure manual forecast → Review inputs → Run → Monitor progress → Inspect result/explanation → Compare previous run → Add research note → Review model card/methodology → Log out.
+Receive administrator invitation → Verify → MFA → Administrator onboarding → Open Research tools → Review data quality → Inspect data source → Configure manual forecast → Review inputs → Run → Monitor progress → Inspect result/explanation → Compare previous run → Review model card/methodology → Return to governance tools → Log out.
 
 ### 9.4 LGU operator flow
 
@@ -413,11 +414,11 @@ Controlled administrator invitation/setup → Verify → MFA → Admin onboardin
 
 **Common outputs:** supported locations, latest data/forecast time, quality warnings, service status, recent activity, and coverage map.
 
-**Researcher buttons:** `Run Forecast`, `Open Map`, `View Latest Run`, `Review Data Quality`.
+**Administrator research buttons:** `Run Forecast`, `Open Map`, `View Latest Run`, `Review Data Quality`.
 
-**LGU buttons:** `Review Latest Forecast`, `Open Assigned Area`, `Open Review Queue`, `View Official Sources`.
+**LGU buttons:** `Review Latest Forecast`, `Open Assigned Area`, `Open Review Queue`.
 
-**Resident buttons:** `View My Outlook`, `Change City`, `View Hazard Context`, `Open Official Advisories`.
+**Resident buttons:** `View My Outlook`, `Change City`, `View Hazard Context`.
 
 **Administrator buttons:** `Review Access Requests`, `Manage Locations`, `Review System Status`, `Open Audit Log`.
 
@@ -441,14 +442,14 @@ Static hazard and forecast layers must never share an ambiguous combined legend.
 
 ### APP-04 — Run experimental forecast
 
-| Input | Control | Rule |
-|---|---|---|
-| Locations | Multi-select | Supported locations only |
-| Horizon | Select/segmented | Up to seven days; extended-outlook label where required |
-| Issue/start period | Read-only/current | Historical dates require backtesting mode |
-| Weather provider | Read-only/admin-configured | Show provider |
-| Model version | Compatible select | Researcher only |
-| Include explanation | Checkbox | Only for supported model |
+| Input               | Control                    | Rule                                                    |
+| ------------------- | -------------------------- | ------------------------------------------------------- |
+| Locations           | Multi-select               | Supported locations only                                |
+| Horizon             | Select/segmented           | Up to seven days; extended-outlook label where required |
+| Issue/start period  | Read-only/current          | Historical dates require backtesting mode               |
+| Weather provider    | Read-only/admin-configured | Show provider                                           |
+| Model version       | Compatible select          | Administrator research tools only                       |
+| Include explanation | Checkbox                   | Only for supported model                                |
 
 **Buttons:** `Review Inputs`, `Run Experimental Forecast`, and `Cancel`.
 
@@ -603,39 +604,39 @@ Account menu action → end session → return to landing/login → show “You 
 
 ## 12. Route and permission matrix
 
-| Area | Guest | Resident | Researcher | LGU | Admin |
-|---|---:|---:|---:|---:|---:|
-| Public About/Limitations | View | View | View | View | View |
-| Simplified public outlook | Future view | Future view | View | View | View |
-| Detailed historical data | No | No | View | Assigned view | View |
-| Run forecast | No | No | Yes | Optional assigned areas | Configure/optional |
-| Model evaluation | No | No | Yes | Summary only | View/configure |
-| Review queue | No | No | Optional research notes | Yes | View |
-| Alert draft | No | No | No | Future assigned users | Future manage |
-| User/role management | No | No | No | No | Yes |
-| System configuration | No | No | No | No | Yes |
-| Audit log | No | Own activity only | Own activity only | Assigned activity | Yes |
+| Area                      |       Guest |          Resident |                     LGU |          Admin |
+| ------------------------- | ----------: | ----------------: | ----------------------: | -------------: |
+| Public About/Limitations  |        View |              View |                    View |           View |
+| Simplified public outlook | Future view |       Future view |                    View |           View |
+| Detailed historical data  |          No |                No |           Assigned view |           View |
+| Run forecast              |          No |                No | Optional assigned areas |            Yes |
+| Model evaluation          |          No |                No |            Summary only | View/configure |
+| Review queue              |          No |                No |                     Yes |           View |
+| Alert draft               |          No |                No |   Future assigned users |  Future manage |
+| User/role management      |          No |                No |                      No |            Yes |
+| System configuration      |          No |                No |                      No |            Yes |
+| Audit log                 |          No | Own activity only |       Assigned activity |            Yes |
 
 The backend must enforce permissions. Hiding navigation items is not sufficient authorization.
 
 ## 13. Reusable components
 
-| Component | Required information |
-|---|---|
-| Account-status banner | Status, impact, next action |
-| Role/workspace badge | Role and assigned organization/location |
-| Location card | Name, support status, latest result, updated time, warnings |
-| Forecast-day card | Date, weather summary, experimental result, uncertainty/status, action |
-| Status badge | Text plus color/icon; never color alone |
-| Data-quality banner | Problem, affected outputs, user impact, next step |
-| Provenance panel | Provider, observation/retrieval time, units, coverage, citation, limitations |
-| Model card | Version, purpose, coverage, validation, limitations |
-| Chart | Variable, unit, range, source, missing markers, table alternative |
-| Map legend | Layer name, meaning, run/date, static/dynamic label |
-| Empty state | What is unavailable, why, and what can happen next |
-| Confirmation dialog | Exact action, consequence, confirm/cancel controls |
-| Stepper | Current authentication/onboarding/forecast step |
-| Toast/notification | Brief result; never the only place critical information appears |
+| Component             | Required information                                                         |
+| --------------------- | ---------------------------------------------------------------------------- |
+| Account-status banner | Status, impact, next action                                                  |
+| Role/workspace badge  | Role and assigned organization/location                                      |
+| Location card         | Name, support status, latest result, updated time, warnings                  |
+| Forecast-day card     | Date, weather summary, experimental result, uncertainty/status, action       |
+| Status badge          | Text plus color/icon; never color alone                                      |
+| Data-quality banner   | Problem, affected outputs, user impact, next step                            |
+| Provenance panel      | Provider, observation/retrieval time, units, coverage, citation, limitations |
+| Model card            | Version, purpose, coverage, validation, limitations                          |
+| Chart                 | Variable, unit, range, source, missing markers, table alternative            |
+| Map legend            | Layer name, meaning, run/date, static/dynamic label                          |
+| Empty state           | What is unavailable, why, and what can happen next                           |
+| Confirmation dialog   | Exact action, consequence, confirm/cancel controls                           |
+| Stepper               | Current authentication/onboarding/forecast step                              |
+| Toast/notification    | Brief result; never the only place critical information appears              |
 
 ## 14. Required system and form states
 
@@ -713,38 +714,37 @@ Forms must preserve valid input after recoverable failures, identify errors next
 ### Onboarding
 
 15. Resident Onboarding
-16. Researcher Onboarding
-17. LGU Onboarding
-18. Administrator Onboarding
+16. LGU Onboarding
+17. Administrator Onboarding
 
 ### Core application
 
-19. Researcher Dashboard
-20. LGU Dashboard
-21. Resident Outlook
-22. Administrator Dashboard
-23. NCR Map / Location Explorer
-24. Location Details
-25. Historical Data
-26. Run Forecast
-27. Review Forecast Inputs
-28. Forecast Progress
-29. Forecast Results
-30. Forecast Day Detail
-31. Forecast History
-32. Compare Forecast Runs
-33. Data Sources
-34. Data-Source Form
-35. Models and Evaluation
-36. Model Card
-37. LGU Review Queue
-38. Forecast Review Form
-39. Alert Draft
-40. Alert Approval
-41. User Access Requests
-42. Users and Roles
-43. Location/Provider/Model/Hazard Configuration
-44. Audit Log
+18. Administrator Research Workspace
+19. LGU Dashboard
+20. Resident Outlook
+21. Administrator Dashboard
+22. NCR Map / Location Explorer
+23. Location Details
+24. Historical Data
+25. Run Forecast
+26. Review Forecast Inputs
+27. Forecast Progress
+28. Forecast Results
+29. Forecast Day Detail
+30. Forecast History
+31. Compare Forecast Runs
+32. Data Sources
+33. Data-Source Form
+34. Models and Evaluation
+35. Model Card
+36. LGU Review Queue
+37. Forecast Review Form
+38. Alert Draft
+39. Alert Approval
+40. User Access Requests
+41. Users and Roles
+42. Location/Provider/Model/Hazard Configuration
+43. Audit Log
 
 ### Settings and states
 
@@ -764,7 +764,7 @@ Forms must preserve valid input after recoverable failures, identify errors next
 2. Authentication and account-state flow
 3. Role-specific onboarding
 4. Shared shell and navigation
-5. Researcher dashboard and core forecast journey
+5. Administrator research workspace and core forecast journey
 6. Map, location, data-source, and model-detail screens
 7. LGU review and future alert-approval journey
 8. Resident simplified journey
@@ -775,6 +775,6 @@ Forms must preserve valid input after recoverable failures, identify errors next
 
 The recommended first connected prototype is:
 
-**Welcome → Log In → Researcher Onboarding → Researcher Dashboard → Run Forecast → Progress → Results → Day Detail → Log Out.**
+**Welcome → Log In → Administrator MFA → Administrator Onboarding → Research Tools → Run Forecast → Progress → Results → Day Detail → Log Out.**
 
 After that path works, adapt the shared system for Resident, LGU, and Administrator flows instead of designing four unrelated products.

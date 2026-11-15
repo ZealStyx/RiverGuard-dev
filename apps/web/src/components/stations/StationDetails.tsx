@@ -16,7 +16,7 @@ export function StationDetails() {
           Data provenance &amp; model information
         </h2>
         <Link
-          href="/researcher/data-sources/daily-rainfall"
+          href="/admin/data-sources/daily-rainfall?view=research"
           className="text-button inline-flex min-h-7 items-center justify-center gap-1.5 rounded-control border border-line px-2.5 hover:bg-canvas-soft"
         >
           Open full evidence

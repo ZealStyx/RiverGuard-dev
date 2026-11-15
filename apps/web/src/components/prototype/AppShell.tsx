@@ -26,7 +26,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
-import { type ProductRole, roleDefinitions } from "@/data/prototype";
+import { can, type ProductRole, roleDefinitions } from "@/data/prototype";
 import { cx } from "@/lib/classnames";
 
 interface AppShellProps {
@@ -38,13 +38,6 @@ const supplementalSearchItems: Record<
   ProductRole,
   { href: string; label: string }[]
 > = {
-  researcher: [
-    { label: "Run forecast", href: "/researcher/forecast/new" },
-    { label: "Forecast runs", href: "/researcher/runs" },
-    { label: "Map and locations", href: "/researcher/map" },
-    { label: "Historical data", href: "/researcher/history" },
-    { label: "Data sources", href: "/researcher/data-sources" },
-  ],
   lgu: [
     { label: "Risk map", href: "/lgu/map" },
     { label: "Assigned locations", href: "/lgu/locations" },
@@ -57,9 +50,12 @@ const supplementalSearchItems: Record<
     { label: "Seven-day outlook", href: "/resident/outlook" },
     { label: "Hazard context", href: "/resident/hazard-context" },
     { label: "Resident preferences", href: "/resident/preferences" },
-    { label: "About RiverGuard", href: "/about" },
   ],
   admin: [
+    { label: "Run forecast", href: "/admin/research/forecast/new" },
+    { label: "Forecast runs", href: "/admin/research/runs" },
+    { label: "Map and locations", href: "/admin/research/map" },
+    { label: "Historical data", href: "/admin/research/history" },
     { label: "User requests", href: "/admin/requests" },
     { label: "Users and roles", href: "/admin/users" },
     { label: "Supported locations", href: "/admin/locations" },
@@ -95,13 +91,20 @@ const settingsNavigation = [
 ];
 
 function isActive(pathname: string, href: string) {
-  if (pathname === "/" && href === "/researcher") return true;
+  if (pathname === "/" && href === "/admin") return true;
   if (
-    href === "/researcher/runs" &&
-    (pathname.startsWith("/researcher/runs") ||
-      pathname.startsWith("/researcher/forecast") ||
-      pathname.startsWith("/researcher/compare") ||
-      pathname.startsWith("/researcher/history"))
+    href === "/admin/research" &&
+    (pathname === "/admin/research" ||
+      pathname.startsWith("/admin/research/map") ||
+      pathname.startsWith("/admin/research/locations") ||
+      pathname.startsWith("/admin/research/history"))
+  )
+    return true;
+  if (
+    href === "/admin/research/runs" &&
+    (pathname.startsWith("/admin/research/runs") ||
+      pathname.startsWith("/admin/research/forecast") ||
+      pathname.startsWith("/admin/research/compare"))
   )
     return true;
   if (
@@ -142,13 +145,6 @@ function isActive(pathname: string, href: string) {
     ].some((route) => pathname.startsWith(route))
   )
     return true;
-  if (
-    href === "/researcher/map" &&
-    (pathname.startsWith("/researcher/map") ||
-      pathname.startsWith("/researcher/locations") ||
-      pathname.startsWith("/researcher/data-sources"))
-  )
-    return true;
   if (href.split("/").filter(Boolean).length === 1) return pathname === href;
   return pathname.startsWith(href);
 }
@@ -157,6 +153,7 @@ function navigationIcon(label: string) {
   const normalized = label.toLowerCase();
   if (normalized.includes("map") || normalized.includes("location"))
     return <MapTrifold size={18} />;
+  if (normalized.includes("research")) return <Brain size={18} />;
   if (normalized.includes("overview") || normalized.includes("outlook"))
     return <House size={18} />;
   if (normalized === "run forecast") return <Play size={18} />;
@@ -186,24 +183,26 @@ export function AppShell({ children, role }: AppShellProps) {
   const [settingsMenuPinned, setSettingsMenuPinned] = useState(false);
   const [query, setQuery] = useState("");
   const roleDefinition = roleDefinitions[role];
+  const navigationItems = roleDefinition.navigation.filter(
+    (item) => !item.capability || can(role, item.capability),
+  );
 
   const searchItems = useMemo(() => {
     const items = [
-      ...roleDefinition.navigation,
+      ...navigationItems,
       ...supplementalSearchItems[role],
       { label: "Profile and account settings", href: "/settings/profile" },
       { label: "Notification preferences", href: "/settings/notifications" },
       { label: "Accessibility preferences", href: "/settings/accessibility" },
       { label: "Security, password & access", href: "/settings/security" },
       { label: "Methodology and limitations", href: "/methodology" },
-      { label: "Official sources", href: "/official-sources" },
     ];
     return Array.from(
       new Map(
         items.map((item) => [`${item.href}-${item.label}`, item]),
       ).values(),
     );
-  }, [role, roleDefinition.navigation]);
+  }, [navigationItems, role]);
 
   const filteredItems = searchItems.filter((item) =>
     item.label.toLowerCase().includes(query.trim().toLowerCase()),
@@ -257,16 +256,12 @@ export function AppShell({ children, role }: AppShellProps) {
             </span>
           </button>
           <div className="grid gap-1">
-            {roleDefinition.navigation.map((item) => {
+            {navigationItems.map((item) => {
               const active = isActive(pathname, item.href);
-              const itemHref =
-                item.href === "/official-sources"
-                  ? `/official-sources?from=/${role}`
-                  : item.href;
               return (
                 <Link
                   key={item.href}
-                  href={itemHref}
+                  href={item.href}
                   aria-current={active ? "page" : undefined}
                   title={item.label}
                   className={cx(
@@ -410,7 +405,7 @@ export function AppShell({ children, role }: AppShellProps) {
             {roleDefinition.label}
           </p>
           <nav aria-label="Mobile navigation" className="grid gap-1">
-            {roleDefinition.navigation.map((item) => (
+            {navigationItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

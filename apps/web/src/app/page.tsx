@@ -1,9 +1,9 @@
 import { PrototypeRouter } from "@/components/prototype/PrototypeRouter";
 
 export const metadata = {
-  title: "Researcher dashboard",
+  title: "RiverGuard",
 };
 
 export default function Home() {
-  return <PrototypeRouter section="researcher" />;
+  return <PrototypeRouter section="welcome" />;
 }

@@ -183,7 +183,7 @@ export default function DesignSystemPage() {
             <Panel className="mt-5 grid gap-6" tone="canvas">
               <div>
                 <p className="text-metadata text-muted">Page title · 28/34</p>
-                <p className="text-page-title mt-1">Researcher Dashboard</p>
+                <p className="text-page-title mt-1">Admin Research Workspace</p>
               </div>
               <div>
                 <p className="text-metadata text-muted">Major status · 22/27</p>

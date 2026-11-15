@@ -122,7 +122,7 @@ export function DashboardLayout() {
             <IconButton label="Notifications">
               <Bell size={18} />
             </IconButton>
-            <IconButton label="Researcher profile">
+            <IconButton label="Admin profile">
               <UserCircle size={21} weight="duotone" />
             </IconButton>
           </div>
@@ -150,7 +150,7 @@ export function DashboardLayout() {
             <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <h1 className="text-page-title tracking-[-0.03em]">
-                  Researcher dashboard
+                  Admin research workspace
                 </h1>
                 <p className="text-navigation mt-1 text-muted">
                   NCR experimental flood-risk research workspace

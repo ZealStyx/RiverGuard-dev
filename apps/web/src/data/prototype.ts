@@ -1,9 +1,18 @@
-export type ProductRole = "researcher" | "lgu" | "resident" | "admin";
+export type ProductRole = "lgu" | "resident" | "admin";
+
+export type AdminCapability =
+  | "research.read"
+  | "research.runForecast"
+  | "research.reviewModels"
+  | "governance.manageUsers"
+  | "governance.configureSystem"
+  | "governance.viewAudit";
 
 export interface NavigationItem {
   href: string;
   label: string;
   shortLabel?: string;
+  capability?: AdminCapability;
 }
 
 export interface RoleDefinition {
@@ -13,27 +22,25 @@ export interface RoleDefinition {
   navigation: NavigationItem[];
 }
 
-export const roleDefinitions: Record<ProductRole, RoleDefinition> = {
-  researcher: {
-    label: "Researcher",
-    location: "NCR workspace",
-    description:
-      "Inspect evidence, run experimental forecasts, and compare models.",
-    navigation: [
-      { label: "Overview", shortLabel: "Overview", href: "/researcher" },
-      {
-        label: "Forecasts",
-        shortLabel: "Forecasts",
-        href: "/researcher/runs",
-      },
-      {
-        label: "Data & map",
-        shortLabel: "Data",
-        href: "/researcher/map",
-      },
-      { label: "Models", shortLabel: "Models", href: "/researcher/models" },
+export const roleCapabilities: Record<ProductRole, readonly AdminCapability[]> =
+  {
+    lgu: [],
+    resident: [],
+    admin: [
+      "research.read",
+      "research.runForecast",
+      "research.reviewModels",
+      "governance.manageUsers",
+      "governance.configureSystem",
+      "governance.viewAudit",
     ],
-  },
+  };
+
+export function can(role: ProductRole, capability: AdminCapability): boolean {
+  return roleCapabilities[role].includes(capability);
+}
+
+export const roleDefinitions: Record<ProductRole, RoleDefinition> = {
   lgu: {
     label: "LGU operator",
     location: "Marikina",
@@ -51,11 +58,6 @@ export const roleDefinitions: Record<ProductRole, RoleDefinition> = {
         shortLabel: "Reviews",
         href: "/lgu/reviews",
       },
-      {
-        label: "Official sources",
-        shortLabel: "Sources",
-        href: "/official-sources",
-      },
     ],
   },
   resident: {
@@ -70,31 +72,45 @@ export const roleDefinitions: Record<ProductRole, RoleDefinition> = {
         shortLabel: "Locations",
         href: "/resident/locations",
       },
-      {
-        label: "Official information",
-        shortLabel: "Official",
-        href: "/official-sources",
-      },
     ],
   },
   admin: {
     label: "Administrator",
     location: "RiverGuard system",
     description:
-      "Manage approved users, supported locations, and system configuration.",
+      "Run research workflows and manage approved users, locations, and system configuration.",
     navigation: [
       { label: "System overview", shortLabel: "Overview", href: "/admin" },
+      {
+        label: "Research",
+        shortLabel: "Research",
+        href: "/admin/research",
+        capability: "research.read",
+      },
+      {
+        label: "Forecasts",
+        shortLabel: "Forecasts",
+        href: "/admin/research/runs",
+        capability: "research.runForecast",
+      },
       {
         label: "Users & access",
         shortLabel: "Users",
         href: "/admin/users",
+        capability: "governance.manageUsers",
       },
       {
-        label: "System configuration",
+        label: "Configuration",
         shortLabel: "Configure",
         href: "/admin/locations",
+        capability: "governance.configureSystem",
       },
-      { label: "Audit log", shortLabel: "Audit", href: "/admin/audit" },
+      {
+        label: "Audit log",
+        shortLabel: "Audit",
+        href: "/admin/audit",
+        capability: "governance.viewAudit",
+      },
     ],
   },
 };
@@ -219,8 +235,8 @@ export const modelVersions = [
 export const accessRequests = [
   {
     name: "Alyssa Reyes",
-    organization: "University research team",
-    role: "Researcher",
+    organization: "Quezon City DRRMO",
+    role: "LGU operator",
     locations: "Supported NCR cities",
     submitted: "Nov 11, 08:20",
     status: "Verified",
@@ -235,11 +251,11 @@ export const accessRequests = [
   },
   {
     name: "Dana Cruz",
-    organization: "Independent",
-    role: "Researcher",
+    organization: "Manila DRRMO",
+    role: "LGU operator",
     locations: "Manila",
     submitted: "Nov 10, 11:15",
-    status: "Unverified",
+    status: "Needs review",
   },
 ] as const;
 
@@ -256,10 +272,10 @@ export const systemUsers = [
   {
     name: "Paolo Mendoza",
     organization: "University research team",
-    role: "Researcher",
+    role: "Administrator",
     status: "Active",
     locations: "Supported NCR cities",
-    mfa: "Optional",
+    mfa: "Enabled",
     lastAccess: "Today, 08:42",
   },
   {

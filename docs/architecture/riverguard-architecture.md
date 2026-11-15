@@ -129,27 +129,27 @@ Treat the CSV as a schema/pipeline smoke-test dataset only until provenance and 
 
 ## 4. Recommended technology stack
 
-| Layer | Technology | Responsibility | Execution |
-|---|---|---|---|
-| Web application | Next.js + TypeScript | Dashboard and route handlers | Local |
-| Styling | Tailwind CSS | Layout and responsive UI | Local |
-| UI components | shadcn/ui | Reusable components | Local |
-| Charts | Recharts | Rainfall, water-level, and risk timelines | Local |
-| Interactive maps | MapLibre GL JS | Boundaries, stations, waterways, and risk layers | Local |
-| Geographic formats | GeoJSON / local PMTiles | Prepared NCR layers | Local files |
-| Application database | Convex | Application records and reactive queries | Convex development deployment |
-| ML/API runtime | Python + FastAPI | Feature validation and inference | Local |
-| Data processing | Pandas + NumPy | Cleaning and feature engineering | Local |
-| Geospatial processing | GeoPandas + Shapely + Rasterio | GIS preprocessing | Local |
-| ML baselines | Scikit-learn + XGBoost | Regression and classification | Local |
-| Explainability | SHAP | Feature-contribution explanations | Local |
-| Weather provider | Open-Meteo or another verified provider | Seven-day forecast input | External API requested by local server |
+| Layer                 | Technology                              | Responsibility                                   | Execution                              |
+| --------------------- | --------------------------------------- | ------------------------------------------------ | -------------------------------------- |
+| Web application       | Next.js + TypeScript                    | Dashboard and route handlers                     | Local                                  |
+| Styling               | Tailwind CSS                            | Layout and responsive UI                         | Local                                  |
+| UI components         | shadcn/ui                               | Reusable components                              | Local                                  |
+| Charts                | Recharts                                | Rainfall, water-level, and risk timelines        | Local                                  |
+| Interactive maps      | MapLibre GL JS                          | Boundaries, stations, waterways, and risk layers | Local                                  |
+| Geographic formats    | GeoJSON / local PMTiles                 | Prepared NCR layers                              | Local files                            |
+| Application database  | Convex                                  | Application records and reactive queries         | Convex development deployment          |
+| ML/API runtime        | Python + FastAPI                        | Feature validation and inference                 | Local                                  |
+| Data processing       | Pandas + NumPy                          | Cleaning and feature engineering                 | Local                                  |
+| Geospatial processing | GeoPandas + Shapely + Rasterio          | GIS preprocessing                                | Local                                  |
+| ML baselines          | Scikit-learn + XGBoost                  | Regression and classification                    | Local                                  |
+| Explainability        | SHAP                                    | Feature-contribution explanations                | Local                                  |
+| Weather provider      | Open-Meteo or another verified provider | Seven-day forecast input                         | External API requested by local server |
 
 ## 5. High-level architecture
 
 ```mermaid
 flowchart TB
-    USER[Researcher / demo user]
+    USER[Administrator using research tools]
 
     subgraph LOCAL[Developer computer — all application compute is local]
         WEB[Next.js dashboard\nlocalhost:3000]
@@ -306,13 +306,13 @@ Examples are schema illustrations, not current weather results or real model out
 
 ### 8.2 Local FastAPI endpoints
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/health` | Confirm local ML service availability |
-| GET | `/api/v1/models` | Report loaded model names and versions |
-| POST | `/api/v1/predict/water-level` | Run Model A for supported stations |
-| POST | `/api/v1/predict/flood-risk` | Run Model B for supported spatial units |
-| POST | `/api/v1/predict/combined` | Run both supported paths for one forecast request |
+| Method | Endpoint                      | Purpose                                           |
+| ------ | ----------------------------- | ------------------------------------------------- |
+| GET    | `/health`                     | Confirm local ML service availability             |
+| GET    | `/api/v1/models`              | Report loaded model names and versions            |
+| POST   | `/api/v1/predict/water-level` | Run Model A for supported stations                |
+| POST   | `/api/v1/predict/flood-risk`  | Run Model B for supported spatial units           |
+| POST   | `/api/v1/predict/combined`    | Run both supported paths for one forecast request |
 
 Request and response schemas must be versioned and tested. FastAPI running does not mean that every model is trained or available.
 
@@ -322,20 +322,20 @@ Convex is the source of truth for application records in the demo. It is not a r
 
 Suggested tables:
 
-| Table | Purpose | Example fields |
-|---|---|---|
-| `users` | Demo users and roles | name, email, role |
-| `locations` | NCR city/municipality and spatial-unit registry | locationCode, name, type, parentId, coordinates, coverageStatus |
-| `monitoring_stations` | Station registry | stationCode, name, coordinates, riverName, status, units |
-| `sensor_readings` | Time-stamped observations | stationId, timestamp, waterLevel, rainfall, source, qualityStatus |
-| `weather_snapshots` | Retrieved weather inputs | runId, provider, retrievedAt, locationId, validAt, variables |
-| `forecast_runs` | Execution/provenance record | locationIds, generatedAt, horizonDays, weatherSnapshotIds, status |
-| `station_forecasts` | Model A outputs | runId, stationId, targetTimestamp, predictedWaterLevel, modelVersion |
-| `spatial_forecasts` | Model B outputs | runId, spatialUnitId, validDate, probability, riskCategory, modelVersion |
-| `risk_thresholds` | Documented thresholds | location/station, threshold, unit, source, effectiveFrom |
-| `alerts` | Demo alert lifecycle | locationId, severity, status, message, createdAt, acknowledgedAt |
-| `hazard_layers` | Local map-layer metadata | name, hazardType, source, attribution, localAssetPath, enabled |
-| `model_versions` | Model registry metadata | modelName, version, trainedAt, metrics, featureSchemaVersion |
+| Table                 | Purpose                                         | Example fields                                                           |
+| --------------------- | ----------------------------------------------- | ------------------------------------------------------------------------ |
+| `users`               | Demo users and roles                            | name, email, role                                                        |
+| `locations`           | NCR city/municipality and spatial-unit registry | locationCode, name, type, parentId, coordinates, coverageStatus          |
+| `monitoring_stations` | Station registry                                | stationCode, name, coordinates, riverName, status, units                 |
+| `sensor_readings`     | Time-stamped observations                       | stationId, timestamp, waterLevel, rainfall, source, qualityStatus        |
+| `weather_snapshots`   | Retrieved weather inputs                        | runId, provider, retrievedAt, locationId, validAt, variables             |
+| `forecast_runs`       | Execution/provenance record                     | locationIds, generatedAt, horizonDays, weatherSnapshotIds, status        |
+| `station_forecasts`   | Model A outputs                                 | runId, stationId, targetTimestamp, predictedWaterLevel, modelVersion     |
+| `spatial_forecasts`   | Model B outputs                                 | runId, spatialUnitId, validDate, probability, riskCategory, modelVersion |
+| `risk_thresholds`     | Documented thresholds                           | location/station, threshold, unit, source, effectiveFrom                 |
+| `alerts`              | Demo alert lifecycle                            | locationId, severity, status, message, createdAt, acknowledgedAt         |
+| `hazard_layers`       | Local map-layer metadata                        | name, hazardType, source, attribution, localAssetPath, enabled           |
+| `model_versions`      | Model registry metadata                         | modelName, version, trainedAt, metrics, featureSchemaVersion             |
 
 Suggested indexes:
 
@@ -424,17 +424,17 @@ The dataset's date-level frequency also means it cannot train hourly prediction 
 
 ### Failure behavior
 
-| Failure | Required behavior |
-|---|---|
-| Weather API unavailable | Show retrieval failure; do not silently present stale data as current |
-| Weather forecast stale | Display retrieval and validity timestamps |
-| Local ML service offline | Keep weather display available; mark ML predictions unavailable |
-| Model A missing/inadequate | Do not display station-level water-level prediction |
-| Model B untrained/unvalidated | Display static context only or clearly labeled experimental output |
-| Required feature missing | Return data-quality warning; do not zero-fill |
-| Convex unavailable | Keep the run locally visible where feasible, mark it unsaved, and allow controlled retry |
-| Unsupported NCR location | Show “No prediction” rather than low risk |
-| Model/schema mismatch | Reject inference with a clear compatibility error |
+| Failure                       | Required behavior                                                                        |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
+| Weather API unavailable       | Show retrieval failure; do not silently present stale data as current                    |
+| Weather forecast stale        | Display retrieval and validity timestamps                                                |
+| Local ML service offline      | Keep weather display available; mark ML predictions unavailable                          |
+| Model A missing/inadequate    | Do not display station-level water-level prediction                                      |
+| Model B untrained/unvalidated | Display static context only or clearly labeled experimental output                       |
+| Required feature missing      | Return data-quality warning; do not zero-fill                                            |
+| Convex unavailable            | Keep the run locally visible where feasible, mark it unsaved, and allow controlled retry |
+| Unsupported NCR location      | Show “No prediction” rather than low risk                                                |
+| Model/schema mismatch         | Reject inference with a clear compatibility error                                        |
 
 ## 13. Explainability, evaluation, and public-safety safeguards
 
