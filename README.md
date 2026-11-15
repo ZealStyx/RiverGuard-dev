@@ -162,6 +162,17 @@ python3 data/build_preview.py          # data/dataset_preview.html
 Source catalogue: [`docs/data-sources.md`](docs/data-sources.md). Dataset detail and reliability
 table: [`data/README.md`](data/README.md). Full licence, units, and per-column caveats live there.
 
+### 2.5 Test model and interactive predictor
+
+[`ml/`](ml/) holds a small model trained on the dataset above — a flood classifier and a water-level
+regressor, both next-day — plus [`ml/predictor.html`](ml/predictor.html), a self-contained page where
+you set the current conditions and tomorrow's forecast and read the result, including a seven-day
+panel that is the shape of the planned weather-API integration.
+
+It is a **test model**: since water level and flood labels in dataset v2 are derived from rainfall,
+its metrics measure how well it recovers the generator. They are not forecast skill. Metrics,
+baselines, and limits: [`ml/README.md`](ml/README.md).
+
 ## 3. Main capabilities
 
 ### 3.1 Geographic hazard visualization
