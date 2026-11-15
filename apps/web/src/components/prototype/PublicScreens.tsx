@@ -1090,10 +1090,17 @@ export function PublicInfoScreen({
   const params = useSearchParams();
   const requestedReturn = params.get("from");
   const returnHref =
-    requestedReturn && /^\/(resident|lgu|admin)(?:\/.*)?$/.test(requestedReturn)
+    requestedReturn &&
+    (requestedReturn === "/methodology" ||
+      /^\/(resident|lgu|admin)(?:\/.*)?$/.test(requestedReturn))
       ? requestedReturn
       : "/welcome";
-  const returnLabel = returnHref === "/welcome" ? "Back" : "Back to dashboard";
+  const returnLabel =
+    returnHref === "/welcome"
+      ? "Back"
+      : returnHref === "/methodology"
+        ? "Back to methodology"
+        : "Back to dashboard";
   const content = {
     about: {
       title: "About RiverGuard",
