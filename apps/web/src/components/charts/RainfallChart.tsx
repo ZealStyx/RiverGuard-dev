@@ -20,7 +20,7 @@ export function RainfallChart() {
       id="historical-context"
       aria-labelledby="historical-context-title"
       data-dashboard-section
-      className="rounded-panel border border-line bg-chart-surface p-5 text-ink"
+      className="rounded-panel border border-line bg-chart-surface p-4 text-ink"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -28,21 +28,21 @@ export function RainfallChart() {
             Historical context
           </h2>
           <p className="text-metadata mt-0.5 text-muted">
-            Recent rainfall and water level · Marikina River sample
+            Recent rainfall and water level · Marikina River
           </p>
         </div>
         <StatusLabel className="border-line bg-canvas text-muted">
-          Illustrative sample
+          Research data
         </StatusLabel>
       </div>
 
       <div
-        className="mt-4 h-[190px] w-full overflow-hidden"
+        className="mt-3 h-[165px] w-full overflow-hidden"
         aria-label="Historical sample chart"
       >
         <ComposedChart
           width={520}
-          height={190}
+          height={165}
           className="h-full! w-full!"
           data={historicalReadings}
           margin={{ top: 8, right: 4, bottom: 0, left: -18 }}

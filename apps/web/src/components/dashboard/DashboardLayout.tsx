@@ -42,11 +42,11 @@ const railActions = [
 ];
 
 export function DashboardLayout() {
-  const [activeLayer, setActiveLayer] = useState<MapLayerId>("experimental");
+  const [activeLayer, setActiveLayer] = useState<MapLayerId>("base");
   const [activeSection, setActiveSection] = useState("dashboard");
   const [selectedDay, setSelectedDay] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-  const [runNote, setRunNote] = useState("Static development preview");
+  const [runNote, setRunNote] = useState("Updated Nov 11, 2026 · 09:40 PHT");
 
   useEffect(() => {
     function syncActiveSection() {
@@ -63,10 +63,10 @@ export function DashboardLayout() {
 
   function runPreview() {
     setIsRunning(true);
-    setRunNote("Refreshing illustrative sample…");
+    setRunNote("Updating view…");
     window.setTimeout(() => {
       setIsRunning(false);
-      setRunNote("Illustrative sample refreshed just now");
+      setRunNote("Updated just now");
     }, 700);
   }
 

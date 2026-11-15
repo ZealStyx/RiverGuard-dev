@@ -44,7 +44,7 @@ The website and Python ML service run on the developer's computer. Convex is the
 - Public operational warnings or automatic evacuation decisions.
 - Automatic background forecast scheduling. A user initiates a forecast from the local dashboard.
 
-The only intended remote application dependency is Convex. The only intended external runtime data API is the weather forecast provider. Map boundaries, hazard layers, and other GIS data required for the demo should be prepared and stored locally. Do not add remote basemap tiles or geocoding APIs to the demo without revising this scope.
+The only intended remote application dependency is Convex. The only intended external runtime data API is the weather forecast provider. Map boundaries, hazard layers, and other RiverGuard GIS data required for the demo should be prepared and stored locally. The current frontend map milestone makes one explicit exception: it uses the public OpenStreetMap raster basemap so the MapLibre interaction can be exercised before verified local GIS assets are supplied. Attribution is shown in the map, and this provider must be reviewed or replaced with a cached/local source before production use.
 
 ## 2. Study area and available development data
 

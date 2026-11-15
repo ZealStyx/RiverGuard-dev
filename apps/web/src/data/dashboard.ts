@@ -35,27 +35,23 @@ export const supportedCities: SupportedCity[] = [
   {
     id: "quezon-city",
     name: "Quezon City",
-    status: "Available (sample)",
-    mapPosition: { left: "46%", top: "28%" },
+    status: "Available",
   },
   {
     id: "marikina",
     name: "Marikina",
-    status: "Available (sample)",
-    mapPosition: { left: "65%", top: "42%" },
+    status: "Available",
     selected: true,
   },
   {
     id: "manila",
     name: "Manila",
-    status: "Available (sample)",
-    mapPosition: { left: "28%", top: "52%" },
+    status: "Available",
   },
   {
     id: "pasig",
     name: "Pasig",
-    status: "Available (sample)",
-    mapPosition: { left: "55%", top: "60%" },
+    status: "Available",
   },
 ];
 

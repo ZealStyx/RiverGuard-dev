@@ -13,7 +13,7 @@ export function ModelContributionPanel() {
       id="model-contribution"
       aria-labelledby="model-contribution-title"
       data-dashboard-section
-      className="rounded-panel border border-line bg-chart-surface p-5 text-ink"
+      className="rounded-panel border border-line bg-chart-surface p-4 text-ink"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -29,14 +29,14 @@ export function ModelContributionPanel() {
         </StatusLabel>
       </div>
 
-      <div className="mt-4 grid gap-3">
+      <div className="mt-3 grid gap-2.5">
         {modelContributions.map((contribution) => (
           <div
             key={contribution.label}
             className="grid items-center gap-2 sm:grid-cols-[145px_minmax(0,1fr)]"
           >
             <p className="text-metadata text-muted">{contribution.label}</p>
-            <div className="h-3 overflow-hidden rounded-sm bg-ink/10">
+            <div className="h-2.5 overflow-hidden rounded-sm bg-ink/10">
               <div
                 className={`h-full ${toneClasses[contribution.tone]}`}
                 style={{ width: `${contribution.value}%` }}

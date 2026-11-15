@@ -13,9 +13,9 @@ const variantClasses = {
 };
 
 const sizeClasses = {
-  small: "min-h-8 px-3",
-  medium: "min-h-10 px-4",
-  large: "min-h-12 px-5",
+  small: "min-h-7 px-2.5",
+  medium: "min-h-8 px-3",
+  large: "min-h-10 px-4",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

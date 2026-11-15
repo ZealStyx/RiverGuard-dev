@@ -1,9 +1,9 @@
-import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { PrototypeRouter } from "@/components/prototype/PrototypeRouter";
 
 export const metadata = {
   title: "Researcher dashboard",
 };
 
 export default function Home() {
-  return <DashboardLayout />;
+  return <PrototypeRouter section="researcher" />;
 }

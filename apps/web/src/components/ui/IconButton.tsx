@@ -25,7 +25,7 @@ export function IconButton({
       type={type}
       aria-label={label}
       className={cx(
-        "inline-flex size-10 items-center justify-center rounded-control border transition-colors motion-reduce:transition-none",
+        "inline-flex size-8 items-center justify-center rounded-control border transition-colors motion-reduce:transition-none",
         "disabled:cursor-not-allowed disabled:opacity-45",
         tone === "dark"
           ? "border-white/15 bg-brand-primary text-white hover:bg-brand-secondary"

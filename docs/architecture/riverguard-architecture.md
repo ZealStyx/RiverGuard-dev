@@ -71,7 +71,7 @@ For every requested NCR location, the application must use a documented coordina
 
 If a provider requires an API key, store it in a server-only local environment variable. Never expose it in `NEXT_PUBLIC_` variables or browser bundles.
 
-No other external runtime APIs are required by the current demo. Historical datasets and GIS assets are acquired separately, then stored locally. Do not call external geocoding, basemap-tile, GIS, or data-catalog services at runtime. The map must use local geographic files and a local/offline background. Any exception requires a deliberate scope change.
+No other external runtime APIs are required by the backend workflow. Historical datasets and RiverGuard GIS assets are acquired separately, then stored locally. The current frontend mapping milestone is a deliberate, temporary exception: MapLibre loads the public OpenStreetMap raster basemap with visible attribution so the map workspace can be exercised before verified local layers are supplied. Do not treat this basemap as a RiverGuard boundary, hazard, station, or prediction layer. Before production or an offline demo, replace it with an approved cached/local source and document that provider decision.
 
 ### 2.4 Geographic and model assets remain local
 
@@ -83,7 +83,7 @@ Prepare local NCR geographic assets, including only those layers whose sources a
 - Elevation/terrain derivatives.
 - Flood susceptibility layers with appropriate attribution.
 
-Use local GeoJSON or local PMTiles for map rendering. Keep raw archives and large source rasters in local gitignored directories. Do not depend on a remote tile host for the required demo map.
+Use local GeoJSON or local PMTiles for RiverGuard-specific layers. Keep raw archives and large source rasters in local gitignored directories. The current frontend baseline may use the explicitly documented OSM basemap exception above, but it must not be used as a substitute for verified RiverGuard GIS assets.
 
 ### 2.5 No cloud scheduler or always-on worker
 
@@ -446,7 +446,7 @@ No AWS or public hosting budget is required by the current scope. The expected r
 1. Convex development deployment for application persistence and reactive data access.
 2. The selected weather forecast API for user-requested forecasts.
 
-All frontend hosting, backend compute, ML inference, model training, and GIS preprocessing happen locally. The local machine needs sufficient memory, CPU, and disk for the selected models and datasets. The map must use local files rather than a remote tile service in this scope.
+All frontend hosting, backend compute, ML inference, model training, and GIS preprocessing happen locally. The local machine needs sufficient memory, CPU, and disk for the selected models and datasets. RiverGuard-specific map layers must use local files; the frontend currently uses the documented OSM basemap exception until an approved local/cached basemap is supplied.
 
 ## 15. Local startup checklist
 

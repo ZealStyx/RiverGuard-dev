@@ -7,6 +7,7 @@ See the project root [`README.md`](../README.md) for the overall project overvie
 ## Product design
 
 - [`designs/ui-ux-design-cheat-sheet.md`](designs/ui-ux-design-cheat-sheet.md) — Complete role, authentication, onboarding, screen, form, permission, system-state, and end-to-end UI/UX flow reference.
+- [`designs/frontend-route-inventory.md`](designs/frontend-route-inventory.md) — Implemented frontend routes, role journeys, prototype boundaries, and backend handoff notes.
 
 ## Folder organization
 

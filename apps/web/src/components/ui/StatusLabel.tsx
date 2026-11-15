@@ -27,7 +27,7 @@ export function StatusLabel({
     <span
       {...props}
       className={cx(
-        "text-metadata inline-flex min-h-6 items-center rounded-full border px-2.5 py-1",
+        "text-metadata inline-flex min-h-5 items-center rounded-full border px-2 py-0.5",
         toneClasses[tone],
         className,
       )}

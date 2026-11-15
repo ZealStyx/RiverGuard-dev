@@ -16,9 +16,9 @@ export interface PanelProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 const paddingClasses = {
-  compact: "p-4",
-  default: "p-6",
-  spacious: "p-8",
+  compact: "p-3",
+  default: "p-4",
+  spacious: "p-6",
 };
 
 export function Panel({

@@ -49,7 +49,7 @@ export function Toggle({
         disabled={disabled}
         onClick={handleClick}
         className={cx(
-          "relative h-7 w-12 shrink-0 rounded-full border transition-colors motion-reduce:transition-none",
+          "relative h-6 w-10 shrink-0 rounded-full border transition-colors motion-reduce:transition-none",
           "disabled:cursor-not-allowed disabled:opacity-45",
           isPressed
             ? "border-brand-secondary bg-brand-secondary"
@@ -59,8 +59,8 @@ export function Toggle({
         <span
           aria-hidden="true"
           className={cx(
-            "absolute top-1/2 left-0 size-5 -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform motion-reduce:transition-none",
-            isPressed ? "translate-x-6" : "translate-x-1",
+            "absolute top-1/2 left-0 size-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform motion-reduce:transition-none",
+            isPressed ? "translate-x-5" : "translate-x-1",
           )}
         />
       </button>

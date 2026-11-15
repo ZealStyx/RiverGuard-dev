@@ -12,7 +12,7 @@ export function RiskSummary({ selectedDay, onDayChange }: RiskSummaryProps) {
   return (
     <section
       aria-labelledby="risk-summary-title"
-      className="rounded-panel border border-line bg-chart-surface p-5 text-ink"
+      className="rounded-panel border border-line bg-chart-surface p-4 text-ink"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -24,18 +24,18 @@ export function RiskSummary({ selectedDay, onDayChange }: RiskSummaryProps) {
           </p>
         </div>
         <StatusLabel className="border-line bg-canvas text-muted">
-          Illustrative sample
+          Experimental
         </StatusLabel>
       </div>
       <p className="text-major-status mt-2 text-warning">
         {activeDay.label} experimental index
       </p>
       <p className="text-body mt-1 text-muted">
-        Experimental / sample · City-level · Not an official warning
+        Experimental · City-level · Not an official warning
       </p>
 
       <div
-        className="mt-4 grid grid-cols-7 gap-1.5"
+        className="mt-3 grid grid-cols-7 gap-1"
         aria-label="Seven-day outlook"
       >
         {outlookDays.map((day, index) => {
@@ -47,7 +47,7 @@ export function RiskSummary({ selectedDay, onDayChange }: RiskSummaryProps) {
               aria-pressed={active}
               aria-label={`${day.day}, November ${day.date}: ${day.label}`}
               onClick={() => onDayChange(index)}
-              className={`rounded-control border px-1 py-2 text-center transition-colors motion-reduce:transition-none ${
+              className={`rounded-control border px-1 py-1.5 text-center transition-colors motion-reduce:transition-none ${
                 active
                   ? "border-brand-secondary bg-brand-secondary text-white"
                   : "border-line bg-canvas text-ink hover:bg-brand-secondary-soft"

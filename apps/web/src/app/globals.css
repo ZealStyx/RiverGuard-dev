@@ -23,39 +23,40 @@
   --color-warning: #a36726;
   --color-danger: #b9443f;
 
-  --radius-control: 0.5rem;
-  --radius-panel: 0.875rem;
-  --radius-structure: 1.25rem;
+  --radius-control: 0.4375rem;
+  --radius-panel: 0.75rem;
+  --radius-structure: 1rem;
 
-  --text-page-title: 1.75rem;
-  --text-page-title--line-height: 2.125rem;
+  /* Compact default density: visually matches the approved 80% browser view at 100% zoom. */
+  --text-page-title: 1.375rem;
+  --text-page-title--line-height: 1.7rem;
   --text-page-title--font-weight: 650;
-  --text-major-status: 1.375rem;
-  --text-major-status--line-height: 1.6875rem;
+  --text-major-status: 1.125rem;
+  --text-major-status--line-height: 1.4rem;
   --text-major-status--font-weight: 600;
-  --text-section: 1rem;
-  --text-section--line-height: 1.375rem;
+  --text-section: 0.875rem;
+  --text-section--line-height: 1.2rem;
   --text-section--font-weight: 600;
-  --text-navigation: 0.875rem;
-  --text-navigation--line-height: 1.25rem;
+  --text-navigation: 0.75rem;
+  --text-navigation--line-height: 1rem;
   --text-navigation--font-weight: 550;
-  --text-body: 0.8125rem;
-  --text-body--line-height: 1.1875rem;
-  --text-button: 0.8125rem;
-  --text-button--line-height: 1.125rem;
+  --text-body: 0.75rem;
+  --text-body--line-height: 1.1rem;
+  --text-button: 0.75rem;
+  --text-button--line-height: 1rem;
   --text-button--font-weight: 600;
-  --text-metadata: 0.6875rem;
-  --text-metadata--line-height: 0.9375rem;
+  --text-metadata: 0.625rem;
+  --text-metadata--line-height: 0.875rem;
   --text-metadata--font-weight: 500;
 }
 
 :root {
-  --rg-space-1: 0.5rem;
-  --rg-space-2: 1rem;
-  --rg-space-3: 1.5rem;
-  --rg-space-4: 2rem;
-  --rg-space-5: 2.5rem;
-  --rg-space-6: 3rem;
+  --rg-space-1: 0.375rem;
+  --rg-space-2: 0.75rem;
+  --rg-space-3: 1.125rem;
+  --rg-space-4: 1.5rem;
+  --rg-space-5: 2rem;
+  --rg-space-6: 2.5rem;
   color-scheme: light;
 }
 
@@ -93,6 +94,7 @@ body {
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  font-size: 0.875rem;
 }
 
 ::selection {

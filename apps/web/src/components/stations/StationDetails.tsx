@@ -1,6 +1,6 @@
 import { ArrowSquareOut } from "@phosphor-icons/react";
+import Link from "next/link";
 
-import { Button } from "@/components/ui";
 import { provenanceRows } from "@/data/dashboard";
 
 export function StationDetails() {
@@ -9,18 +9,21 @@ export function StationDetails() {
       id="data-provenance"
       aria-labelledby="provenance-title"
       data-dashboard-section
-      className="rounded-panel border border-line bg-chart-surface p-5 text-ink"
+      className="rounded-panel border border-line bg-chart-surface p-4 text-ink"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h2 id="provenance-title" className="text-section">
           Data provenance &amp; model information
         </h2>
-        <Button variant="quiet" size="small">
+        <Link
+          href="/researcher/data-sources/daily-rainfall"
+          className="text-button inline-flex min-h-7 items-center justify-center gap-1.5 rounded-control border border-line px-2.5 hover:bg-canvas-soft"
+        >
           Open full evidence
           <ArrowSquareOut aria-hidden="true" size={14} />
-        </Button>
+        </Link>
       </div>
-      <dl className="mt-4 grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-1.5">
+      <dl className="mt-3 grid grid-cols-[78px_minmax(0,1fr)] gap-x-3 gap-y-1.5">
         {provenanceRows.map(([label, value]) => (
           <div key={label} className="contents">
             <dt className="text-metadata text-muted">{label}</dt>
