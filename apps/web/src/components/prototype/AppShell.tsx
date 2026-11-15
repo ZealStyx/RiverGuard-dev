@@ -50,7 +50,6 @@ const supplementalSearchItems: Record<
     { label: "Seven-day outlook", href: "/resident/outlook" },
     { label: "Hazard context", href: "/resident/hazard-context" },
     { label: "Resident preferences", href: "/resident/preferences" },
-    { label: "About RiverGuard", href: "/about" },
   ],
   admin: [
     { label: "Run forecast", href: "/admin/research/forecast/new" },
@@ -197,7 +196,6 @@ export function AppShell({ children, role }: AppShellProps) {
       { label: "Accessibility preferences", href: "/settings/accessibility" },
       { label: "Security, password & access", href: "/settings/security" },
       { label: "Methodology and limitations", href: "/methodology" },
-      { label: "Official sources", href: "/official-sources" },
     ];
     return Array.from(
       new Map(
@@ -260,14 +258,10 @@ export function AppShell({ children, role }: AppShellProps) {
           <div className="grid gap-1">
             {navigationItems.map((item) => {
               const active = isActive(pathname, item.href);
-              const itemHref =
-                item.href === "/official-sources"
-                  ? `/official-sources?from=/${role}`
-                  : item.href;
               return (
                 <Link
                   key={item.href}
-                  href={itemHref}
+                  href={item.href}
                   aria-current={active ? "page" : undefined}
                   title={item.label}
                   className={cx(

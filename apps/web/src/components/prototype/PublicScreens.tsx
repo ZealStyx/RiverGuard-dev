@@ -38,7 +38,13 @@ import {
   TextField,
 } from "./Primitives";
 
-function PublicShell({ children }: { children: ReactNode }) {
+function PublicShell({
+  children,
+  showPublicLinks = false,
+}: {
+  children: ReactNode;
+  showPublicLinks?: boolean;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const sourceReturn = searchParams.get("from");
@@ -66,15 +72,17 @@ function PublicShell({ children }: { children: ReactNode }) {
           <WaveSine size={30} weight="bold" />
           <span className="text-section">RiverGuard</span>
         </Link>
-        <nav
-          className="text-navigation ml-auto hidden items-center gap-4 sm:flex"
-          aria-label="Public navigation"
-        >
-          <Link href={`/about${informationQuery}`}>About</Link>
-          <Link href={`/official-sources${informationQuery}`}>
-            Official sources
-          </Link>
-        </nav>
+        {showPublicLinks ? (
+          <nav
+            className="text-navigation ml-auto hidden items-center gap-4 sm:flex"
+            aria-label="Public navigation"
+          >
+            <Link href={`/about${informationQuery}`}>About</Link>
+            <Link href={`/official-sources${informationQuery}`}>
+              Official sources
+            </Link>
+          </nav>
+        ) : null}
       </header>
       {children}
     </div>
@@ -83,7 +91,7 @@ function PublicShell({ children }: { children: ReactNode }) {
 
 export function WelcomeScreen() {
   return (
-    <PublicShell>
+    <PublicShell showPublicLinks>
       <main className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-7xl items-center gap-8 px-5 py-10 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
           <p className="text-metadata font-semibold uppercase tracking-[0.14em] text-brand-secondary">

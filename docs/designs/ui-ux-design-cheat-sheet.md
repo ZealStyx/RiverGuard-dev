@@ -47,7 +47,7 @@ Use this cheat sheet when creating the sitemap, user flows, low-fidelity wirefra
 | Role                       | Primary goal                                                                                                              | Initial availability         |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
 | **Guest / Public Visitor** | View general project information and, in a future public version, supported public outlooks                               | **Future public experience** |
-| **Resident / Public User** | View a simplified location outlook, save preferences, and find official sources                                           | **Future**                   |
+| **Resident / Public User** | View a simplified location outlook, save preferences, and read official-source reminders                                  | **Future**                   |
 | **LGU / DRRMO Operator**   | Review forecasts, record assessments, acknowledge items, and prepare controlled alert drafts                              | **Optional/Future**          |
 | **Administrator**          | Use research tools, approve users, assign roles, configure supported locations/providers/models, and review audit history | **Prototype primary role**   |
 
@@ -357,9 +357,8 @@ Each screen must explain what happened without exposing security details and pro
 - Locations
 - Seven-Day Outlook
 - Hazard Context
-- Official Advisories
 - Saved Preferences
-- About and Limitations
+- Help and Limitations
 
 ### LGU operator
 
@@ -369,7 +368,6 @@ Each screen must explain what happened without exposing security details and pro
 - Forecast Outlook
 - Review Queue
 - Alerts and Notes — future
-- Official Sources
 
 ### Administrator
 
@@ -396,7 +394,7 @@ If public hosting does not exist, this flow remains a future wireframe only.
 
 ### 9.2 Resident flow
 
-Create account → Verify → Resident onboarding → Select/save city → View seven-day outlook → Open a day → Read experimental status and limitations → View static hazard context separately → Follow link to official advisories → Adjust preferences → Log out.
+Create account → Verify → Resident onboarding → Select/save city → View seven-day outlook → Open a day → Read experimental status and limitations → View static hazard context separately → Review the official-source reminder → Adjust preferences → Log out.
 
 ### 9.3 Administrator research flow
 
@@ -418,9 +416,9 @@ Controlled administrator invitation/setup → Verify → MFA → Admin onboardin
 
 **Administrator research buttons:** `Run Forecast`, `Open Map`, `View Latest Run`, `Review Data Quality`.
 
-**LGU buttons:** `Review Latest Forecast`, `Open Assigned Area`, `Open Review Queue`, `View Official Sources`.
+**LGU buttons:** `Review Latest Forecast`, `Open Assigned Area`, `Open Review Queue`.
 
-**Resident buttons:** `View My Outlook`, `Change City`, `View Hazard Context`, `Open Official Advisories`.
+**Resident buttons:** `View My Outlook`, `Change City`, `View Hazard Context`.
 
 **Administrator buttons:** `Review Access Requests`, `Manage Locations`, `Review System Status`, `Open Audit Log`.
 

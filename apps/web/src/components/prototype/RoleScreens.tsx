@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ArrowRight,
   CheckCircle,
   FloppyDisk,
   Plus,
@@ -57,11 +56,6 @@ function ResidentHome() {
         title="My outlook"
         eyebrow="Marikina"
         description="A simplified seven-day experimental outlook with clear links to official information."
-        actions={
-          <ActionLink href="/official-sources?from=/resident" variant="quiet">
-            Open official advisories
-          </ActionLink>
-        }
       />
       <Notice title="Official guidance" tone="warning">
         RiverGuard does not replace PAGASA advisories, LGU instructions, or
@@ -251,9 +245,6 @@ function ResidentOutlook() {
             Review official weather and local government guidance before making
             decisions. RiverGuard’s category is illustrative and city-level.
           </p>
-          <ActionLink href="/official-sources?from=/resident" className="mt-4">
-            Check official sources <ArrowRight size={14} />
-          </ActionLink>
         </Surface>
       </div>
     </>

@@ -58,11 +58,6 @@ export const roleDefinitions: Record<ProductRole, RoleDefinition> = {
         shortLabel: "Reviews",
         href: "/lgu/reviews",
       },
-      {
-        label: "Official sources",
-        shortLabel: "Sources",
-        href: "/official-sources",
-      },
     ],
   },
   resident: {
@@ -76,11 +71,6 @@ export const roleDefinitions: Record<ProductRole, RoleDefinition> = {
         label: "Locations & hazard",
         shortLabel: "Locations",
         href: "/resident/locations",
-      },
-      {
-        label: "Official information",
-        shortLabel: "Official",
-        href: "/official-sources",
       },
     ],
   },

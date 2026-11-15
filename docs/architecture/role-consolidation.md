@@ -46,6 +46,10 @@ The frontend uses these capabilities to decide which Admin navigation items are 
 - Researcher is not offered in signup, access requests, pending approval copy, demo login, or onboarding.
 - Research orientation is included in Administrator onboarding.
 
+## Public information navigation
+
+About and Official Sources remain available as public pages from the Welcome page only. Authenticated role shells do not show those links; they keep the in-context Help & Limitations route instead.
+
 ## Route compatibility
 
 Existing Researcher URLs are compatibility aliases, not a separate role workspace:

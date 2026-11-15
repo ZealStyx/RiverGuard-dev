@@ -29,6 +29,8 @@ This document records the connected frontend prototype implemented from the Rive
 | `/auth/verification-expired` | Expired verification state                                           |
 | `/auth/logout`               | Logout success                                                       |
 
+About and Official Sources remain public information routes, but their navigation links are intentionally exposed only on `/welcome`. Authenticated role shells use the in-context Help & Limitations route and do not show About or Official Sources navigation.
+
 ## Onboarding routes
 
 - `/onboarding/resident`
