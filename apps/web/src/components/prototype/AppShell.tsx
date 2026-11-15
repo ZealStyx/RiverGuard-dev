@@ -9,7 +9,6 @@ import {
   EnvelopeSimple,
   GearSix,
   House,
-  LockKey,
   List,
   MagnifyingGlass,
   MapTrifold,
@@ -90,18 +89,8 @@ const settingsNavigation = [
   },
   {
     href: "/settings/security",
-    label: "Security & sessions",
+    label: "Security, password & access",
     icon: <ShieldCheck size={16} />,
-  },
-  {
-    href: "/settings/password",
-    label: "Password",
-    icon: <LockKey size={16} />,
-  },
-  {
-    href: "/settings/account",
-    label: "Account access",
-    icon: <SignOut size={16} />,
   },
 ];
 
@@ -198,21 +187,23 @@ export function AppShell({ children, role }: AppShellProps) {
   const [query, setQuery] = useState("");
   const roleDefinition = roleDefinitions[role];
 
-  const searchItems = useMemo(
-    () => [
+  const searchItems = useMemo(() => {
+    const items = [
       ...roleDefinition.navigation,
       ...supplementalSearchItems[role],
       { label: "Profile and account settings", href: "/settings/profile" },
       { label: "Notification preferences", href: "/settings/notifications" },
       { label: "Accessibility preferences", href: "/settings/accessibility" },
-      { label: "Security and sessions", href: "/settings/security" },
-      { label: "Change password", href: "/settings/password" },
-      { label: "Account access", href: "/settings/account" },
+      { label: "Security, password & access", href: "/settings/security" },
       { label: "Methodology and limitations", href: "/methodology" },
       { label: "Official sources", href: "/official-sources" },
-    ],
-    [role, roleDefinition.navigation],
-  );
+    ];
+    return Array.from(
+      new Map(
+        items.map((item) => [`${item.href}-${item.label}`, item]),
+      ).values(),
+    );
+  }, [role, roleDefinition.navigation]);
 
   const filteredItems = searchItems.filter((item) =>
     item.label.toLowerCase().includes(query.trim().toLowerCase()),

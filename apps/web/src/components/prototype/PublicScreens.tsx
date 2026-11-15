@@ -13,7 +13,13 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type FormEvent, type ReactNode, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { Button } from "@/components/ui";
 import type { ProductRole } from "@/data/prototype";
@@ -45,7 +51,6 @@ function PublicShell({ children }: { children: ReactNode }) {
           aria-label="Public navigation"
         >
           <Link href="/about">About</Link>
-          <Link href="/methodology">Methodology</Link>
           <Link href="/official-sources">Official sources</Link>
         </nav>
       </header>
@@ -70,44 +75,10 @@ export function WelcomeScreen() {
             city-level flood-risk data, experimental forecasts, model evidence,
             and controlled review workflows.
           </p>
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-5">
             <ActionLink href="/auth/login">
-              Log in <ArrowRight size={14} />
+              Get started <ArrowRight size={14} />
             </ActionLink>
-            <ActionLink href="/auth/signup" variant="secondary">
-              Create resident account
-            </ActionLink>
-            <ActionLink href="/about" variant="quiet">
-              Learn how it works
-            </ActionLink>
-          </div>
-        </div>
-        <div className="rounded-structure border border-line bg-canvas-soft p-4 sm:p-6">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Surface
-              title="Researcher"
-              description="Run and compare experimental forecasts."
-            >
-              <StatusBadge tone="neutral">Approval required</StatusBadge>
-            </Surface>
-            <Surface
-              title="LGU operator"
-              description="Review assigned-area evidence."
-            >
-              <StatusBadge tone="neutral">Approval required</StatusBadge>
-            </Surface>
-            <Surface
-              title="Resident"
-              description="See a simplified city-level outlook."
-            >
-              <StatusBadge tone="info">Account available</StatusBadge>
-            </Surface>
-            <Surface
-              title="Administrator"
-              description="Review access and configuration."
-            >
-              <StatusBadge tone="neutral">Restricted access</StatusBadge>
-            </Surface>
           </div>
         </div>
       </main>
@@ -199,6 +170,12 @@ function LoginForm() {
         defaultValue="riverguard"
         error={error}
       />
+      <Link
+        href="/auth/forgot-password"
+        className="text-metadata text-brand-primary"
+      >
+        Forgot password?
+      </Link>
       <CheckControl
         id="remember-device"
         label="Remember this device"
@@ -212,26 +189,15 @@ function LoginForm() {
       >
         Log in
       </Button>
-      <div className="text-metadata flex flex-wrap justify-between gap-2">
-        <Link
-          href="/auth/forgot-password"
-          className="text-brand-primary underline"
-        >
-          Forgot password?
-        </Link>
-        <Link
-          href="/auth/request-access"
-          className="text-brand-primary underline"
-        >
-          Request staff access
-        </Link>
-        <Link href="/auth/signup" className="text-brand-primary underline">
-          Create account
-        </Link>
-      </div>
+      <Link
+        href="/auth/signup"
+        className="text-metadata text-center text-brand-primary"
+      >
+        New to RiverGuard? Create Account
+      </Link>
       <div className="border-t border-line pt-3 text-center">
         <Link href="/welcome" className="text-metadata text-muted">
-          Back to public view
+          Back to Home
         </Link>
       </div>
     </form>
@@ -240,14 +206,25 @@ function LoginForm() {
 
 function ResidentSignup() {
   const router = useRouter();
+  const [role, setRole] = useState("resident");
   return (
     <form
       className="grid gap-3"
       onSubmit={(event) => {
         event.preventDefault();
-        router.push("/auth/verify?role=resident&source=signup");
+        router.push(`/auth/verify?role=${role}&source=signup`);
       }}
     >
+      <SelectControl
+        id="signup-role"
+        label="Account type"
+        value={role}
+        onChange={(event) => setRole(event.target.value)}
+      >
+        <option value="resident">Resident</option>
+        <option value="researcher">Researcher</option>
+        <option value="lgu">LGU operator</option>
+      </SelectControl>
       <TextField id="signup-name" label="Full name" required />
       <TextField id="signup-email" label="Email" type="email" required />
       <PasswordField
@@ -257,16 +234,43 @@ function ResidentSignup() {
         hint="Use at least 12 characters in a production system."
       />
       <PasswordField id="signup-confirm" label="Confirm password" required />
-      <SelectControl id="signup-city" label="Primary city">
-        <option>Marikina</option>
-        <option>Quezon City</option>
-        <option>Manila</option>
-        <option>Pasig</option>
-        <option>Unsupported area</option>
-      </SelectControl>
+      {role === "resident" ? (
+        <SelectControl id="signup-city" label="Primary city">
+          <option>Marikina</option>
+          <option>Quezon City</option>
+          <option>Manila</option>
+          <option>Pasig</option>
+          <option>Unsupported area</option>
+        </SelectControl>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <TextField
+            id="signup-organization"
+            label={role === "lgu" ? "LGU or agency" : "Organization"}
+            required
+          />
+          <SelectControl id="signup-area" label="Requested area" required>
+            <option>Marikina</option>
+            <option>Quezon City</option>
+            <option>Manila</option>
+            <option>Pasig</option>
+          </SelectControl>
+          <div className="sm:col-span-2">
+            <TextAreaField
+              id="signup-purpose"
+              label={
+                role === "lgu" ? "Operational purpose" : "Research purpose"
+              }
+              required
+              placeholder="Tell us how you plan to use RiverGuard."
+            />
+          </div>
+        </div>
+      )}
       <CheckControl
         id="signup-terms"
         label="Accept future terms and privacy notice"
+        description="This refers to RiverGuard’s terms of use, privacy notice, and authorized-use limitations."
         required
       />
       <CheckControl
@@ -275,19 +279,13 @@ function ResidentSignup() {
         description="Optional and separate from account consent."
       />
       <Button type="submit" className="w-full">
-        Create resident account
+        Create Account
       </Button>
       <Link
         href="/auth/login"
-        className="text-metadata text-center text-brand-primary underline"
+        className="text-metadata text-center text-brand-primary"
       >
         Already have an account? Log in
-      </Link>
-      <Link
-        href="/welcome"
-        className="text-metadata text-center text-muted underline"
-      >
-        Continue as guest
       </Link>
     </form>
   );
@@ -359,8 +357,19 @@ function Verification() {
   const params = useSearchParams();
   const [verified, setVerified] = useState(false);
   const [resent, setResent] = useState(false);
+  const [code, setCode] = useState("");
+  const [secondsRemaining, setSecondsRemaining] = useState(60);
+  const codeInputs = useRef<Array<HTMLInputElement | null>>([]);
   const role = params.get("role") ?? "researcher";
   const source = params.get("source") ?? "access";
+  useEffect(() => {
+    if (secondsRemaining <= 0) return;
+    const timer = window.setInterval(
+      () => setSecondsRemaining((current) => Math.max(0, current - 1)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [secondsRemaining]);
   if (verified)
     return (
       <AuthSuccess
@@ -383,17 +392,64 @@ function Verification() {
       />
     );
   return (
-    <div className="grid gap-3">
+    <div className="grid min-w-0 gap-3">
       <Notice title={resent ? "New code sent" : "Code sent"}>
         A verification code was sent to re••••••@example.com.
       </Notice>
-      <TextField
-        id="verification-code"
-        label="Six-digit code"
-        inputMode="numeric"
-        maxLength={6}
-        defaultValue="123456"
-      />
+      <div className="grid w-full gap-1.5">
+        <span className="text-button">Six-digit code</span>
+        <div
+          className="grid min-w-0 grid-cols-6 gap-2"
+          aria-label="Six-digit verification code"
+        >
+          {Array.from({ length: 6 }, (_, index) => (
+            <input
+              key={index}
+              ref={(element) => {
+                codeInputs.current[index] = element;
+              }}
+              aria-label={`Digit ${index + 1}`}
+              className="text-body h-11 min-w-0 w-full rounded-control border border-line bg-canvas text-center text-ink outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+              inputMode="numeric"
+              maxLength={1}
+              value={code[index] ?? ""}
+              onChange={(event) => {
+                const digit = event.target.value.replace(/\D/g, "").slice(-1);
+                const next = code.padEnd(6, "").split("");
+                next[index] = digit;
+                setCode(next.join("").slice(0, 6));
+                if (digit && index < 5) codeInputs.current[index + 1]?.focus();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Backspace" && !code[index] && index > 0) {
+                  codeInputs.current[index - 1]?.focus();
+                }
+              }}
+            />
+          ))}
+        </div>
+        <div className="mt-1 flex items-center justify-between text-metadata">
+          <button
+            type="button"
+            disabled={secondsRemaining > 0}
+            onClick={() => {
+              setResent(true);
+              setCode("");
+              setSecondsRemaining(60);
+            }}
+            className={
+              secondsRemaining > 0
+                ? "cursor-not-allowed text-muted"
+                : "text-brand-primary"
+            }
+          >
+            {resent ? "Code resent" : "Resend code"}
+          </button>
+          <span className="text-muted">
+            Expires in 00:{String(secondsRemaining).padStart(2, "0")}
+          </span>
+        </div>
+      </div>
       <Button
         onClick={() => {
           setVerified(true);
@@ -402,27 +458,8 @@ function Verification() {
       >
         Verify
       </Button>
-      <div className="text-metadata flex justify-between">
-        <button
-          type="button"
-          onClick={() => setResent(true)}
-          className="text-brand-primary underline"
-        >
-          {resent ? "Code resent" : "Resend code"}
-        </button>
-        <Link
-          href={
-            source === "signup"
-              ? "/auth/signup"
-              : source === "login"
-                ? "/auth/login"
-                : "/auth/request-access"
-          }
-          className="text-brand-primary underline"
-        >
-          Change email
-        </Link>
-        <Link href="/auth/login" className="text-brand-primary underline">
+      <div className="text-center text-metadata">
+        <Link href="/auth/login" className="text-brand-primary">
           Back to login
         </Link>
       </div>
@@ -726,7 +763,7 @@ export function AuthScreen({ screen }: { screen: string }) {
   const titles: Record<string, [string, string]> = {
     login: ["Log in", "Sign in to your RiverGuard workspace."],
     signup: [
-      "Create resident account",
+      "Create Account",
       "Save locations and preferences in a future public experience.",
     ],
     "request-access": [
@@ -1209,11 +1246,11 @@ export function SettingsScreen({ screen }: { screen: string }) {
       : activeScreen === "accessibility"
         ? "Accessibility"
         : activeScreen === "security"
-          ? "Security and sessions"
+          ? "Security, password & access"
           : activeScreen === "password"
-            ? "Change password"
+            ? "Security, password & access"
             : activeScreen === "account"
-              ? "Account access"
+              ? "Security, password & access"
               : "Profile";
 
   let content: ReactNode;
@@ -1407,49 +1444,149 @@ export function SettingsScreen({ screen }: { screen: string }) {
         </Button>
       </div>
     );
-  } else if (activeScreen === "security") {
+  } else if (
+    activeScreen === "security" ||
+    activeScreen === "password" ||
+    activeScreen === "account"
+  ) {
     content = (
-      <div>
-        <h2 className="text-major-status">Security and sessions</h2>
-        <p className="text-body mt-1 text-muted">
-          Review sign-in protection and active devices.
-        </p>
-        <div className="mt-4 divide-y divide-line rounded-control border border-line">
-          <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-            <div className="flex-1">
-              <p className="text-button">Multi-factor authentication</p>
-              <p className="text-body mt-0.5 text-muted">Not configured</p>
-            </div>
-            <ActionLink href="/auth/mfa" variant="quiet">
-              Set up MFA
-            </ActionLink>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-            <div className="flex-1">
-              <p className="text-button">Current session</p>
-              <p className="text-body mt-0.5 text-muted">
-                This browser · Manila timezone
-              </p>
-            </div>
-            <StatusBadge tone="success">Active</StatusBadge>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-            <div className="flex-1">
-              <p className="text-button">Other sessions</p>
-              <p className="text-body mt-0.5 text-muted">
-                End access on other signed-in devices.
-              </p>
-            </div>
-            <Button size="small" variant="quiet">
-              Log out other sessions
-            </Button>
-          </div>
+      <div className="mx-auto grid w-full max-w-none gap-5">
+        <div>
+          <h2 className="text-major-status">Security, password & access</h2>
+          <p className="text-body mt-1 text-muted">
+            Manage sign-in protection, password changes, active sessions, and
+            workspace access in one place.
+          </p>
         </div>
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] lg:items-start">
+          <section
+            className="grid gap-3"
+            aria-labelledby="security-section-title"
+          >
+            <div>
+              <h3 id="security-section-title" className="text-section">
+                Security and sessions
+              </h3>
+              <p className="text-body mt-1 text-muted">
+                Review sign-in protection and active devices.
+              </p>
+            </div>
+            <div className="divide-y divide-line rounded-control border border-line">
+              <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-button">Multi-factor authentication</p>
+                  <p className="text-body mt-0.5 text-muted">Not configured</p>
+                </div>
+                <ActionLink href="/auth/mfa" variant="quiet">
+                  Set up MFA
+                </ActionLink>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-button">Current session</p>
+                  <p className="text-body mt-0.5 text-muted">
+                    This browser · Manila timezone
+                  </p>
+                </div>
+                <StatusBadge tone="success">Active</StatusBadge>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-button">Other sessions</p>
+                  <p className="text-body mt-0.5 text-muted">
+                    End access on other signed-in devices.
+                  </p>
+                </div>
+                <Button size="small" variant="quiet">
+                  Log out other sessions
+                </Button>
+              </div>
+            </div>
+          </section>
+          <section
+            className="grid gap-3"
+            aria-labelledby="password-section-title"
+          >
+            <div>
+              <h3 id="password-section-title" className="text-section">
+                Change password
+              </h3>
+              <p className="text-body mt-1 text-muted">
+                Choose a strong password that is not reused elsewhere.
+              </p>
+            </div>
+            <div className="grid gap-3">
+              <PasswordField
+                id="combined-current-password"
+                label="Current password"
+                autoComplete="current-password"
+              />
+              <PasswordField
+                id="combined-new-password"
+                label="New password"
+                autoComplete="new-password"
+              />
+              <PasswordField
+                id="combined-confirm-password"
+                label="Confirm new password"
+                autoComplete="new-password"
+              />
+              <Button
+                size="small"
+                className="w-full sm:w-fit"
+                onClick={() => setSaved(true)}
+              >
+                Change password
+              </Button>
+            </div>
+          </section>
+        </div>
+        <section
+          className="grid gap-3 border-t border-line pt-5"
+          aria-labelledby="access-section-title"
+        >
+          <div>
+            <h3 id="access-section-title" className="text-section">
+              Account access
+            </h3>
+            <p className="text-body mt-1 text-muted">
+              Manage role and workspace access requests.
+            </p>
+          </div>
+          <div className="divide-y divide-line rounded-control border border-line">
+            <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-button">Request an access change</p>
+                <p className="text-body mt-0.5 text-muted">
+                  Ask an administrator to review your role or assigned
+                  locations.
+                </p>
+              </div>
+              <Button size="small" variant="quiet">
+                Request review
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-button text-danger">
+                  Deactivate account access
+                </p>
+                <p className="text-body mt-0.5 text-muted">
+                  Staff access is deactivated by an authorized administrator to
+                  preserve audit history.
+                </p>
+              </div>
+              <Button size="small" variant="danger">
+                Request deactivation
+              </Button>
+            </div>
+          </div>
+        </section>
       </div>
     );
   } else if (activeScreen === "password") {
     content = (
-      <div className="grid gap-6 lg:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)] lg:gap-8">
+      <div className="mx-auto grid w-full max-w-4xl gap-6 lg:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)] lg:gap-8">
         <div className="self-stretch rounded-control border border-line bg-canvas-soft p-4">
           <p className="text-metadata font-semibold uppercase tracking-[0.12em] text-muted">
             Security
@@ -1465,7 +1602,7 @@ export function SettingsScreen({ screen }: { screen: string }) {
             <li>Never share your password or verification codes.</li>
           </ul>
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 max-w-2xl">
           <h2 className="text-major-status">Change password</h2>
           <p className="text-body mt-1 text-muted">
             Choose a strong password that is not reused elsewhere.

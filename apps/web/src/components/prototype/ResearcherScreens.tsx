@@ -577,7 +577,7 @@ function ForecastForm() {
             onChange={(event) => setIncludeExplanation(event.target.checked)}
           />
         </div>
-        <Notice title="Review before running" tone="info">
+        <Notice title="Review before running" tone="info" className="mt-3">
           Confirm the selected location, horizon, provider, and model version.
         </Notice>
         <div className="mt-4 flex justify-end gap-2">
