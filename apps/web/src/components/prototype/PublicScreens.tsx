@@ -12,7 +12,7 @@ import {
   WaveSine,
 } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   type FormEvent,
   type ReactNode,
@@ -39,6 +39,15 @@ import {
 } from "./Primitives";
 
 function PublicShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const sourceReturn = searchParams.get("from");
+  const informationReturn =
+    pathname === "/methodology" ? "/methodology" : sourceReturn;
+  const informationQuery = informationReturn
+    ? `?from=${encodeURIComponent(informationReturn)}`
+    : "";
+
   return (
     <div className="min-h-screen bg-canvas text-ink">
       <header className="flex min-h-16 items-center border-b border-line px-4 sm:px-6">
@@ -50,8 +59,10 @@ function PublicShell({ children }: { children: ReactNode }) {
           className="text-navigation ml-auto hidden items-center gap-4 sm:flex"
           aria-label="Public navigation"
         >
-          <Link href="/about">About</Link>
-          <Link href="/official-sources">Official sources</Link>
+          <Link href={`/about${informationQuery}`}>About</Link>
+          <Link href={`/official-sources${informationQuery}`}>
+            Official sources
+          </Link>
         </nav>
       </header>
       {children}
