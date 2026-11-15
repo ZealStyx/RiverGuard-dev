@@ -8,10 +8,17 @@ import {
   Play,
   Plus,
 } from "@phosphor-icons/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { RainfallChart } from "@/components/charts/RainfallChart";
+import { MonthlyRainfallChart } from "@/components/charts/MonthlyRainfallChart";
+import {
+  TremorHistoricalCharts,
+  TremorMonthlyRainfallChart,
+} from "@/components/charts/TremorHistoricalCharts";
 import { ModelContributionPanel } from "@/components/dashboard/ModelContributionPanel";
 import { RiskSummary } from "@/components/dashboard/RiskSummary";
 import { RiverMap } from "@/components/map/RiverMap";
@@ -94,67 +101,125 @@ function DashboardOverview() {
   );
 }
 
-function MapWorkspace() {
+function ResearcherWorkspaceViewSwitcher({
+  activeView,
+}: {
+  activeView: "data" | "map";
+}) {
+  return (
+    <div
+      className="mb-4 inline-flex rounded-control border border-line bg-canvas-soft p-1"
+      role="tablist"
+      aria-label="Researcher data workspace view"
+    >
+      <Link
+        href="/researcher/map"
+        role="tab"
+        aria-selected={activeView === "map"}
+        className={`text-button rounded-control px-3 py-1.5 transition-colors ${
+          activeView === "map"
+            ? "bg-brand-primary text-white"
+            : "text-muted hover:bg-canvas hover:text-ink"
+        }`}
+      >
+        Map
+      </Link>
+      <Link
+        href="/researcher/map?view=data"
+        role="tab"
+        aria-selected={activeView === "data"}
+        className={`text-button rounded-control px-3 py-1.5 transition-colors ${
+          activeView === "data"
+            ? "bg-brand-primary text-white"
+            : "text-muted hover:bg-canvas hover:text-ink"
+        }`}
+      >
+        Data sources
+      </Link>
+    </div>
+  );
+}
+
+function MapWorkspace({
+  initialView = "map",
+}: {
+  initialView?: "data" | "map";
+}) {
   const [activeLayer, setActiveLayer] = useState<MapLayerId>("base");
+  const searchParams = useSearchParams();
+  const requestedView = searchParams.get("view");
+  const activeView =
+    requestedView === "data" ||
+    (initialView === "data" && requestedView !== "map")
+      ? "data"
+      : "map";
+
   return (
     <>
       <PageHeading
-        title="Map and locations"
+        title="Data & map"
         eyebrow="Spatial explorer"
-        description="Explore the four supported sample cities. Forecast output and static hazard context remain separate layers."
+        description="Explore supported locations and review the data sources behind the research workspace."
         actions={
           <ActionLink href="/researcher/locations/marikina">
             View Marikina details <ArrowRight size={14} />
           </ActionLink>
         }
       />
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_320px]">
-        <RiverMap activeLayer={activeLayer} onLayerChange={setActiveLayer} />
-        <div className="grid content-start gap-3 xl:flex xl:h-full xl:flex-col">
-          <Surface
-            title="Location list"
-            description="Accessible alternative to the map"
-            className="xl:flex-1"
-          >
-            <div className="grid gap-2">
-              {supportedLocations.map((location) => (
-                <div
-                  key={location.name}
-                  className="rounded-control border border-line p-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-button flex items-center gap-1">
-                        <MapPin size={14} /> {location.name}
-                      </p>
-                      <p className="text-metadata mt-1 text-muted">
-                        {location.support} · Updated {location.updated}
-                      </p>
-                    </div>
-                    <StatusBadge
-                      tone={location.status === "Elevated" ? "warning" : "info"}
-                    >
-                      {location.status}
-                    </StatusBadge>
-                  </div>
-                  <ActionLink
-                    href={`/researcher/locations/${location.name.toLowerCase().replace(" ", "-")}`}
-                    variant="quiet"
-                    className="mt-3 w-full"
+      <ResearcherWorkspaceViewSwitcher activeView={activeView} />
+      {activeView === "data" ? (
+        <DataSourceCatalog embedded />
+      ) : (
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_320px]">
+          <RiverMap activeLayer={activeLayer} onLayerChange={setActiveLayer} />
+          <div className="grid content-start gap-3 xl:flex xl:h-full xl:flex-col">
+            <Surface
+              title="Location list"
+              description="Accessible alternative to the map"
+              className="xl:flex-1"
+            >
+              <div className="grid gap-2">
+                {supportedLocations.map((location) => (
+                  <div
+                    key={location.name}
+                    className="rounded-control border border-line p-3"
                   >
-                    Open details
-                  </ActionLink>
-                </div>
-              ))}
-            </div>
-          </Surface>
-          <Notice title="Map limitation" className="xl:shrink-0">
-            This is a real OpenStreetMap basemap. RiverGuard boundaries,
-            monitoring stations, hazard layers, and predictions are not loaded
-            until verified local GIS and model data are supplied.
-          </Notice>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-button flex items-center gap-1">
+                          <MapPin size={14} /> {location.name}
+                        </p>
+                        <p className="text-metadata mt-1 text-muted">
+                          {location.support} · Updated {location.updated}
+                        </p>
+                      </div>
+                      <StatusBadge
+                        tone={
+                          location.status === "Elevated" ? "warning" : "info"
+                        }
+                      >
+                        {location.status}
+                      </StatusBadge>
+                    </div>
+                    <ActionLink
+                      href={`/researcher/locations/${location.name.toLowerCase().replace(" ", "-")}`}
+                      variant="quiet"
+                      className="mt-3 w-full"
+                    >
+                      Open details
+                    </ActionLink>
+                  </div>
+                ))}
+              </div>
+            </Surface>
+            <Notice title="Map limitation" className="xl:shrink-0">
+              This is a real OpenStreetMap basemap. RiverGuard boundaries,
+              monitoring stations, hazard layers, and predictions are not loaded
+              until verified local GIS and model data are supplied.
+            </Notice>
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
@@ -233,6 +298,50 @@ function LocationDetails() {
 
 function HistoricalData() {
   const [applied, setApplied] = useState(false);
+  const [chartMode, setChartMode] = useState<"riverguard" | "tremor">(
+    "riverguard",
+  );
+  const [filters, setFilters] = useState({
+    location: "Marikina",
+    startDate: "2026-11-05",
+    endDate: "2026-11-11",
+  });
+  const [appliedFilters, setAppliedFilters] = useState(filters);
+  const [readings, setReadings] = useState<
+    Array<{
+      isoDate: string;
+      date: string;
+      rainfall: number;
+      waterLevel: number;
+      rainSource: string;
+      qualityStatus: string;
+    }>
+  >([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const params = new URLSearchParams({
+      location: appliedFilters.location,
+      limit: "14",
+      start: appliedFilters.startDate,
+      end: appliedFilters.endDate,
+    });
+    fetch(`/api/historical?${params.toString()}`)
+      .then((response) => {
+        if (!response.ok) throw new Error("Historical data unavailable");
+        return response.json();
+      })
+      .then((payload: { readings?: typeof readings }) => {
+        if (!cancelled) setReadings(payload.readings ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setReadings([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [appliedFilters]);
+
   return (
     <>
       <PageHeading
@@ -246,11 +355,17 @@ function HistoricalData() {
         }
       />
       <Surface className="mb-3" title="Filters">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <SelectControl
             id="history-location"
             label="Location"
-            defaultValue="Marikina"
+            value={filters.location}
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                location: event.target.value,
+              }))
+            }
           >
             <option>Marikina</option>
             <option>Quezon City</option>
@@ -261,58 +376,130 @@ function HistoricalData() {
             id="date-from"
             label="From"
             type="date"
-            defaultValue="2026-11-05"
+            value={filters.startDate}
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                startDate: event.target.value,
+              }))
+            }
           />
           <TextField
             id="date-to"
             label="To"
             type="date"
-            defaultValue="2026-11-11"
+            value={filters.endDate}
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                endDate: event.target.value,
+              }))
+            }
           />
-          <SelectControl
-            id="history-variable"
-            label="Variable"
-            defaultValue="Rainfall"
-          >
-            <option>Rainfall</option>
-            <option>Water level sample</option>
-          </SelectControl>
         </div>
         <div className="mt-3 flex gap-2">
-          <Button size="small" onClick={() => setApplied(true)}>
+          <Button
+            size="small"
+            onClick={() => {
+              setAppliedFilters(filters);
+              setApplied(true);
+            }}
+          >
             Apply filters
           </Button>
           <Button
             size="small"
             variant="quiet"
-            onClick={() => setApplied(false)}
+            onClick={() => {
+              const reset = {
+                location: "Marikina",
+                startDate: "2026-11-05",
+                endDate: "2026-11-11",
+              };
+              setFilters(reset);
+              setAppliedFilters(reset);
+              setApplied(false);
+            }}
           >
             Reset
           </Button>
         </div>
         {applied ? (
           <p className="text-metadata mt-2 text-success" role="status">
-            Filters applied to the illustrative sample.
+            Filters applied to the selected Dataset v2 location.
           </p>
         ) : null}
       </Surface>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-section">Visualization comparison</h2>
+          <p className="text-metadata mt-0.5 text-muted">
+            Compare the current RiverGuard chart with the Tremor Raw-style
+            experiment.
+          </p>
+        </div>
+        <div className="flex gap-1 rounded-control border border-line bg-canvas-soft p-1">
+          <Button
+            size="small"
+            variant={chartMode === "riverguard" ? "secondary" : "quiet"}
+            onClick={() => setChartMode("riverguard")}
+          >
+            RiverGuard
+          </Button>
+          <Button
+            size="small"
+            variant={chartMode === "tremor" ? "secondary" : "quiet"}
+            onClick={() => setChartMode("tremor")}
+          >
+            Tremor trial
+          </Button>
+        </div>
+      </div>
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
-        <RainfallChart />
-        <Surface title="Displayed data">
+        {chartMode === "tremor" ? (
+          <TremorHistoricalCharts
+            location={appliedFilters.location}
+            startDate={appliedFilters.startDate}
+            endDate={appliedFilters.endDate}
+          />
+        ) : (
+          <RainfallChart
+            location={appliedFilters.location}
+            startDate={appliedFilters.startDate}
+            endDate={appliedFilters.endDate}
+          />
+        )}
+        <Surface title={`Displayed data · ${appliedFilters.location}`}>
           <DataTable
             columns={[
               { key: "date", label: "Date" },
               { key: "rainfall", label: "Rainfall" },
               { key: "water", label: "Water level" },
             ]}
-            rows={[
-              { date: "Nov 11", rainfall: "36 mm", water: "15.9 m (sample)" },
-              { date: "Nov 10", rainfall: "82 mm", water: "16.4 m (sample)" },
-              { date: "Nov 9", rainfall: "48 mm", water: "15.8 m (sample)" },
-              { date: "Nov 8", rainfall: "28 mm", water: "Missing" },
-            ]}
+            rows={readings.map((reading) => ({
+              date: reading.isoDate,
+              rainfall:
+                reading.rainfall === null
+                  ? "Missing"
+                  : `${reading.rainfall.toFixed(1)} mm`,
+              water:
+                reading.waterLevel === null
+                  ? "Missing"
+                  : `${reading.waterLevel.toFixed(2)} m · ${reading.rainSource}`,
+            }))}
           />
+          <p className="text-metadata mt-2">
+            RiverGuard NCR Dataset v2 · values retain their source and quality
+            status; water level is a derived proxy where documented.
+          </p>
         </Surface>
+      </div>
+      <div className="mt-3">
+        {chartMode === "tremor" ? (
+          <TremorMonthlyRainfallChart location={appliedFilters.location} />
+        ) : (
+          <MonthlyRainfallChart location={appliedFilters.location} />
+        )}
       </div>
     </>
   );
@@ -744,40 +931,53 @@ function CompareRuns() {
   );
 }
 
-function DataSourceCatalog({ detail }: { detail?: string }) {
+function DataSourceCatalog({
+  detail,
+  embedded = false,
+}: {
+  detail?: string;
+  embedded?: boolean;
+}) {
   if (detail === "new") return <DataSourceForm />;
   if (detail) return <DataSourceDetail />;
+  const catalog = (
+    <Surface
+      title="Source catalogue"
+      action={
+        <ActionLink href="/researcher/data-sources/new">
+          <Plus size={14} /> Add metadata
+        </ActionLink>
+      }
+    >
+      <DataTable
+        columns={[
+          { key: "name", label: "Source" },
+          { key: "provider", label: "Provider" },
+          { key: "coverage", label: "Coverage" },
+          { key: "status", label: "Provenance status" },
+        ]}
+        rows={dataSources.map((source) => ({ ...source }))}
+        actions={(row) => (
+          <ActionLink
+            href={`/researcher/data-sources/${dataSources.find((source) => source.name === row.name)?.id ?? "daily-rainfall"}`}
+            variant="quiet"
+          >
+            View
+          </ActionLink>
+        )}
+      />
+    </Surface>
+  );
+
+  if (embedded) return catalog;
   return (
     <>
       <PageHeading
         title="Data sources"
         eyebrow="Catalogue and provenance"
         description="Review coverage, licensing, resolution, quality, and limitations before using any source."
-        actions={
-          <ActionLink href="/researcher/data-sources/new">
-            <Plus size={14} /> Add metadata
-          </ActionLink>
-        }
       />
-      <Surface title="Source catalogue">
-        <DataTable
-          columns={[
-            { key: "name", label: "Source" },
-            { key: "provider", label: "Provider" },
-            { key: "coverage", label: "Coverage" },
-            { key: "status", label: "Provenance status" },
-          ]}
-          rows={dataSources.map((source) => ({ ...source }))}
-          actions={(row) => (
-            <ActionLink
-              href={`/researcher/data-sources/${dataSources.find((source) => source.name === row.name)?.id ?? "daily-rainfall"}`}
-              variant="quiet"
-            >
-              View
-            </ActionLink>
-          )}
-        />
-      </Surface>
+      {catalog}
     </>
   );
 }
@@ -1014,6 +1214,8 @@ export function ResearcherScreen({ segments }: { segments: string[] }) {
   if (first === "runs" && second && third === "day") return <DayDetail />;
   if (first === "runs" && second) return <ForecastResults />;
   if (first === "compare") return <CompareRuns />;
+  if (first === "data-sources" && !second)
+    return <MapWorkspace initialView="data" />;
   if (first === "data-sources") return <DataSourceCatalog detail={second} />;
   if (first === "models") return <Models detail={second} />;
   return <DashboardOverview />;
