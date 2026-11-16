@@ -2,7 +2,7 @@
 
 **Project:** RiverGuard  
 **Folder:** `docs/plan/phase-04-api-integration-hosting.md`  
-**Status:** Planned  
+**Status:** In progress — pipeline built, awaiting a Convex deployment to verify the write path
 **Dependencies:** Phase 3 complete (dashboard + Convex ingest working)
 
 ---
@@ -11,6 +11,20 @@
 > 15,884 rows) exists and is usable for schema and pipeline work. `WaterLevel_m`, `SoilMoisture_pct`,
 > and `FloodOccurrence` are **derived from rainfall**, so anything built on them demonstrates plumbing,
 > not validated hydrology — the UI must label them as such. See [`docs/data-sources.md`](../data-sources.md).
+
+## Current status (2026-11-15)
+
+| Piece | State |
+|---|---|
+| Weather provider adapter | Built — `apps/web/src/lib/weather/` (Open-Meteo primary, offline fixture fallback, both labelled) |
+| ML service | Built — `services/ml/` FastAPI, 6 endpoints, 24 tests passing, bit-exact against the exported model |
+| Orchestrating route | Built — `POST /api/forecast`; verified end to end with the fixture provider and the live ML service |
+| Convex write path | Built — `forecasts:recordOutlook` writes runs, forecasts, assessments, model versions and alerts |
+| Convex read path | Built — `forecasts:latestOutlook` + `alerts:listOpenForLocation`, consumed via `makeFunctionReference` |
+| Scheduled refresh | **Not possible** — a Convex cron cannot reach this machine. `convex/crons.ts` only fails stale runs. See §6 of the pipeline guide |
+| Verified against a real deployment | **Pending** — run `npx convex dev` and press Refresh once |
+
+Runbook: [`docs/guides/forecast-pipeline.md`](../guides/forecast-pipeline.md).
 
 ## Objective
 

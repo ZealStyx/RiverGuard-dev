@@ -179,6 +179,21 @@ It is a **test model**: since water level and flood labels in dataset v2 are der
 its metrics measure how well it recovers the generator. They are not forecast skill. Metrics,
 baselines, and limits: [`ml/README.md`](ml/README.md).
 
+### 2.6 Forecast pipeline (weather → ML → Convex)
+
+The live path is built: an Open-Meteo adapter, a local FastAPI inference service in `services/ml`, and
+a Convex write/read path (`convex/forecasts.ts`, `convex/alerts.ts`), orchestrated by
+`POST /api/forecast` and rendered on the research workspace.
+
+```bash
+cd services/ml && uvicorn app.main:app --port 8000   # 1. inference
+npm run convex:dev                                   # 2. database
+npm run dev                                          # 3. http://localhost:3000/admin/research
+```
+
+Setup, request flow, and failure modes: [`docs/guides/forecast-pipeline.md`](docs/guides/forecast-pipeline.md).
+
+
 ## 3. Main capabilities
 
 ### 3.1 Geographic hazard visualization

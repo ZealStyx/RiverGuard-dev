@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { PrototypeRouter } from "@/components/prototype/PrototypeRouter";
 
 export const metadata = {
@@ -5,5 +7,11 @@ export const metadata = {
 };
 
 export default function Home() {
-  return <PrototypeRouter section="welcome" />;
+  // The prototype screens read query parameters (useSearchParams), which Next 16
+  // requires to sit behind a Suspense boundary so the shell can still prerender.
+  return (
+    <Suspense fallback={null}>
+      <PrototypeRouter section="welcome" />
+    </Suspense>
+  );
 }

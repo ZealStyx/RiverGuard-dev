@@ -18,7 +18,13 @@ import {
   TremorMonthlyRainfallChart,
 } from "@/components/charts/TremorHistoricalCharts";
 import { ModelContributionPanel } from "@/components/dashboard/ModelContributionPanel";
+import {
+  convexConfigured,
+  OutlookBridge,
+} from "@/components/dashboard/OutlookBridge";
 import { RiskSummary } from "@/components/dashboard/RiskSummary";
+import { DEFAULT_LOCATION } from "@/lib/locations";
+import { useOutlookFeed } from "@/lib/outlook";
 import { RiverMap } from "@/components/map/RiverMap";
 import { StationDetails } from "@/components/stations/StationDetails";
 import { Button } from "@/components/ui";
@@ -48,22 +54,33 @@ import {
 function DashboardOverview() {
   const [activeLayer, setActiveLayer] = useState<MapLayerId>("base");
   const [selectedDay, setSelectedDay] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshNote, setRefreshNote] = useState(
-    "Updated Nov 11, 2026 · 09:40 PHT",
-  );
+  const outlook = useOutlookFeed(DEFAULT_LOCATION);
+  const refreshing = outlook.isRunning;
+  const refreshNote = outlook.error
+    ? `Forecast failed: ${outlook.error}`
+    : outlook.snapshot
+      ? `Updated ${new Date(outlook.snapshot.updatedAt).toLocaleTimeString(
+          "en-PH",
+          {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "Asia/Manila",
+          },
+        )} PHT · ${outlook.snapshot.provider} · model ${outlook.snapshot.modelVersion ?? "unknown"}`
+      : "No run yet · press Refresh to fetch weather, run the model, and store the result";
 
   function refreshPreview() {
-    setRefreshing(true);
-    setRefreshNote("Updating view…");
-    window.setTimeout(() => {
-      setRefreshing(false);
-      setRefreshNote("Updated just now");
-    }, 700);
+    void outlook.run();
   }
 
   return (
     <>
+      {convexConfigured ? (
+        <OutlookBridge
+          locationCode={DEFAULT_LOCATION}
+          onSnapshot={outlook.adopt}
+        />
+      ) : null}
       <PageHeading
         title="Research workspace"
         eyebrow="Administrator tools"
@@ -89,7 +106,18 @@ function DashboardOverview() {
       <div className="grid gap-3 min-[1180px]:grid-cols-[minmax(0,1.38fr)_minmax(390px,1fr)]">
         <RiverMap activeLayer={activeLayer} onLayerChange={setActiveLayer} />
         <div className="grid content-start gap-3">
-          <RiskSummary selectedDay={selectedDay} onDayChange={setSelectedDay} />
+          <RiskSummary
+            selectedDay={selectedDay}
+            onDayChange={setSelectedDay}
+            days={outlook.snapshot?.days}
+            source={outlook.snapshot?.source ?? "static"}
+            note={
+              outlook.snapshot
+                ? (outlook.snapshot.warnings[0] ??
+                  `Weather via ${outlook.snapshot.provider}`)
+                : "Illustrative week from the design prototype, not a forecast."
+            }
+          />
           <RainfallChart />
           <ModelContributionPanel />
           <StationDetails />

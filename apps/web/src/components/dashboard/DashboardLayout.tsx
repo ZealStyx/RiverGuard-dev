@@ -23,7 +23,11 @@ import { StationDetails } from "@/components/stations/StationDetails";
 import { Button, IconButton, Tooltip } from "@/components/ui";
 import type { MapLayerId } from "@/types";
 
+import { DEFAULT_LOCATION } from "@/lib/locations";
+import { useOutlookFeed } from "@/lib/outlook";
+
 import { ModelContributionPanel } from "./ModelContributionPanel";
+import { convexConfigured, OutlookBridge } from "./OutlookBridge";
 import { RiskSummary } from "./RiskSummary";
 
 const navigation = [
@@ -45,8 +49,20 @@ export function DashboardLayout() {
   const [activeLayer, setActiveLayer] = useState<MapLayerId>("base");
   const [activeSection, setActiveSection] = useState("dashboard");
   const [selectedDay, setSelectedDay] = useState(0);
-  const [isRunning, setIsRunning] = useState(false);
-  const [runNote, setRunNote] = useState("Updated Nov 11, 2026 · 09:40 PHT");
+  const outlook = useOutlookFeed(DEFAULT_LOCATION);
+  const isRunning = outlook.isRunning;
+  const snapshot = outlook.snapshot;
+  const runNote = outlook.error
+    ? `Forecast failed: ${outlook.error}`
+    : snapshot
+      ? `Updated ${new Date(snapshot.updatedAt).toLocaleTimeString("en-PH", {
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "Asia/Manila",
+        })} PHT · ${snapshot.provider} · model ${snapshot.modelVersion ?? "unknown"}${
+          snapshot.source === "convex" ? " · restored from Convex" : ""
+        }`
+      : "No run yet · press Run forecast to fetch weather and score the next seven days";
 
   useEffect(() => {
     function syncActiveSection() {
@@ -62,16 +78,17 @@ export function DashboardLayout() {
   }, []);
 
   function runPreview() {
-    setIsRunning(true);
-    setRunNote("Updating view…");
-    window.setTimeout(() => {
-      setIsRunning(false);
-      setRunNote("Updated just now");
-    }, 700);
+    void outlook.run();
   }
 
   return (
     <main id="dashboard" className="min-h-screen bg-canvas">
+      {convexConfigured ? (
+        <OutlookBridge
+          locationCode={DEFAULT_LOCATION}
+          onSnapshot={outlook.adopt}
+        />
+      ) : null}
       <div className="min-h-screen bg-canvas">
         <nav
           aria-label="Primary navigation"
@@ -191,6 +208,17 @@ export function DashboardLayout() {
                 <RiskSummary
                   selectedDay={selectedDay}
                   onDayChange={setSelectedDay}
+                  days={snapshot?.days}
+                  source={snapshot?.source ?? "static"}
+                  note={
+                    snapshot
+                      ? `${snapshot.warnings[0] ?? "Weather via " + snapshot.provider}${
+                          snapshot.alerts > 0
+                            ? ` · ${snapshot.alerts} open alert(s)`
+                            : ""
+                        }`
+                      : "Illustrative week from the design prototype, not a forecast."
+                  }
                 />
                 <RainfallChart />
                 <ModelContributionPanel />
