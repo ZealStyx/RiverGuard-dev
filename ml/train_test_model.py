@@ -140,9 +140,10 @@ def design_matrix(samples: pd.DataFrame) -> np.ndarray:
     return X
 
 
-FEATURE_NAMES = [f["key"] for f in FEATURES] + ["m_sin", "m_cos", "elev"] + [
-    f"city={c}" for c in CITY_KEYS[:-1]
-]
+# "month" is a UI control, not a matrix column: it only exists here as sin/cos.
+FEATURE_NAMES = [f["key"] for f in FEATURES if f["key"] != "month"] + [
+    "m_sin", "m_cos", "elev",
+] + [f"city={c}" for c in CITY_KEYS[:-1]]
 
 
 # ---------------------------------------------------------------------------
