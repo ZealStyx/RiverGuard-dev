@@ -1,13 +1,39 @@
 import { StatusLabel } from "@/components/ui";
-import { outlookDays } from "@/data/dashboard";
+import { outlookDays as staticOutlookDays } from "@/data/dashboard";
+import type { OutlookDay } from "@/types";
 
 export interface RiskSummaryProps {
   selectedDay: number;
   onDayChange: (index: number) => void;
+  /** Real forecast days when a run has completed; falls back to the illustrative week. */
+  days?: OutlookDay[];
+  /** Where the days came from, so the label can say it out loud. */
+  source?: "live" | "convex" | "static";
+  /** Free-form provenance line, e.g. provider and model version. */
+  note?: string;
 }
 
-export function RiskSummary({ selectedDay, onDayChange }: RiskSummaryProps) {
-  const activeDay = outlookDays[selectedDay];
+export function RiskSummary({
+  selectedDay,
+  onDayChange,
+  days,
+  source = "static",
+  note,
+}: RiskSummaryProps) {
+  const outlookDays = days && days.length > 0 ? days : staticOutlookDays;
+  const activeDay = outlookDays[Math.min(selectedDay, outlookDays.length - 1)];
+  const isLive = source !== "static";
+
+  const monthYear = activeDay.isoDate
+    ? new Date(`${activeDay.isoDate}T00:00:00+08:00`).toLocaleDateString(
+        "en-PH",
+        {
+          month: "long",
+          year: "numeric",
+          timeZone: "Asia/Manila",
+        },
+      )
+    : "November 2026";
 
   return (
     <section
@@ -20,11 +46,16 @@ export function RiskSummary({ selectedDay, onDayChange }: RiskSummaryProps) {
             Marikina
           </h2>
           <p className="text-body mt-0.5 text-muted">
-            {activeDay.day}, November {activeDay.date}, 2026
+            {activeDay.day}, {monthYear.split(" ")[0]} {activeDay.date},{" "}
+            {monthYear.split(" ")[1]}
           </p>
         </div>
         <StatusLabel className="border-line bg-canvas text-muted">
-          Experimental
+          {isLive
+            ? source === "convex"
+              ? "Experimental · stored run"
+              : "Experimental · just run"
+            : "Experimental · illustrative"}
         </StatusLabel>
       </div>
       <p className="text-major-status mt-2 text-warning">
@@ -32,7 +63,14 @@ export function RiskSummary({ selectedDay, onDayChange }: RiskSummaryProps) {
       </p>
       <p className="text-body mt-1 text-muted">
         Experimental · City-level · Not an official warning
+        {activeDay.probability !== undefined
+          ? ` · ${(activeDay.probability * 100).toFixed(0)}% flood probability`
+          : ""}
+        {activeDay.waterLevelM !== undefined
+          ? ` · ${activeDay.waterLevelM.toFixed(2)} m predicted`
+          : ""}
       </p>
+      {note ? <p className="text-metadata mt-1 text-muted">{note}</p> : null}
 
       <div
         className="mt-3 grid grid-cols-7 gap-1"
@@ -45,7 +83,7 @@ export function RiskSummary({ selectedDay, onDayChange }: RiskSummaryProps) {
               key={`${day.day}-${day.date}`}
               type="button"
               aria-pressed={active}
-              aria-label={`${day.day}, November ${day.date}: ${day.label}`}
+              aria-label={`${day.day}, ${day.isoDate ?? `November ${day.date}`}: ${day.label}`}
               onClick={() => onDayChange(index)}
               className={`rounded-control border px-1 py-1.5 text-center transition-colors motion-reduce:transition-none ${
                 active
