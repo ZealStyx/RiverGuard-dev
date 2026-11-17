@@ -27,6 +27,8 @@ import { DEFAULT_LOCATION, LOCATIONS } from "@/lib/locations";
 import { useOutlookFeed } from "@/lib/outlook";
 
 import { ModelContributionPanel } from "./ModelContributionPanel";
+import { BuildStamp } from "@/components/BuildStamp";
+
 import { convexConfigured, OutlookBridge } from "./OutlookBridge";
 import { RiskSummary } from "./RiskSummary";
 
@@ -224,6 +226,9 @@ export function DashboardLayout() {
                     Reading the dataset…
                   </p>
                 )}
+                <p className="text-metadata mt-1 text-muted">
+                  <BuildStamp />
+                </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <Button

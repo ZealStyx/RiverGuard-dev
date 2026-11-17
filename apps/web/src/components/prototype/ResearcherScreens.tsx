@@ -140,10 +140,9 @@ function DashboardOverview() {
             days={outlook.snapshot?.days}
             source={outlook.snapshot?.source}
             note={
-              outlook.snapshot?.warnings[0] ??
-              (outlook.snapshot
-                ? `Weather via ${outlook.snapshot.provider}`
-                : undefined)
+              outlook.snapshot?.observed
+                ? `Model input: ${outlook.snapshot.provider}, rain through ${outlook.snapshot.observed.asOfDate}`
+                : outlook.snapshot?.warnings[0]
             }
           />
           <RainfallChart />
@@ -1723,9 +1722,9 @@ function DataSourceDetail({
             ["Units", "Millimetres (rain), metres (water level)"],
             ["License", "Not established"],
             [
-              "Real rain segment",
+              "Real rain segment (dataset)",
               dataset?.realRainFrom
-                ? `ERA5 reanalysis from ${dataset.realRainFrom}; synthetic before that`
+                ? `ERA5 reanalysis from ${dataset.realRainFrom}; synthetic before that. These are training rows and chart history, never a forecast input.`
                 : "Not reported",
             ],
             ["Provenance status", "Research use only"],
