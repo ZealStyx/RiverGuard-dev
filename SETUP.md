@@ -153,9 +153,18 @@ npm run convex:dev
 - Choose **create a new deployment** / a **development** deployment when asked.
 - The command writes `CONVEX_DEPLOYMENT` and `NEXT_PUBLIC_CONVEX_URL` into
   `apps/web/.env.local`, generates `convex/_generated/`, and pushes `convex/`.
+- Make sure `NEXT_PUBLIC_FIREBASE_PROJECT_ID` in `apps/web/.env.local` matches
+  the Firebase project used by the web app. The `convex/auth.config.ts` file
+  configures Convex to accept that project's Firebase ID tokens.
 
 Leave it running while you work: it keeps the deployment in sync. If you stop it,
 your deployment keeps the functions you already pushed.
+
+If Firebase sign-in succeeds but Convex reports **“No auth provider found
+matching the given token”**, the selected Convex deployment has not received the
+current `convex/` configuration. Run `npm run convex:dev` while targeting your
+own development deployment, then restart the Next.js server. Do not deploy
+these changes to somebody else's production deployment without permission.
 
 > **`Could not find public function for 'forecasts:latestOutlook'`** means the
 > deployment is behind the code — pull doesn't push. Run `npm run convex:dev`
