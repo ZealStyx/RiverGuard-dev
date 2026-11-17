@@ -294,10 +294,9 @@ No AWS account, cloud container registry, public hosting account, or separate ma
 
 ## 6. Local setup
 
-The Next.js frontend foundation and Convex schema are runnable now. A Convex
-development deployment still needs to be selected before database queries are
-connected to the dashboard. The Python ML service remains a planned
-integration.
+**Prerequisites, environment variables and the step-by-step run guide live in
+[`SETUP.md`](SETUP.md).** This section is the abbreviated version for people who
+already have a working checkout.
 
 ### 6.1 Install JavaScript dependencies
 
@@ -352,9 +351,9 @@ query instead of unmounting the page.
 
 ### 6.2 Start the Python ML service
 
-The ML package is currently a placeholder. The following is the intended
-workflow after `services/ml/pyproject.toml` and the FastAPI application are
-implemented.
+The FastAPI inference service in `services/ml` is implemented and is what scores
+a forecast; the website needs it running on `127.0.0.1:8000` (or wherever
+`ML_API_BASE_URL` points).
 
 In a separate terminal:
 
