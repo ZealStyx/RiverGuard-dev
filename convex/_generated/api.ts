@@ -9,6 +9,7 @@
  */
 
 import type * as alerts from "../alerts.js";
+import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as forecasts from "../forecasts.js";
 import type * as hazardLayers from "../hazardLayers.js";
@@ -29,6 +30,7 @@ import { anyApi, componentsGeneric } from "convex/server";
 
 const fullApi: ApiFromModules<{
   alerts: typeof alerts;
+  auth: typeof auth;
   crons: typeof crons;
   forecasts: typeof forecasts;
   hazardLayers: typeof hazardLayers;
