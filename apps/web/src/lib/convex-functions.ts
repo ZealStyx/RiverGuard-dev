@@ -77,6 +77,39 @@ export interface RecentRun {
   modelVersion: string | null;
 }
 
+/** One day of a stored run, as `forecasts:getRun` returns it. */
+export interface RemoteRunDay {
+  date: string;
+  locationCode: string;
+  horizonDays: number;
+  rainfallMm: number;
+  probability: number;
+  waterLevelM: number;
+  riskLevel: "lower" | "moderate" | "elevated" | "unavailable";
+  alertLevel: "none" | "first" | "second" | "third";
+  exceedsOperatingThreshold: boolean;
+  reasons: string[];
+}
+
+/** A stored run with its days, as `forecasts:getRun` returns it. */
+export interface RemoteRun {
+  runId: string;
+  /** Last day of the provider window the model was fed. */
+  issueDate: string | null;
+  requestedAt: number;
+  completedAt: number | null;
+  provider: string;
+  status: string;
+  retrievedAt: number;
+  providerDegraded: boolean;
+  modelVersion: string | null;
+  modelKind: string | null;
+  operatingThreshold: number | null;
+  featureSchemaVersion: string | null;
+  warning: string | null;
+  days: RemoteRunDay[];
+}
+
 export const convexFunctions = {
   recordOutlook: makeFunctionReference<
     "mutation",
@@ -90,6 +123,9 @@ export const convexFunctions = {
   >("forecasts:latestOutlook"),
   recentRuns: makeFunctionReference<"query", { limit?: number }, RecentRun[]>(
     "forecasts:recentRuns",
+  ),
+  getRun: makeFunctionReference<"query", { runId: string }, RemoteRun | null>(
+    "forecasts:getRun",
   ),
   listOpenAlerts: makeFunctionReference<
     "query",

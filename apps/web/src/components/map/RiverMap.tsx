@@ -1,11 +1,18 @@
 "use client";
 
 import { ArrowCounterClockwise, Info, MapTrifold } from "@phosphor-icons/react";
-import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
+import type {
+  ExpressionSpecification,
+  Map as MapLibreMap,
+  StyleSpecification,
+} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 
+import type { GisLayerSummary } from "@/lib/gis-types";
+import { gisLayerIdFromKey, gisLayerKey } from "@/lib/gis-types";
 import { LOCATION_CODES, LOCATIONS } from "@/lib/locations";
+import { useGisLayers } from "@/lib/use-gis-layers";
 import type { MapLayerId } from "@/types";
 
 import { HazardLayerControl } from "./HazardLayerControl";
@@ -149,6 +156,8 @@ export function RiverMap({
   const [mapStatus, setMapStatus] = useState<MapStatus>("loading");
   const [mapError, setMapError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [overlayError, setOverlayError] = useState<string | null>(null);
+  const gis = useGisLayers();
 
   useEffect(() => {
     let cancelled = false;
@@ -196,6 +205,17 @@ export function RiverMap({
 
       map.on("error", (event) => {
         if (cancelled) return;
+        // A verified overlay that fails to load is not a basemap failure: the
+        // tiles are fine, one local layer is not. Say which. MapLibre includes
+        // the source id on source errors, but its typings omit it.
+        const { sourceId } = event as { sourceId?: string };
+        if (sourceId?.startsWith("gis-")) {
+          setOverlayError(
+            event.error?.message ??
+              `Layer ${sourceId.replace(/^gis-/, "")} could not be loaded.`,
+          );
+          return;
+        }
         setMapStatus("error");
         const detail = event.error?.message;
         setMapError(
@@ -216,6 +236,107 @@ export function RiverMap({
     };
   }, [retryKey, cooperativeGestures]);
 
+  // Draw the verified overlays.
+  //
+  // Sources are added once per verified layer and then only toggled, so
+  // switching between layers never refetches geometry. Nothing is added at all
+  // when the verification artifact lists no layers — which is what a clean
+  // checkout has, and why this map draws no RiverGuard geometry.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || mapStatus !== "ready") return;
+
+    const colourFor = (
+      layer: GisLayerSummary,
+    ): string | ExpressionSpecification => {
+      if (!layer.classProperty || !layer.classColors) return layer.strokeColor;
+      const expression: unknown[] = ["match", ["get", layer.classProperty]];
+      for (const [value, colour] of Object.entries(layer.classColors)) {
+        expression.push(value, colour);
+      }
+      // A value outside the declared classes was rejected by the verifier, but
+      // keep a neutral fallback rather than a missing colour.
+      expression.push("#94a3b8");
+      return expression as ExpressionSpecification;
+    };
+
+    for (const layer of gis.layers) {
+      const sourceId = `gis-${layer.id}`;
+      const visibility: "visible" | "none" =
+        activeLayer === gisLayerKey(layer.id) ? "visible" : "none";
+      const colour = colourFor(layer);
+
+      if (!map.getSource(sourceId)) {
+        map.addSource(sourceId, { type: "geojson", data: layer.url });
+      }
+      if (layer.geometry === "polygon") {
+        const fillId = `${sourceId}-fill`;
+        const outlineId = `${sourceId}-outline`;
+        if (!map.getLayer(fillId)) {
+          map.addLayer({
+            id: fillId,
+            type: "fill",
+            source: sourceId,
+            layout: { visibility },
+            paint: { "fill-color": colour, "fill-opacity": layer.fillOpacity },
+          });
+        }
+        if (!map.getLayer(outlineId)) {
+          map.addLayer({
+            id: outlineId,
+            type: "line",
+            source: sourceId,
+            layout: { visibility },
+            paint: {
+              "line-color": layer.strokeColor,
+              "line-width": 1.2,
+              "line-opacity": 0.9,
+            },
+          });
+        }
+        map.setLayoutProperty(fillId, "visibility", visibility);
+        map.setLayoutProperty(outlineId, "visibility", visibility);
+        continue;
+      }
+
+      if (layer.geometry === "line") {
+        const lineId = `${sourceId}-line`;
+        if (!map.getLayer(lineId)) {
+          map.addLayer({
+            id: lineId,
+            type: "line",
+            source: sourceId,
+            layout: { visibility },
+            paint: {
+              "line-color": colour,
+              "line-width": 2,
+              "line-opacity": 0.85,
+            },
+          });
+        }
+        map.setLayoutProperty(lineId, "visibility", visibility);
+        continue;
+      }
+
+      const pointId = `${sourceId}-point`;
+      if (!map.getLayer(pointId)) {
+        map.addLayer({
+          id: pointId,
+          type: "circle",
+          source: sourceId,
+          layout: { visibility },
+          paint: {
+            "circle-color": colour,
+            "circle-radius": 4.5,
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": 1.5,
+          },
+        });
+      }
+      map.setLayoutProperty(pointId, "visibility", visibility);
+    }
+  }, [activeLayer, gis.layers, mapStatus]);
+
   function resetView() {
     mapRef.current?.fitBounds(NCR_VIEW_BOUNDS, {
       padding: 28,
@@ -223,12 +344,17 @@ export function RiverMap({
     });
   }
 
-  const layerSummary =
-    activeLayer === "base"
+  const activeGisId = gisLayerIdFromKey(activeLayer);
+  const activeGisLayer =
+    gis.layers.find((layer) => layer.id === activeGisId) ?? null;
+
+  const layerSummary = activeGisLayer
+    ? `${activeGisLayer.description || `${activeGisLayer.title} from a verified local file.`} Source: ${activeGisLayer.source.publisher}, ${activeGisLayer.source.license}, retrieved ${activeGisLayer.source.retrievedAt}.`
+    : activeLayer === "base" || activeGisId !== null
       ? `${BASEMAP.label}: roads, rivers, land, and place labels.`
       : activeLayer === "static"
-        ? "Static hazard susceptibility is unavailable until a verified GIS layer is supplied."
-        : "Experimental flood predictions are unavailable until weather and ML integration is complete.";
+        ? "Static hazard susceptibility needs a verified hazard layer in data/gis. None is loaded, so nothing is drawn."
+        : "The model works at city level, so it produces numbers per city, not geometry. There is no map overlay to draw from it.";
 
   // The map fills whatever height it is given, so a tall sibling column used to
   // stretch it into a 1000px+ panel. The height is bounded instead, and the
@@ -278,7 +404,10 @@ export function RiverMap({
         <div className="absolute top-4 right-4 hidden lg:block">
           <HazardLayerControl
             activeLayer={activeLayer}
+            loading={gis.loading}
             onLayerChange={onLayerChange}
+            rejected={gis.rejected}
+            verified={gis.layers}
           />
         </div>
 
@@ -309,6 +438,19 @@ export function RiverMap({
               >
                 Retry map
               </button>
+            </div>
+          </div>
+        ) : null}
+
+        {overlayError ? (
+          <div className="absolute inset-x-4 top-24 flex justify-center">
+            <div className="max-w-md rounded-control border border-danger/30 bg-canvas-soft/95 p-3 text-ink shadow-lg">
+              <p className="text-button">Verified layer could not be drawn</p>
+              <p className="text-metadata mt-1 text-muted">{overlayError}</p>
+              <p className="text-metadata mt-1 text-muted">
+                The basemap is unaffected. Re-run npm run gis:verify to confirm
+                the file still matches its recorded checksum.
+              </p>
             </div>
           </div>
         ) : null}
@@ -348,8 +490,11 @@ export function RiverMap({
                 and Pasig.
               </p>
               <p className="text-metadata mt-0.5 text-muted">
-                Boundaries, stations, and hazard layers still require verified
-                local GIS files.
+                {gis.layers.length === 0
+                  ? "Boundaries, stations, and hazard layers still require verified local GIS files."
+                  : `${gis.layers.length} verified local layer${
+                      gis.layers.length === 1 ? "" : "s"
+                    }: ${gis.layers.map((layer) => layer.title).join(", ")}.`}
               </p>
             </div>
           </div>

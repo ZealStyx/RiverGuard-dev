@@ -61,13 +61,13 @@ export function StationDetails({
     ],
     [
       "Runtime input",
-      "Weather provider — model runs are never seeded from this dataset",
+      "Weather provider — a forecast run takes its rain from that API, not from this file",
     ],
     [
-      "Rainfall",
+      "Rainfall column (dataset)",
       dataset.realRainFrom
-        ? `ERA5 reanalysis from ${dataset.realRainFrom}; synthetic-calibrated before that`
-        : "Synthetic-calibrated throughout (no ERA5 segment found)",
+        ? `ERA5 reanalysis from ${dataset.realRainFrom}; synthetic-calibrated before that. Training rows and charts only — a forecast run reads its rain from the weather provider.`
+        : "Synthetic-calibrated throughout (no ERA5 segment found). Training rows and charts only.",
     ],
     [
       "Water level",

@@ -10,6 +10,7 @@
 
 import Link from "next/link";
 
+import { BuildStamp } from "@/components/BuildStamp";
 import { StatusLabel } from "@/components/ui";
 import { DEFAULT_LOCATION, LOCATIONS } from "@/lib/locations";
 import { useOutlookFeed, type OutlookSource } from "@/lib/outlook";
@@ -186,9 +187,13 @@ export function RiskSummary({
               {feed.isRunning ? "Refreshing…" : "Run forecast again"}
             </button>
             {snapshot ? (
-              <span className="text-metadata text-muted">
-                model {snapshot.modelVersion ?? "unknown"} · {snapshot.provider}
-              </span>
+              <>
+                <span className="text-metadata text-muted">
+                  model {snapshot.modelVersion ?? "unknown"} ·{" "}
+                  {snapshot.provider}
+                </span>
+                <BuildStamp className="text-metadata ml-auto text-muted" />
+              </>
             ) : null}
           </div>
 

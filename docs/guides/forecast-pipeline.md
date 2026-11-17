@@ -82,9 +82,14 @@ Convex subscription, so a reload does not spend another weather call.
 6. The ML service chains them: predict day _d_, fold its rain into the antecedent sums and the soil
    bucket, predict day _d+1_. Each day comes back with probability, water level, risk level, alarm
    crossing, and a one-sentence reason.
-7. The route calls the Convex mutation `forecasts:recordOutlook`, which writes one `forecastRuns` row,
-   seven `forecasts`, seven `riskAssessments`, a `modelVersions` row if it is new, and an alert for
-   every `elevated` day — then resolves alerts superseded by this run.
+7. The route stores the run, in one of two places:
+   - **Convex** (`NEXT_PUBLIC_CONVEX_URL` set) — `forecasts:recordOutlook` writes one `forecastRuns`
+     row, seven `forecasts`, seven `riskAssessments`, a `modelVersions` row if it is new, and an alert
+     for every `elevated` day, then resolves alerts superseded by this run.
+   - **This machine** (no deployment configured) — `lib/run-store.ts` appends the run to
+     `.data/runs.json` (gitignored, newest first, capped at 200 runs, written atomically). Without
+     this, a run existed only in the response that produced it and run history, run detail and the
+     comparison screen had nothing to read.
 8. The dashboard renders the response immediately and the Convex subscription delivers the same run
    on the next page load.
 
@@ -97,8 +102,25 @@ Convex subscription, so a reload does not spend another weather call.
 | `weather.degraded: true`                                                    | Provider failed and the fixture was allowed              | Runs end to end on the labelled fixture — which is now also its input — and the outlook panel renders a warning banner plus every warning, so illustrative rainfall is never presented as a forecast |
 | `observedState.qualityStatus: "degraded"`                                   | The input came from the offline fixture                  | Same as `weather.degraded`; the run is shown with a warning, never as a live forecast                                                                                                                |
 | 400 `Unknown locationCode`                                                  | Not one of the four cities                               | Lists the supported codes                                                                                                                                                                            |
-| Outlook not saved                                                           | `NEXT_PUBLIC_CONVEX_URL` unset, or mutation error        | Forecast still returned; `persistence.error` says why                                                                                                                                                |
+| Outlook not saved to `.data/runs.json`                                      | `persistence.kind: "none"` — disk full, permissions      | Forecast still returned; `persistence.error` says why                                                                                                                                                |
+| Run stored locally only                                                     | `NEXT_PUBLIC_CONVEX_URL` unset                           | `persistence.kind: "local"`; the run is readable from `/admin/research/runs` on this machine and nowhere else                                                                                        |
+| `Could not find public function for 'forecasts:getRun'`                     | Deployment behind `convex/`                              | Run detail and comparison report it; push with `npm run convex:dev`                                                                                                                                  |
 | Alert never appears                                                         | No day reached `elevated`                                | Only elevated days raise alerts                                                                                                                                                                      |
+
+## 5.1 Reading runs back
+
+Both stores expose the same records, so the screens do not care where a run lives:
+
+| Screen      | URL                                     | Reads                                          |
+| ----------- | --------------------------------------- | ---------------------------------------------- |
+| Run history | `/admin/research/runs`                  | `forecasts:recentRuns`, or `GET /api/runs`     |
+| Run detail  | `/admin/research/runs/<runId>`          | `forecasts:getRun`, or `GET /api/runs/<runId>` |
+| Compare     | `/admin/research/compare?a=<id>&b=<id>` | the two runs above, side by side               |
+
+The detail page shows the run record (provider, issue date, model, threshold, schema), the stored days,
+and the model's reason lines verbatim. The comparison page prints B − A per day and says so when the
+two runs are not like-for-like (different provider, model version, or input quality) — it does not
+pretend to be a model comparison.
 
 ## 6. What is deliberately not automated
 

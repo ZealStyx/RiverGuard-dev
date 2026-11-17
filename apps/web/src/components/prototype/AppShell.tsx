@@ -23,6 +23,8 @@ import {
   X,
 } from "@phosphor-icons/react";
 import Link from "next/link";
+
+import { BuildStamp } from "@/components/BuildStamp";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
@@ -438,7 +440,12 @@ export function AppShell({ children, role }: AppShellProps) {
         </div>
       ) : null}
 
-      <div className="min-w-0 md:pl-14">{children}</div>
+      <div className="min-w-0 md:pl-14">
+        {children}
+        <footer className="text-metadata flex flex-wrap items-center justify-end gap-2 border-t border-line px-4 py-2 text-muted">
+          <BuildStamp />
+        </footer>
+      </div>
 
       {searchOpen ? (
         <div
