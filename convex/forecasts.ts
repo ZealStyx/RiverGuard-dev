@@ -17,6 +17,7 @@ import {
 import { v } from "convex/values";
 
 import { raiseAlertIfElevated, resolveSupersededAlerts } from "./alerts";
+import { requireCurrentUser, requireRole } from "./auth";
 
 const forecastDayValidator = v.object({
   date: v.string(),
@@ -96,6 +97,7 @@ export const recordOutlook = mutation({
     alerts: v.number(),
   }),
   handler: async (ctx, args) => {
+    const user = await requireCurrentUser(ctx);
     if (args.days.length === 0) {
       throw new Error("recordOutlook requires at least one forecast day");
     }
@@ -110,6 +112,7 @@ export const recordOutlook = mutation({
     });
 
     const runId = await ctx.db.insert("forecastRuns", {
+      requestedBy: user._id,
       requestedAt: now,
       completedAt: now,
       provider: args.provider,
@@ -198,6 +201,7 @@ export const latestOutlook = query({
   args: { locationCode: v.string() },
   returns: v.union(v.any(), v.null()),
   handler: async (ctx, args) => {
+    await requireCurrentUser(ctx);
     const run = await ctx.db
       .query("forecastRuns")
       .withIndex("by_requested_at", (index: any) => index)
@@ -302,6 +306,7 @@ export const recentRuns = query({
     }),
   ),
   handler: async (ctx, args) => {
+    await requireRole(ctx, ["admin", "lgu"]);
     const runs = await ctx.db
       .query("forecastRuns")
       .withIndex("by_requested_at", (index: any) => index)

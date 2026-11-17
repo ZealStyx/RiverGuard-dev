@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useFirebaseAuth } from "@/components/auth/FirebaseAuthProvider";
 import { convexErrorHint, convexFunctions } from "@/lib/convex-functions";
 import { useConvexQueryResult } from "@/lib/convex-query";
 import type { OutlookDay } from "@/types";
@@ -122,6 +123,7 @@ interface ForecastApiResponse {
 }
 
 export function useOutlookFeed(locationCode: string) {
+  const { getIdToken } = useFirebaseAuth();
   const [snapshot, setSnapshot] = useState<OutlookSnapshot | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,9 +138,13 @@ export function useOutlookFeed(locationCode: string) {
     setError(null);
     setErrorDetail(null);
     try {
+      const accessToken = await getIdToken();
       const response = await fetch("/api/forecast", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({ locationCode }),
       });
       const payload = (await response.json()) as ForecastApiResponse;
@@ -173,7 +179,7 @@ export function useOutlookFeed(locationCode: string) {
     } finally {
       setIsRunning(false);
     }
-  }, [locationCode]);
+  }, [getIdToken, locationCode]);
 
   const adopt = useCallback((incoming: OutlookSnapshot) => {
     setSnapshot((current) =>

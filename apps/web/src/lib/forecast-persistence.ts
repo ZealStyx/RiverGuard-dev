@@ -33,6 +33,7 @@ export async function persistOutlook(
   bundle: WeatherBundle,
   forecast: MlForecastResponse,
   issueDate: string,
+  accessToken?: string | null,
 ): Promise<PersistenceResult> {
   if (!convexUrl) {
     return {
@@ -69,6 +70,9 @@ export async function persistOutlook(
 
   try {
     const client = new ConvexHttpClient(convexUrl);
+    if (accessToken) {
+      client.setAuth(accessToken);
+    }
     const result = await client.mutation(convexFunctions.recordOutlook, args);
     return {
       enabled: true,
