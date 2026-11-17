@@ -41,8 +41,20 @@ import {
   supportedLocations,
 } from "@/data/prototype";
 import { convexFunctions } from "@/lib/convex-functions";
+import {
+  detailFromConvexRun,
+  formatMetres,
+  formatProbability,
+  formatRunTime,
+  RUN_SOURCE_LABEL,
+  summaryFromConvexRun,
+  type StoredRun,
+  type StoredRunSummary,
+} from "@/lib/runs";
+import { useLocalRun, useLocalRuns } from "@/lib/use-runs";
 import { useDatasetMeta } from "@/lib/use-dataset-meta";
 import { useModelArtifacts } from "@/lib/use-model-artifacts";
+import { useGisLayers } from "@/lib/use-gis-layers";
 import type { MapLayerId } from "@/types";
 
 import {
@@ -114,7 +126,14 @@ function DashboardOverview() {
       />
 
       <div className="grid gap-3 min-[1180px]:grid-cols-[minmax(0,1.38fr)_minmax(390px,1fr)]">
-        <RiverMap activeLayer={activeLayer} onLayerChange={setActiveLayer} />
+        {/* Same tall-column problem as the admin dashboard: the map stays a
+            fixed panel and follows the scroll instead of stretching. */}
+        <RiverMap
+          activeLayer={activeLayer}
+          onLayerChange={setActiveLayer}
+          className="min-[1180px]:sticky min-[1180px]:top-4 z-0"
+          cooperativeGestures
+        />
         <div className="grid content-start gap-3">
           <RiskSummary
             selectedDay={selectedDay}
@@ -122,10 +141,9 @@ function DashboardOverview() {
             days={outlook.snapshot?.days}
             source={outlook.snapshot?.source}
             note={
-              outlook.snapshot?.warnings[0] ??
-              (outlook.snapshot
-                ? `Weather via ${outlook.snapshot.provider}`
-                : undefined)
+              outlook.snapshot?.observed
+                ? `Model input: ${outlook.snapshot.provider}, rain through ${outlook.snapshot.observed.asOfDate}`
+                : outlook.snapshot?.warnings[0]
             }
           />
           <RainfallChart />
@@ -139,6 +157,7 @@ function DashboardOverview() {
 
 function MapWorkspace() {
   const [activeLayer, setActiveLayer] = useState<MapLayerId>("base");
+  const gis = useGisLayers();
   return (
     <>
       <PageHeading
@@ -192,9 +211,15 @@ function MapWorkspace() {
             </div>
           </Surface>
           <Notice title="Map limitation" className="xl:shrink-0">
-            This is a real OpenStreetMap basemap. RiverGuard boundaries,
-            monitoring stations, hazard layers, and predictions are not loaded
-            until verified local GIS and model data are supplied.
+            {gis.layers.length === 0
+              ? "This is a real OpenStreetMap basemap. RiverGuard boundaries, monitoring stations and hazard layers are not loaded: none has passed verification in data/gis yet. The forecast model itself is city-level, so it has no geometry of its own to draw."
+              : `This is a real OpenStreetMap basemap plus ${gis.layers.length} verified local layer${
+                  gis.layers.length === 1 ? "" : "s"
+                } (${gis.layers
+                  .map((entry) => entry.title)
+                  .join(
+                    ", ",
+                  )}). The forecast model is city-level, so its predictions appear as numbers per city, never as geometry.`}
           </Notice>
         </div>
       </div>
@@ -792,89 +817,162 @@ function ForecastProgress() {
   );
 }
 
+/* ------------------------------------------------------- stored run views */
+
 /**
- * A run URL that does not resolve to a stored run.
+ * Run history, run detail and run comparison.
  *
- * These routes used to render a fixed "RG-NCR-041 · Complete" narrative for any
- * id in the path, so every link looked like a real run. Now an id only renders if
- * it came from storage, and until Convex is configured nothing does.
+ * Two stores, one set of screens: Convex when `NEXT_PUBLIC_CONVEX_URL` is set,
+ * the local `.data/runs.json` fallback otherwise. Only the small wrappers switch
+ * on storage; the table, the detail record and the diff are shared, so the two
+ * paths cannot drift apart.
  */
-function RunDetailNotFound({ runId }: { runId: string }) {
+
+function RunHistoryTable({ runs }: { runs: StoredRunSummary[] }) {
+  const rows: Array<Record<string, string>> = runHistoryRows(runs);
+  return (
+    <DataTable
+      columns={[
+        { key: "run", label: "Run ID" },
+        { key: "created", label: "Created" },
+        { key: "location", label: "Location" },
+        { key: "model", label: "Model" },
+        { key: "status", label: "Status" },
+        { key: "warning", label: "Elevated" },
+      ]}
+      rows={rows}
+      actions={(row) => (
+        <ActionLink href={`/admin/research/runs/${row.run}`} variant="quiet">
+          View
+        </ActionLink>
+      )}
+    />
+  );
+}
+
+function RunHistorySurface({
+  description,
+  runs,
+}: {
+  description: string;
+  runs: StoredRunSummary[];
+}) {
+  const [location, setLocation] = useState("all");
+  const [status, setStatus] = useState("all");
+
+  const locations = Array.from(
+    new Set(runs.flatMap((run) => run.locations)),
+  ).sort();
+  const filtered = runs.filter(
+    (run) =>
+      (location === "all" || run.locations.includes(location)) &&
+      (status === "all" || run.status === status),
+  );
+
   return (
     <>
-      <PageHeading
-        title="Run not found"
-        eyebrow="Forecast runs"
-        description="This workspace has no stored run with that identifier."
-      />
-      <EmptyPanel
-        title={`No run “${runId}”`}
-        description="Run results are read from the database. A run exists only after someone presses Run forecast, and only while a Convex deployment is configured."
-        actionHref="/admin/research/runs"
-        actionLabel="Back to run history"
-      />
+      <Surface
+        className="mb-3"
+        title="Filters"
+        description={`${filtered.length} of ${runs.length} stored run(s) shown`}
+      >
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <SelectControl
+            id="run-location"
+            label="Location"
+            onChange={(event) => setLocation(event.target.value)}
+            value={location}
+          >
+            <option value="all">All supported locations</option>
+            {locations.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </SelectControl>
+          <SelectControl
+            id="run-status"
+            label="Status"
+            onChange={(event) => setStatus(event.target.value)}
+            value={status}
+          >
+            <option value="all">All statuses</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="requested">Requested</option>
+          </SelectControl>
+        </div>
+      </Surface>
+      <Surface title="Run history" description={description}>
+        {runs.length === 0 ? (
+          <p className="text-body text-muted">
+            No runs stored yet — run a forecast to create one.
+          </p>
+        ) : filtered.length === 0 ? (
+          <p className="text-body text-muted">No runs match these filters.</p>
+        ) : (
+          <RunHistoryTable runs={filtered} />
+        )}
+      </Surface>
     </>
   );
 }
 
-function CompareRunsUnavailable() {
-  return (
-    <>
-      <PageHeading
-        title="Compare forecast runs"
-        eyebrow="Model comparison"
-        description="Side-by-side comparison of stored runs."
-      />
-      <EmptyPanel
-        title="Nothing to compare"
-        description="Comparison needs at least two stored runs. This page previously showed two invented runs and called the difference a model comparison."
-        actionHref="/admin/research/runs"
-        actionLabel="Back to run history"
-      />
-    </>
-  );
-}
-
-/**
- * Stored runs. Kept in a separate component so the query is never called when
- * no deployment is configured — it needs a ConvexProvider.
- */
-function StoredRunTable() {
+function ConvexRunHistory() {
   const { data: runs, error } = useConvexQueryResult(
     convexFunctions.recentRuns,
     { limit: 25 },
   );
-  const rows: Array<Record<string, string>> = runHistoryRows(runs ?? []);
+
+  if (error) {
+    return (
+      <Surface title="Run history" description="The deployment did not answer">
+        <p className="text-body text-muted">{convexErrorHint(error)}</p>
+      </Surface>
+    );
+  }
+  if (runs === undefined) {
+    return (
+      <Surface title="Run history" description="Loading stored runs…">
+        <p className="text-body text-muted">Reading the deployment…</p>
+      </Surface>
+    );
+  }
+
   return (
-    <Surface
-      title="Run history"
-      description={
-        error
-          ? `Unavailable — ${convexErrorHint(error)}`
-          : runs === undefined
-            ? "Loading stored runs…"
-            : runs.length === 0
-              ? "No runs stored yet — run a forecast to create one"
-              : `${runs.length} stored run(s)`
-      }
-    >
-      <DataTable
-        columns={[
-          { key: "run", label: "Run ID" },
-          { key: "created", label: "Created" },
-          { key: "location", label: "Location" },
-          { key: "model", label: "Model" },
-          { key: "status", label: "Status" },
-          { key: "warning", label: "Warnings" },
-        ]}
-        rows={rows}
-        actions={(row) => (
-          <ActionLink href={`/admin/research/runs/${row.run}`} variant="quiet">
-            View
-          </ActionLink>
-        )}
-      />
-    </Surface>
+    <RunHistorySurface
+      description={`Read from the Convex deployment · ${runs.length} stored run(s)`}
+      runs={runs.map(summaryFromConvexRun)}
+    />
+  );
+}
+
+function LocalRunHistory() {
+  const { data: runs, error } = useLocalRuns(25);
+
+  if (error) {
+    return (
+      <Surface
+        title="Run history"
+        description="The local store could not be read"
+      >
+        <p className="text-body text-muted">{error.message}</p>
+      </Surface>
+    );
+  }
+  if (runs === undefined) {
+    return (
+      <Surface title="Run history" description="Loading stored runs…">
+        <p className="text-body text-muted">Reading this machine’s store…</p>
+      </Surface>
+    );
+  }
+
+  return (
+    <RunHistorySurface
+      description={`Read from this machine (.data/runs.json) · ${runs.length} stored run(s)`}
+      runs={runs}
+    />
   );
 }
 
@@ -891,47 +989,618 @@ function RunHistory() {
           </ActionLink>
         }
       />
-      <Surface className="mb-3" title="Filters">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <SelectControl id="run-location" label="Location">
-            <option>All supported locations</option>
-            <option>Marikina</option>
-            <option>Quezon City</option>
-          </SelectControl>
-          <SelectControl id="run-model" label="Model">
-            <option>All models</option>
-            <option>Current deployed model</option>
-          </SelectControl>
-          <SelectControl id="run-status" label="Status">
-            <option>All statuses</option>
-            <option>Complete</option>
-            <option>Partial</option>
-            <option>Failed</option>
-          </SelectControl>
-          <TextField id="run-date" label="Created after" type="date" />
-        </div>
-      </Surface>
-      {convexConfigured ? (
-        <StoredRunTable />
-      ) : (
-        <Surface title="Run history" description="No deployment configured">
-          <p className="text-body text-muted">
-            Forecast runs are stored in Convex. Set{" "}
-            <code className="rounded bg-canvas px-1 py-0.5">
-              NEXT_PUBLIC_CONVEX_URL
-            </code>{" "}
-            to list them here; until then a run exists only in the response that
-            produced it.
-          </p>
-        </Surface>
-      )}
+      {convexConfigured ? <ConvexRunHistory /> : <LocalRunHistory />}
       <div className="mt-3 flex justify-end">
         <ActionLink href="/admin/research/compare" variant="secondary">
-          Compare selected
+          Compare two runs
         </ActionLink>
       </div>
     </>
   );
+}
+
+/**
+ * A run URL that does not resolve to a stored run.
+ *
+ * These routes used to render a fixed "RG-NCR-041 · Complete" narrative for any
+ * id in the path, so every link looked like a real run. Now an id only renders
+ * if it came from storage.
+ */
+function RunDetailNotFound({ runId }: { runId: string }) {
+  return (
+    <>
+      <PageHeading
+        title="Run not found"
+        eyebrow="Forecast runs"
+        description="This workspace has no stored run with that identifier."
+      />
+      <EmptyPanel
+        title={`No run “${runId}”`}
+        description="A run exists only after someone presses Run forecast. It is read from the Convex deployment when one is configured, and from this machine’s .data/runs.json otherwise."
+        actionHref="/admin/research/runs"
+        actionLabel="Back to run history"
+      />
+    </>
+  );
+}
+
+function RunReading({ runId }: { runId: string }) {
+  return (
+    <Surface title="Reading run" description={runId}>
+      <p className="text-body text-muted">Loading the stored run…</p>
+    </Surface>
+  );
+}
+
+function RunUnreadable({ runId, reason }: { runId: string; reason: string }) {
+  return (
+    <>
+      <PageHeading
+        title="Run could not be read"
+        eyebrow="Forecast runs"
+        description={`Run ${runId}`}
+        actions={
+          <ActionLink href="/admin/research/runs" variant="quiet">
+            Back to run history
+          </ActionLink>
+        }
+      />
+      <Notice title="Storage problem" tone="danger">
+        {reason}
+      </Notice>
+    </>
+  );
+}
+
+function RunDetailView({ run }: { run: StoredRun }) {
+  const dayRows: Array<Record<string, string>> = run.dayRows.map((day) => ({
+    date: day.date,
+    horizon: `+${day.horizonDays}d`,
+    rain: `${day.rainfallMm.toFixed(1)} mm`,
+    probability: formatProbability(day.probability),
+    waterLevel: formatMetres(day.waterLevelM),
+    risk: day.riskLevel,
+    alert: day.alertLevel,
+    threshold: day.exceedsOperatingThreshold ? "above" : "below",
+  }));
+
+  return (
+    <>
+      <PageHeading
+        title={`Run ${run.runId}`}
+        eyebrow="Forecast runs"
+        description={`Stored in the ${RUN_SOURCE_LABEL[run.source]}. Every number below is what the model wrote, including its caveats.`}
+        actions={
+          <ActionLink href="/admin/research/runs" variant="quiet">
+            Back to run history
+          </ActionLink>
+        }
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric
+          label="Location"
+          value={run.locations.join(", ") || "—"}
+          detail="City-level coverage"
+        />
+        <Metric
+          label="Issue date"
+          value={run.issueDate}
+          detail="Last day of the provider window"
+        />
+        <Metric
+          label="Days stored"
+          value={String(run.days)}
+          detail={`Model ${run.modelVersion ?? "unknown"}`}
+        />
+        <Metric
+          label="Elevated days"
+          value={String(run.alerts)}
+          detail="Risk level elevated"
+          tone={run.alerts > 0 ? "warning" : "neutral"}
+        />
+      </div>
+
+      <Surface className="mt-3" title="Run record">
+        <dl className="text-body grid gap-2 sm:grid-cols-[170px_1fr]">
+          <dt className="text-muted">Run id</dt>
+          <dd className="break-all">{run.runId}</dd>
+          <dt className="text-muted">Stored in</dt>
+          <dd>{RUN_SOURCE_LABEL[run.source]}</dd>
+          <dt className="text-muted">Requested</dt>
+          <dd>{formatRunTime(run.requestedAt)}</dd>
+          <dt className="text-muted">Completed</dt>
+          <dd>{formatRunTime(run.completedAt)}</dd>
+          <dt className="text-muted">Weather provider</dt>
+          <dd>
+            {run.provider}
+            {run.providerDegraded
+              ? " — degraded: the labelled offline fixture, not a forecast"
+              : ""}
+          </dd>
+          <dt className="text-muted">Provider data retrieved</dt>
+          <dd>{formatRunTime(run.retrievedAt)}</dd>
+          <dt className="text-muted">Model</dt>
+          <dd>
+            {run.modelVersion ?? "unknown"}
+            {run.modelKind ? ` · ${run.modelKind}` : ""}
+          </dd>
+          <dt className="text-muted">Operating threshold</dt>
+          <dd>
+            {run.operatingThreshold > 0
+              ? run.operatingThreshold.toFixed(4)
+              : "not stored"}
+          </dd>
+          <dt className="text-muted">Feature schema</dt>
+          <dd>{run.featureSchemaVersion}</dd>
+        </dl>
+      </Surface>
+
+      <Surface
+        className="mt-3"
+        title="Stored output"
+        description="Every day the run wrote, with its risk level and alarm crossing."
+      >
+        {dayRows.length === 0 ? (
+          <p className="text-body text-muted">
+            This run stored no forecast days.
+          </p>
+        ) : (
+          <DataTable
+            columns={[
+              { key: "date", label: "Date" },
+              { key: "horizon", label: "Horizon" },
+              { key: "rain", label: "Rain" },
+              { key: "probability", label: "Probability" },
+              { key: "waterLevel", label: "Water level" },
+              { key: "risk", label: "Risk" },
+              { key: "alert", label: "Alarm" },
+              { key: "threshold", label: "Threshold" },
+            ]}
+            rows={dayRows}
+          />
+        )}
+      </Surface>
+
+      <Surface
+        className="mt-3"
+        title="Why the model said this"
+        description="The reason lines stored with each day."
+      >
+        {run.dayRows.length === 0 ? (
+          <p className="text-body text-muted">No reason lines were stored.</p>
+        ) : (
+          <ul className="grid gap-2">
+            {run.dayRows.map((day) => (
+              <li key={day.date} className="text-body">
+                <span className="font-semibold">{day.date}</span>
+                <span className="text-muted">
+                  {" — "}
+                  {day.reasons.length
+                    ? day.reasons.join(" ")
+                    : "No reasons stored."}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Surface>
+
+      {run.warning ? (
+        <Notice className="mt-3" title="Model caveat" tone="warning">
+          {run.warning}
+        </Notice>
+      ) : null}
+    </>
+  );
+}
+
+function ConvexRunDetail({ runId }: { runId: string }) {
+  const { data, error } = useConvexQueryResult(convexFunctions.getRun, {
+    runId,
+  });
+
+  if (error) {
+    return <RunUnreadable reason={convexErrorHint(error)} runId={runId} />;
+  }
+  if (data === undefined) return <RunReading runId={runId} />;
+  if (data === null) return <RunDetailNotFound runId={runId} />;
+  return <RunDetailView run={detailFromConvexRun(data)} />;
+}
+
+function LocalRunDetail({ runId }: { runId: string }) {
+  const { data, error } = useLocalRun(runId);
+
+  if (error) return <RunUnreadable reason={error.message} runId={runId} />;
+  if (data === undefined) return <RunReading runId={runId} />;
+  if (data === null) return <RunDetailNotFound runId={runId} />;
+  return <RunDetailView run={data} />;
+}
+
+function RunDetail({ runId }: { runId: string }) {
+  return convexConfigured ? (
+    <ConvexRunDetail runId={runId} />
+  ) : (
+    <LocalRunDetail runId={runId} />
+  );
+}
+
+function runOptionLabel(run: StoredRunSummary): string {
+  return `${run.runId} · ${formatRunTime(run.requestedAt)} · ${run.locations.join(", ") || "no location"}`;
+}
+
+function ComparePickers({
+  a,
+  b,
+  runs,
+}: {
+  a: string;
+  b: string;
+  runs: StoredRunSummary[];
+}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  function choose(key: "a" | "b", value: string) {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set(key, value);
+    router.replace(`/admin/research/compare?${next.toString()}`);
+  }
+
+  return (
+    <Surface
+      className="mb-3"
+      title="Runs to compare"
+      description="Pick two stored runs. The choice is kept in the URL, so a comparison can be linked or bookmarked."
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <SelectControl
+          id="compare-a"
+          label="Run A"
+          onChange={(event) => choose("a", event.target.value)}
+          value={a}
+        >
+          {runs.map((run) => (
+            <option key={run.runId} value={run.runId}>
+              {runOptionLabel(run)}
+            </option>
+          ))}
+        </SelectControl>
+        <SelectControl
+          id="compare-b"
+          label="Run B"
+          onChange={(event) => choose("b", event.target.value)}
+          value={b}
+        >
+          {runs.map((run) => (
+            <option key={run.runId} value={run.runId}>
+              {runOptionLabel(run)}
+            </option>
+          ))}
+        </SelectControl>
+      </div>
+    </Surface>
+  );
+}
+
+function CompareTable({ runA, runB }: { runA: StoredRun; runB: StoredRun }) {
+  const byDate = new Map<
+    string,
+    { a?: StoredRun["dayRows"][number]; b?: StoredRun["dayRows"][number] }
+  >();
+  for (const day of runA.dayRows) {
+    byDate.set(day.date, { ...(byDate.get(day.date) ?? {}), a: day });
+  }
+  for (const day of runB.dayRows) {
+    byDate.set(day.date, { ...(byDate.get(day.date) ?? {}), b: day });
+  }
+
+  const rows: Array<Record<string, string>> = [...byDate.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([date, pair]) => {
+      const dProbability =
+        pair.a && pair.b
+          ? `${((pair.b.probability - pair.a.probability) * 100).toFixed(1)} pp`
+          : "—";
+      const dLevel =
+        pair.a && pair.b
+          ? `${(pair.b.waterLevelM - pair.a.waterLevelM).toFixed(2)} m`
+          : "—";
+      return {
+        date,
+        probabilityA: pair.a ? formatProbability(pair.a.probability) : "—",
+        probabilityB: pair.b ? formatProbability(pair.b.probability) : "—",
+        dProbability,
+        levelA: pair.a ? formatMetres(pair.a.waterLevelM) : "—",
+        levelB: pair.b ? formatMetres(pair.b.waterLevelM) : "—",
+        dLevel,
+        risk: `${pair.a?.riskLevel ?? "—"} → ${pair.b?.riskLevel ?? "—"}`,
+      };
+    });
+
+  const metadata: Array<[string, string, string]> = [
+    ["Run id", runA.runId, runB.runId],
+    ["Stored in", RUN_SOURCE_LABEL[runA.source], RUN_SOURCE_LABEL[runB.source]],
+    ["Location", runA.locations.join(", "), runB.locations.join(", ")],
+    ["Issue date", runA.issueDate, runB.issueDate],
+    [
+      "Provider",
+      `${runA.provider}${runA.providerDegraded ? " (degraded)" : ""}`,
+      `${runB.provider}${runB.providerDegraded ? " (degraded)" : ""}`,
+    ],
+    ["Model", runA.modelVersion ?? "unknown", runB.modelVersion ?? "unknown"],
+    [
+      "Operating threshold",
+      runA.operatingThreshold > 0 ? runA.operatingThreshold.toFixed(4) : "—",
+      runB.operatingThreshold > 0 ? runB.operatingThreshold.toFixed(4) : "—",
+    ],
+    ["Days stored", String(runA.days), String(runB.days)],
+    ["Elevated days", String(runA.alerts), String(runB.alerts)],
+  ];
+
+  const comparable =
+    runA.provider === runB.provider &&
+    runA.modelVersion === runB.modelVersion &&
+    !runA.providerDegraded &&
+    !runB.providerDegraded;
+
+  return (
+    <>
+      {comparable ? null : (
+        <Notice title="These runs are not like-for-like" tone="warning">
+          The two runs differ in provider, model version, or input quality, so
+          part of every difference below is that change rather than the
+          forecast. The table is still the stored record — it is not a model
+          comparison.
+        </Notice>
+      )}
+      <Surface
+        className="mt-3"
+        title="Run records"
+        description="A is the left column, B the right."
+      >
+        <DataTable
+          columns={[
+            { key: "field", label: "Field" },
+            { key: "a", label: "Run A" },
+            { key: "b", label: "Run B" },
+          ]}
+          rows={metadata.map(([field, a, b]) => ({ field, a, b }))}
+        />
+      </Surface>
+      <Surface
+        className="mt-3"
+        title="Day by day"
+        description="Differences are B minus A. A date stored by only one run shows dashes for the other."
+      >
+        {rows.length === 0 ? (
+          <p className="text-body text-muted">Neither run stored any days.</p>
+        ) : (
+          <DataTable
+            columns={[
+              { key: "date", label: "Date" },
+              { key: "probabilityA", label: "A probability" },
+              { key: "probabilityB", label: "B probability" },
+              { key: "dProbability", label: "Δ probability" },
+              { key: "levelA", label: "A level" },
+              { key: "levelB", label: "B level" },
+              { key: "dLevel", label: "Δ level" },
+              { key: "risk", label: "Risk A → B" },
+            ]}
+            rows={rows}
+          />
+        )}
+      </Surface>
+      <p className="text-metadata mt-3 text-muted">
+        Both runs are read from {RUN_SOURCE_LABEL[runA.source]}. Nothing on this
+        page is recomputed or interpolated: a date the model did not store stays
+        blank.
+      </p>
+    </>
+  );
+}
+
+function ConvexCompareDiff({ a, b }: { a: string; b: string }) {
+  const runA = useConvexQueryResult(convexFunctions.getRun, { runId: a });
+  const runB = useConvexQueryResult(convexFunctions.getRun, { runId: b });
+
+  if (runA.error || runB.error) {
+    return (
+      <Notice title="A run could not be read" tone="danger">
+        {convexErrorHint((runA.error ?? runB.error) as Error)}
+      </Notice>
+    );
+  }
+  if (runA.data === undefined || runB.data === undefined) {
+    return (
+      <Surface title="Reading runs" description="Loading both stored runs…">
+        <p className="text-body text-muted">Fetching from the deployment…</p>
+      </Surface>
+    );
+  }
+  if (runA.data === null || runB.data === null) {
+    return (
+      <Notice title="A run is missing" tone="warning">
+        One of the selected runs is no longer stored in the deployment. Pick
+        another pair.
+      </Notice>
+    );
+  }
+
+  return (
+    <CompareTable
+      runA={detailFromConvexRun(runA.data)}
+      runB={detailFromConvexRun(runB.data)}
+    />
+  );
+}
+
+function LocalCompareDiff({ a, b }: { a: string; b: string }) {
+  const runA = useLocalRun(a);
+  const runB = useLocalRun(b);
+
+  if (runA.error || runB.error) {
+    return (
+      <Notice title="A run could not be read" tone="danger">
+        {(runA.error ?? runB.error)?.message ?? "unknown error"}
+      </Notice>
+    );
+  }
+  if (runA.data === undefined || runB.data === undefined) {
+    return (
+      <Surface title="Reading runs" description="Loading both stored runs…">
+        <p className="text-body text-muted">Reading this machine’s store…</p>
+      </Surface>
+    );
+  }
+  if (runA.data === null || runB.data === null) {
+    return (
+      <Notice title="A run is missing" tone="warning">
+        One of the selected runs is no longer in .data/runs.json. Pick another
+        pair.
+      </Notice>
+    );
+  }
+
+  return <CompareTable runA={runA.data} runB={runB.data} />;
+}
+
+function CompareContent({
+  a,
+  b,
+  runs,
+}: {
+  a: string;
+  b: string;
+  runs: StoredRunSummary[];
+}) {
+  if (runs.length < 2) {
+    return (
+      <>
+        <PageHeading
+          title="Compare forecast runs"
+          eyebrow="Model comparison"
+          description="Side-by-side comparison of stored runs."
+          actions={
+            <ActionLink href="/admin/research/forecast/new">
+              <Plus size={14} /> New forecast
+            </ActionLink>
+          }
+        />
+        <EmptyPanel
+          title="Nothing to compare"
+          description={`Comparison needs at least two stored runs; this store has ${runs.length}. This page previously showed two invented runs and called the difference a model comparison.`}
+          actionHref="/admin/research/runs"
+          actionLabel="Back to run history"
+        />
+      </>
+    );
+  }
+
+  const newest = runs[0];
+  const older = runs[1];
+  const selectedA = runs.some((run) => run.runId === a) ? a : older.runId;
+  const selectedB = runs.some(
+    (run) => run.runId === b && run.runId !== selectedA,
+  )
+    ? b
+    : newest.runId === selectedA
+      ? older.runId
+      : newest.runId;
+
+  return (
+    <>
+      <PageHeading
+        title="Compare forecast runs"
+        eyebrow="Model comparison"
+        description="Two stored runs side by side, exactly as the model wrote them."
+        actions={
+          <ActionLink href="/admin/research/runs" variant="quiet">
+            Run history
+          </ActionLink>
+        }
+      />
+      <ComparePickers a={selectedA} b={selectedB} runs={runs} />
+      {selectedA === selectedB ? (
+        <Notice title="Pick two different runs" tone="warning">
+          Both selects point at the same run, so there is nothing to compare.
+        </Notice>
+      ) : convexConfigured ? (
+        <ConvexCompareDiff a={selectedA} b={selectedB} />
+      ) : (
+        <LocalCompareDiff a={selectedA} b={selectedB} />
+      )}
+    </>
+  );
+}
+
+function ConvexCompare() {
+  const searchParams = useSearchParams();
+  const { data: runs, error } = useConvexQueryResult(
+    convexFunctions.recentRuns,
+    { limit: 25 },
+  );
+
+  if (error) {
+    return (
+      <Surface
+        title="Comparison unavailable"
+        description="The deployment did not answer"
+      >
+        <p className="text-body text-muted">{convexErrorHint(error)}</p>
+      </Surface>
+    );
+  }
+  if (runs === undefined) {
+    return (
+      <Surface title="Comparison" description="Loading stored runs…">
+        <p className="text-body text-muted">Reading the deployment…</p>
+      </Surface>
+    );
+  }
+
+  return (
+    <CompareContent
+      a={searchParams.get("a") ?? ""}
+      b={searchParams.get("b") ?? ""}
+      runs={runs.map(summaryFromConvexRun)}
+    />
+  );
+}
+
+function LocalCompare() {
+  const searchParams = useSearchParams();
+  const { data: runs, error } = useLocalRuns(25);
+
+  if (error) {
+    return (
+      <Surface
+        title="Comparison unavailable"
+        description="The local store could not be read"
+      >
+        <p className="text-body text-muted">{error.message}</p>
+      </Surface>
+    );
+  }
+  if (runs === undefined) {
+    return (
+      <Surface title="Comparison" description="Loading stored runs…">
+        <p className="text-body text-muted">Reading this machine’s store…</p>
+      </Surface>
+    );
+  }
+
+  return (
+    <CompareContent
+      a={searchParams.get("a") ?? ""}
+      b={searchParams.get("b") ?? ""}
+      runs={runs}
+    />
+  );
+}
+
+function CompareRuns() {
+  return convexConfigured ? <ConvexCompare /> : <LocalCompare />;
 }
 
 export function DataSourceCatalog({
@@ -1061,9 +1730,9 @@ function DataSourceDetail({
             ["Units", "Millimetres (rain), metres (water level)"],
             ["License", "Not established"],
             [
-              "Real rain segment",
+              "Real rain segment (dataset)",
               dataset?.realRainFrom
-                ? `ERA5 reanalysis from ${dataset.realRainFrom}; synthetic before that`
+                ? `ERA5 reanalysis from ${dataset.realRainFrom}; synthetic before that. These are training rows and chart history, never a forecast input.`
                 : "Not reported",
             ],
             ["Provenance status", "Research use only"],
@@ -1350,8 +2019,8 @@ export function ResearcherScreen({ segments }: { segments: string[] }) {
   if (first === "forecast" && second === "progress")
     return <ForecastProgress />;
   if (first === "runs" && !second) return <RunHistory />;
-  if (first === "runs" && second) return <RunDetailNotFound runId={second} />;
-  if (first === "compare") return <CompareRunsUnavailable />;
+  if (first === "runs" && second) return <RunDetail runId={second} />;
+  if (first === "compare") return <CompareRuns />;
   if (first === "data-sources") return <DataSourceCatalog detail={second} />;
   if (first === "models") return <Models detail={second} />;
   return <DashboardOverview />;

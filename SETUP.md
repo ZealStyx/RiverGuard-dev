@@ -96,8 +96,51 @@ which overwrites them with a real deployment URL.
 | `WEATHER_PROVIDER`       | `open-meteo`            | no       | `open-meteo` (live, keyless) or `fixture` (offline samples).                                                                      |
 | `WEATHER_ALLOW_FIXTURE`  | `false`                 | no       | Opt in to the offline fixture when the provider fails. Only the exact string `true` enables it.                                   |
 
+| `RUN_STORE_PATH` | `<repo>/.data/runs.json` | no | Where the local run fallback is written. Only used when no Convex deployment is configured. |
+| `NEXT_PUBLIC_MAP_TILE_PROVIDER` | `osm` | no | Basemap preset: `osm` or `carto`. Use `carto` when OSM answers `403 Access blocked`. |
+| `NEXT_PUBLIC_MAP_TILE_URL` | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` | no | Raster tile template for the basemap. |
+| `NEXT_PUBLIC_MAP_TILE_ATTRIBUTION` | `© OpenStreetMap contributors` | no | Credit the map shows in its always-visible attribution control. Change it with the URL. |
+
 Only `NEXT_PUBLIC_*` values reach the browser. Never put keys or credentials in
 those.
+
+#### Basemap tiles and the OpenStreetMap policy
+
+The map uses OpenStreetMap's volunteer-run tile server, which comes with a
+[usage policy](https://operations.osmfoundation.org/policies/tiles/). The app is
+built to follow it:
+
+- **Attribution stays visible** — the attribution control is created with
+  `compact: false`, and the panel keeps a clear band beneath its overlays, so the
+  credit is never behind a toggle or covered by app chrome. A "report a map
+  issue" link points at OSM's fixthemap page.
+- **Identifiable requests** — tiles are fetched by the browser from the page
+  itself, so the browser's `User-Agent` and a real `Referer` are sent. No
+  `no-cache` headers, no restrictive referrer policy.
+- **Caching** — the browser cache does the work and honours OSM's
+  `Cache-Control`/`ETag`; the app never bypasses it.
+- **No bulk or offline fetching** — only the tiles for the current viewport are
+  requested: no prefetch, no "download this area", no background job.
+- **Swappable** — `NEXT_PUBLIC_MAP_TILE_URL` and `NEXT_PUBLIC_MAP_TILE_ATTRIBUTION`
+  change providers without a code change.
+
+Interactive use by one person on a local machine is permitted. A shared or public
+deployment must switch to a provider that allows it, or self-host tiles — the
+same rule as the execution policy in [`README.md`](README.md) §1.
+
+**If the map says "Access blocked" (HTTP 403):** OSM's volunteers block traffic
+they cannot identify or consider abusive, and a shared/cloud preview origin
+often qualifies. Their rules, their call — it is not a bug in this app. Switch
+provider without touching code:
+
+```bash
+# apps/web/.env.local
+NEXT_PUBLIC_MAP_TILE_PROVIDER=carto
+```
+
+`carto` uses CARTO's public basemaps (OSM data, no key, attribution shown).
+Any other raster provider works through `NEXT_PUBLIC_MAP_TILE_URL` plus
+`NEXT_PUBLIC_MAP_TILE_ATTRIBUTION`.
 
 ### Step 4 — Install and start the ML service
 
@@ -252,6 +295,38 @@ CSV; see "Troubleshooting" below if you want the labelled offline fixture.
 
 ---
 
+## 2.8 Where a run is stored
+
+A completed forecast is stored in one of two places, and the run screens read whichever one is active:
+
+| Convex configured?                 | Store                                                                                           | Read by                                                                        |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| yes (`NEXT_PUBLIC_CONVEX_URL` set) | Convex — `forecasts:recordOutlook` / `forecasts:recentRuns` / `forecasts:getRun`                | `/admin/research/runs`, `/admin/research/runs/<id>`, `/admin/research/compare` |
+| no                                 | `.data/runs.json` on this machine (gitignored, newest first, capped at 200, written atomically) | the same screens through `GET /api/runs` and `GET /api/runs/<id>`              |
+
+The local file is a fallback, not a second source of truth: nothing is written to it once Convex is
+configured. Delete it to start a clean local history. The forecast response says which happened in
+`persistence.kind` (`"convex"`, `"local"`) and repeats it in `warnings`.
+
+## 2.9 Verified map overlays (optional)
+
+The map draws the basemap only until a local GIS file passes verification. Nothing is fetched from a
+GIS service at runtime, and no geometry ships with this checkout, so the layer panel says _"RiverGuard
+overlays are hidden until verified local GIS data is added."_
+
+To add one:
+
+1. Put a GeoJSON file (WGS84 / `EPSG:4326`) in `data/gis/`, e.g. `flood-susceptibility.geojson`. The
+   geometry stays out of git; `data/gis/manifest.json` is committed.
+2. Describe it there — copy the field list from `data/gis/manifest.example.json`, including publisher,
+   source URL, licence, retrieval date, and who verified it.
+3. Run `npm run gis:verify -- --write-hashes`, then `npm run gis:verify`. Every layer must print `✓`.
+4. Reload the map: the layer appears in **Map layers** with its feature count, publisher, licence and
+   class legend. A layer that fails is listed as rejected with the reason and is never drawn.
+
+The result is written to `apps/web/src/generated/gis-layers.json` (committed), which is what the app
+reads. Details, the full field table and what verification does not prove: [`docs/guides/gis-data.md`](docs/guides/gis-data.md).
+
 ## 3. What runs where
 
 | Process            | Command                            | Address                 | Required?                |
@@ -285,19 +360,22 @@ neither is needed to run the website locally.
 
 ## 5. Troubleshooting
 
-| Symptom                                                                                                                    | Cause and fix                                                                                                                                                                                                                                                                                                                         |
-| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/forecast` → **502** "Weather provider failed and the offline forecast fallback is disabled."                    | No HTTPS access to `api.open-meteo.com` (offline machine, proxy, or corporate DNS). Fix the network, or for a demo without network set `WEATHER_PROVIDER=fixture` **and** `WEATHER_ALLOW_FIXTURE=true` in `apps/web/.env.local`, restart `npm run dev`, and accept that the run shows as `degraded` / "illustrative, not a forecast". |
-| **503** "The local ML service did not produce a forecast." with detail "ML service unreachable at http://127.0.0.1:8000 …" | The ML service is not running, or `ML_API_BASE_URL` points elsewhere. Start step 4; check `curl http://127.0.0.1:8000/health`.                                                                                                                                                                                                        |
-| Forecast fails with **503** `model artifact not found at …; run 'python3 ml/train_test_model.py' first`                    | `ml/artifacts/model.json` is missing (it is committed, so check your checkout) or `ML_MODEL_PATH` points at the wrong file. Re-training is optional; `ml/README.md` explains it.                                                                                                                                                      |
-| Dashboard panels are empty and mention Convex                                                                              | No deployment configured, or `npm run convex:dev` is not running / was never run. Optional — forecasts still run, they just aren't saved.                                                                                                                                                                                             |
-| `Could not find public function for 'forecasts:…'`                                                                         | Deployment is behind `convex/`. Re-run `npm run convex:dev`; confirm `NEXT_PUBLIC_CONVEX_URL` matches that deployment.                                                                                                                                                                                                                |
-| `Another next dev server is already running`                                                                               | One `next dev` per directory. Stop the other process, or start on another port with `npm run dev --workspace @riverguard/web -- -p 3100`.                                                                                                                                                                                             |
-| `Invalid project directory provided, no such directory: …/3101`                                                            | You passed `-p` to the root `npm run dev`; npm swallows the flag and Next.js reads the number as a directory. Use `npm run dev --workspace @riverguard/web -- -p 3101`.                                                                                                                                                               |
-| `EADDRINUSE` on port 3000 / 8000                                                                                           | Something else owns the port: `npm run dev --workspace @riverguard/web -- -p 3100`, or `uvicorn ... --port 8001` plus `ML_API_BASE_URL=http://127.0.0.1:8001`.                                                                                                                                                                        |
-| `EBADENGINE` warnings from npm                                                                                             | Node is older than 20.9. Upgrade Node.                                                                                                                                                                                                                                                                                                |
-| Python `ModuleNotFoundError: app`                                                                                          | Install the package (`pip install -e "services/ml[dev]"`) and start uvicorn from `services/ml`, or use the venv from step 4.                                                                                                                                                                                                          |
-| Environment variables seem ignored                                                                                         | They must be in `apps/web/.env.local`. Restart `npm run dev` after editing — Next reads the file at startup.                                                                                                                                                                                                                          |
+| Symptom                                                                                                                    | Cause and fix                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /api/forecast` → **502** "Weather provider failed and the offline forecast fallback is disabled."                    | No HTTPS access to `api.open-meteo.com` (offline machine, proxy, or corporate DNS). Fix the network, or for a demo without network set `WEATHER_PROVIDER=fixture` **and** `WEATHER_ALLOW_FIXTURE=true` in `apps/web/.env.local`, restart `npm run dev`, and accept that the run shows as `degraded` / "illustrative, not a forecast".                                                                                                                                                                                                                                                            |
+| **503** "The local ML service did not produce a forecast." with detail "ML service unreachable at http://127.0.0.1:8000 …" | The ML service is not running, or `ML_API_BASE_URL` points elsewhere. Start step 4; check `curl http://127.0.0.1:8000/health`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Forecast fails with **503** `model artifact not found at …; run 'python3 ml/train_test_model.py' first`                    | `ml/artifacts/model.json` is missing (it is committed, so check your checkout) or `ML_MODEL_PATH` points at the wrong file. Re-training is optional; `ml/README.md` explains it.                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Dashboard panels are empty and mention Convex                                                                              | No deployment configured, or `npm run convex:dev` is not running / was never run. Optional — forecasts still run, they just aren't saved.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `Could not find public function for 'forecasts:…'`                                                                         | Deployment is behind `convex/`. Re-run `npm run convex:dev`; confirm `NEXT_PUBLIC_CONVEX_URL` matches that deployment.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `Another next dev server is already running`                                                                               | One `next dev` per directory. Stop the other process, or start on another port with `npm run dev --workspace @riverguard/web -- -p 3100`.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `Invalid project directory provided, no such directory: …/3101`                                                            | You passed `-p` to the root `npm run dev`; npm swallows the flag and Next.js reads the number as a directory. Use `npm run dev --workspace @riverguard/web -- -p 3101`.                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `EADDRINUSE` on port 3000 / 8000                                                                                           | Something else owns the port: `npm run dev --workspace @riverguard/web -- -p 3100`, or `uvicorn ... --port 8001` plus `ML_API_BASE_URL=http://127.0.0.1:8001`.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `EBADENGINE` warnings from npm                                                                                             | Node is older than 20.9. Upgrade Node.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Python `ModuleNotFoundError: app`                                                                                          | Install the package (`pip install -e "services/ml[dev]"`) and start uvicorn from `services/ml`, or use the venv from step 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Browser console: `Hydration failed because the server rendered HTML didn't match the client`                               | The tab is running an older JavaScript bundle than the server. That happens when a dev server survives a code change (`git pull`, merge, edit) or a tab stays open across a rebuild: the server compiles new code, the browser keeps the chunks it already had. Restart `npm run dev` and hard-reload (Ctrl-Shift-R). This build also detects it: `GET /api/version` reports the server's build stamp, and a tab whose stamp differs shows a _"This tab is running build X; the server is on Y"_ bar with a reload button. Compare both with the `[riverguard] build …` line printed at startup. |
+| A page still shows wording you already changed (e.g. a note about the seeded dataset)                                      | Check the **build stamp** at the bottom of the risk panel or under the dashboard provenance line — `build <commit> · <time>Z`, also printed as `[riverguard] build …` when the server starts. If the page's stamp is older than the server's, you are looking at a stale tab or a different checkout: hard-reload (Ctrl-Shift-R), confirm `git log -1 --oneline` matches the stamp, and make sure only one `next dev` is running. Nothing in the source produces that copy any more.                                                                                                             |
+| Map says "RiverGuard overlays are hidden until verified local GIS data is added"                                           | Correct for a clean checkout: no GIS layer has been verified. Add a GeoJSON file to `data/gis/`, describe it in `data/gis/manifest.json`, then run `npm run gis:verify` (see [§2.9](#29-verified-map-overlays-optional)). If a layer is listed as rejected, the panel shows the verifier's reason.                                                                                                                                                                                                                                                                                               |
+| Environment variables seem ignored                                                                                         | They must be in `apps/web/.env.local`. Restart `npm run dev` after editing — Next reads the file at startup.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ---
 

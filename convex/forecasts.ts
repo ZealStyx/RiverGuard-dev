@@ -350,6 +350,107 @@ export const recentRuns = query({
   },
 });
 
+/**
+ * One run, with every day it stored.
+ *
+ * The run detail page used to answer "Run not found" for any id, because there
+ * was no way to ask for a specific run. This is that way: the id comes from
+ * `recentRuns` (or from the `runId` a completed forecast returns).
+ */
+export const getRun = query({
+  args: { runId: v.string() },
+  returns: v.union(v.any(), v.null()),
+  handler: async (ctx, args) => {
+    const runId = ctx.db.normalizeId("forecastRuns", args.runId);
+    if (!runId) return null;
+
+    const run = await ctx.db.get(runId);
+    if (!run) return null;
+
+    const forecasts = await ctx.db
+      .query("forecasts")
+      .withIndex("by_run_valid_at", (index: any) => index.eq("runId", runId))
+      .order("asc")
+      .collect();
+
+    const modelVersionId = forecasts.find(
+      (row: any) => row.modelVersionId,
+    )?.modelVersionId;
+    const model = modelVersionId ? await ctx.db.get(modelVersionId) : null;
+
+    const days = [];
+    for (const forecast of forecasts) {
+      const assessment = await ctx.db
+        .query("riskAssessments")
+        .withIndex("by_forecast", (index: any) =>
+          index.eq("forecastId", forecast._id),
+        )
+        .first();
+
+      days.push({
+        date: new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Manila",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date(forecast.validAt)),
+        locationCode: String(forecast.locationCode),
+        horizonDays: Math.max(
+          1,
+          Math.round((forecast.horizonHours ?? 24) / 24),
+        ),
+        rainfallMm: forecast.rainfallMm ?? 0,
+        probability: assessment?.probability ?? 0,
+        waterLevelM: forecast.predictedWaterLevelM ?? 0,
+        riskLevel: assessment?.riskLevel ?? "unavailable",
+        alertLevel: assessment?.contributionSummary?.alertLevel ?? "none",
+        exceedsOperatingThreshold:
+          assessment?.contributionSummary?.exceedsOperatingThreshold ?? false,
+        reasons: assessment?.contributionSummary?.reasons ?? [],
+      });
+    }
+
+    const metrics = (model as any)?.metrics;
+    const issuedAt = forecasts.find(
+      (row: any) => typeof row.issuedAt === "number",
+    )?.issuedAt;
+
+    return {
+      runId: String(run._id),
+      issueDate:
+        typeof issuedAt === "number"
+          ? new Intl.DateTimeFormat("en-CA", {
+              timeZone: "Asia/Manila",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            }).format(new Date(issuedAt))
+          : null,
+      requestedAt: run.requestedAt ?? 0,
+      completedAt: run.completedAt ?? null,
+      provider: run.provider ?? "",
+      status: run.status ?? "unknown",
+      retrievedAt: run.retrievedAt ?? 0,
+      providerDegraded: forecasts.some(
+        (row: any) => row.qualityStatus === "unverified",
+      ),
+      modelVersion: model ? String((model as any).version ?? "") : null,
+      modelKind: model ? String((model as any).modelType ?? "") : null,
+      operatingThreshold:
+        typeof metrics?.operatingThreshold === "number"
+          ? metrics.operatingThreshold
+          : null,
+      featureSchemaVersion: model
+        ? String((model as any).featureSchemaVersion ?? "")
+        : null,
+      warning: Array.isArray((model as any)?.limitations)
+        ? String((model as any).limitations[0] ?? "")
+        : null,
+      days,
+    };
+  },
+});
+
 /** Housekeeping used by the cron: finish runs that never completed. */
 export const failStaleRuns = mutation({
   args: { olderThanMs: v.optional(v.number()) },
