@@ -29,6 +29,8 @@ import { useOutlookFeed } from "@/lib/outlook";
 import { ModelContributionPanel } from "./ModelContributionPanel";
 import { BuildStamp } from "@/components/BuildStamp";
 
+import { describeStorageShort } from "@/lib/persistence";
+
 import { convexConfigured, OutlookBridge } from "./OutlookBridge";
 import { RiskSummary } from "./RiskSummary";
 
@@ -79,6 +81,9 @@ export function DashboardLayout() {
   }, []);
   const isRunning = outlook.isRunning;
   const snapshot = outlook.snapshot;
+  const storageShort = snapshot
+    ? describeStorageShort(snapshot.persistence)
+    : null;
   const runNote = outlook.error
     ? `Forecast failed: ${outlook.error}`
     : snapshot
@@ -87,7 +92,11 @@ export function DashboardLayout() {
           minute: "2-digit",
           timeZone: "Asia/Manila",
         })} PHT · ${snapshot.provider} · model ${snapshot.modelVersion ?? "unknown"}${
-          snapshot.source === "convex" ? " · restored from Convex" : ""
+          snapshot.source === "convex"
+            ? " · restored from Convex"
+            : storageShort
+              ? ` · ${storageShort}`
+              : ""
         }`
       : "No run yet · press Run forecast to fetch weather and score the next seven days";
 

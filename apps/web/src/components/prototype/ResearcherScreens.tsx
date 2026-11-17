@@ -28,6 +28,7 @@ import {
   LOCATIONS,
   locationCodeForName,
 } from "@/lib/locations";
+import { describePersistence } from "@/lib/persistence";
 import { convexErrorHint } from "@/lib/convex-functions";
 import { useConvexQueryResult } from "@/lib/convex-query";
 import { useOutlookFeed } from "@/lib/outlook";
@@ -707,6 +708,13 @@ function ForecastProgress() {
 
   const snapshot = feed.snapshot;
   const stageIndex = snapshot ? stages.length - 1 : feed.isRunning ? 1 : 0;
+  // Where the run actually went, from the response — not inferred from
+  // `source`, which is "live" for every run this tab just performed.
+  const storageLine = snapshot
+    ? describePersistence(snapshot.persistence, {
+        restored: snapshot.source === "convex",
+      })
+    : null;
 
   return (
     <>
@@ -801,11 +809,15 @@ function ForecastProgress() {
                 degraded={snapshot.degraded}
               />
             </div>
-            <p className="text-metadata text-muted">
-              {snapshot.source === "convex"
-                ? "Stored in Convex and restored on reload."
-                : "Convex is not configured, so this run exists only on this page. Set NEXT_PUBLIC_CONVEX_URL to keep it."}
-            </p>
+            {storageLine ? (
+              <p
+                className={`text-metadata ${
+                  storageLine.tone === "warning" ? "text-warning" : "text-muted"
+                }`}
+              >
+                {storageLine.text}
+              </p>
+            ) : null}
           </div>
         ) : feed.isRunning ? (
           <div className="mt-6 h-2 overflow-hidden rounded-full bg-line">
