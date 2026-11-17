@@ -2,7 +2,8 @@
 
 ## `pr-body-attribution.yml` — strip bot/agent attribution from PR bodies
 
-**Trigger:** `pull_request` → `opened`, `edited`
+**Trigger:** `pull_request` → `opened`, `edited`, `synchronize` (the summary lists commit
+trailers when new commits are pushed)
 **Cost:** one short `ubuntu-latest` job (~10–20 s); no checkout of the dataset, only `.github`
 **Effect:** if the PR body contains an attribution footer, the job rewrites the body with
 `gh pr edit` and logs exactly which lines it removed.
@@ -39,7 +40,10 @@ Whole lines that match an attribution signature:
   riskier — do not add it without a security review.)
 - **No loops.** `if: github.actor != 'github-actions[bot]'` plus the fact that edits made with
   `GITHUB_TOKEN` do not re-trigger workflows. `concurrency` cancels superseded runs.
-- **Idempotent.** If nothing matches, the job exits 0 without touching the PR.
+- **Idempotent.** If nothing matches, the job exits 0 without touching the PR (it does not
+  reformat a description that has no attribution).
+- **Cannot fix commits.** Attribution trailers are reported in the run summary, not rewritten — see
+  below.
 
 ### Required repository setting
 

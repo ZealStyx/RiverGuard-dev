@@ -6,7 +6,7 @@ name: PR body — strip bot attribution
 
 on:
   pull_request:
-    types: [opened, edited]
+    types: [opened, edited, synchronize]
 
 permissions:
   contents: read
@@ -83,7 +83,7 @@ jobs:
           set -uo pipefail
 
           gh api "repos/$REPO/pulls/$PR_NUMBER/commits" --paginate \
-            --jq '.[] | select(.commit.message | test("co-authored-by:.*\\b(agent|arena|bot|ai|llm|assistant|claude|copilot|codex|gpt|openai|anthropic)\\b"; "i")) | "- `\(.sha[0:7])` \(.commit.message | split("\n")[0])"' \
+            --jq '.[] | select(.commit.message | test("(?m)^co-authored-by:[^\\n]*\\b(agent|arena|bot|ai|llm|assistant|claude|copilot|codex|gpt|openai|anthropic)\\b"; "i")) | "- `\(.sha[0:7])` \(.commit.message | split("\n")[0])"' \
             > "$RUNNER_TEMP/trailers.md"
 
           count=$(grep -c '^- ' "$RUNNER_TEMP/trailers.md" || true)
