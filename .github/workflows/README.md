@@ -2,7 +2,8 @@
 
 ## `pr-body-attribution.yml` — strip bot/agent attribution from PR bodies
 
-**Trigger:** `pull_request` → `opened`, `edited`
+**Trigger:** `pull_request` → `opened`, `edited`, `synchronize` (the summary lists commit
+trailers when new commits are pushed)
 **Cost:** one short `ubuntu-latest` job (~10–20 s); no checkout of the dataset, only `.github`
 **Effect:** if the PR body contains an attribution footer, the job rewrites the body with
 `gh pr edit` and logs exactly which lines it removed.
@@ -26,9 +27,15 @@ Whole lines that match an attribution signature:
   documentation snippets and rule examples survive — including a line that *quotes* a pattern.
 - Ordinary prose that merely mentions a tool: *"Generated with `python data/generate_dataset.py`"*,
   *"Rainfall comes from Open-Meteo ERA5"*, *"Assisted by the Marikina MDRRMO"*.
+- The bare word **arena**. It is an ordinary word in this repository (the `arena/...` branches), so
+  the rule requires the product name or the account: `Arena.ai`, `Arena Agent (Mode)`,
+  `arena-agent`. Without that, a sentence like *"every commit was made with `--no-verify`, so none
+  carries an Arena trailer"* matched `made … with … arena` and was deleted from a real PR body.
 - `Signed-off-by:` trailers (DCO is legitimate authorship metadata).
 - Commit messages and commit author/committer identity — those cannot be changed without
-  rewriting history. The team's convention is simply not to add attribution there.
+  rewriting history. The team's convention is simply not to add attribution there; see
+  ["It still says Arena on my PR"](#it-still-says-arena-on-my-pr) for the sandbox hook that adds a
+  `Co-authored-by: arena-agent` trailer anyway.
 
 ### Scope and safety
 
@@ -37,7 +44,10 @@ Whole lines that match an attribution signature:
   riskier — do not add it without a security review.)
 - **No loops.** `if: github.actor != 'github-actions[bot]'` plus the fact that edits made with
   `GITHUB_TOKEN` do not re-trigger workflows. `concurrency` cancels superseded runs.
-- **Idempotent.** If nothing matches, the job exits 0 without touching the PR.
+- **Idempotent.** If nothing matches, the job exits 0 without touching the PR (it does not
+  reformat a description that has no attribution).
+- **Cannot fix commits.** Attribution trailers are reported in the run summary, not rewritten — see
+  below.
 
 ### Required repository setting
 
@@ -45,6 +55,59 @@ The workflow needs `pull-requests: write`. If the repository has restricted work
 `gh pr edit` will fail with a 403:
 
 > Settings → Actions → General → Workflow permissions → **Read and write permissions**
+
+### "It still says Arena on my PR"
+
+The workflow only ever rewrites the **pull-request description**. It cannot touch commits, so any
+attribution that lives in a commit message stays visible on the PR page and in the merged history —
+GitHub lists trailer co-authors next to the commit, and `Co-authored-by` lines land in `main`.
+
+In this environment that is the norm, because the sandbox installs a `commit-msg` hook that appends
+a trailer to **every** commit you make:
+
+```bash
+$ cat .git/hooks/commit-msg
+TRAILER='Co-authored-by: arena-agent <297053741+arena-agent@users.noreply.github.com>'
+```
+
+So a PR opened from an agent session looks like this even when its body is clean:
+
+```
+$ gh api repos/OWNER/REPO/pulls/19/commits --jq '.[].commit.message'
+docs(report): add UI/UX audit and progress re-check for 17 Nov 2026
+Co-authored-by: arena-agent <297053741+arena-agent@users.noreply.github.com>
+```
+
+How to get rid of it:
+
+| Goal | Command |
+|---|---|
+| Stop it on a new commit | `git commit --no-verify` — skips `commit-msg` (and `pre-commit`) hooks |
+| Stop it for the session | `rm .git/hooks/commit-msg` — untracked, but the sandbox may recreate it |
+| Clean commits already pushed | rewrite the messages and force-push the PR branch |
+| Keep it out of `main` | merge with **Squash** and edit the squash message (drop the trailer) |
+
+The run summary of every workflow run now lists any commits that carry a trailer, so a "clean"
+PR body plus a dirty commit log is visible instead of silent.
+
+### What a real Arena footer looks like
+
+Arena writes footers such as `🤖 Generated with [Arena.ai Agent Mode](https://arena.ai)`,
+`🤖 Generated with [Arena.ai](https://arena.ai)`, `🤖 Generated with Arena.ai agent mode`, and
+sometimes no body footer at all (only the commit trailer above). The robot-emoji and
+`generated … with … arena` rules catch all of those variants, so a footer that reaches the body is
+removed on the next `opened`/`edited` event.
+
+Check whether it worked without the Actions log:
+
+```bash
+# who edited the description last, and what changed
+gh api graphql -f query='{ repository(owner:"OWNER", name:"REPO") { pullRequest(number: 20) {
+  userContentEdits(first: 5) { nodes { editedAt editor { login } diff } } } } }'
+```
+
+An edit by `github-actions` a few seconds after the PR was opened means the job ran and rewrote the
+body.
 
 ### Run it locally
 
@@ -54,6 +117,9 @@ python3 .github/scripts/strip_attribution.py path/to/body.md
 
 # check-only mode (exit 1 if attribution is present) — useful in a pre-push hook
 python3 .github/scripts/strip_attribution.py --check path/to/body.md
+
+# the rules themselves (plain unittest, no dependencies)
+python3 .github/scripts/test_strip_attribution.py
 
 # clean a PR you already opened
 gh pr view 15 --json body --jq .body | python3 .github/scripts/strip_attribution.py - \

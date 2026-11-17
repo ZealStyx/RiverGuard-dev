@@ -6,7 +6,7 @@ name: PR body — strip bot attribution
 
 on:
   pull_request:
-    types: [opened, edited]
+    types: [opened, edited, synchronize]
 
 permissions:
   contents: read
@@ -34,6 +34,7 @@ jobs:
           fetch-depth: 1
 
       - name: Strip attribution lines from the PR body
+        id: strip
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -44,12 +45,20 @@ jobs:
           gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq '.body // ""' \
             > "$RUNNER_TEMP/body.md"
           python3 .github/scripts/strip_attribution.py "$RUNNER_TEMP/body.md" \
-            > "$RUNNER_TEMP/clean.md"
+            > "$RUNNER_TEMP/clean.md" 2> "$RUNNER_TEMP/stripped.log"
+          cat "$RUNNER_TEMP/stripped.log" >&2
 
-          if cmp -s "$RUNNER_TEMP/body.md" "$RUNNER_TEMP/clean.md"; then
+          # Compare on the script's own report, not on the files: the script
+          # always normalises trailing blank lines, so `cmp` would call every
+          # body "changed" and rewrite PRs that have nothing to strip.
+          removed=$(grep -c '^stripped: ' "$RUNNER_TEMP/stripped.log" || true)
+          if [ "${removed:-0}" -eq 0 ]; then
             echo "No attribution lines found — nothing to do."
+            echo "result=nothing to remove" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          echo "result=rewritten — removed ${removed} line(s)" >> "$GITHUB_OUTPUT"
 
           if [ -s "$RUNNER_TEMP/clean.md" ]; then
             gh pr edit "$PR_NUMBER" --repo "$REPO" --body-file "$RUNNER_TEMP/clean.md"
@@ -59,3 +68,41 @@ jobs:
           fi
 
           echo "PR body cleaned."
+
+      # A workflow can rewrite the PR description, never the commits. Any
+      # "Co-authored-by: arena-agent <...>" trailer stays visible on the PR
+      # (GitHub lists the co-author) and in the merged history, so surface it
+      # in the run summary instead of letting the job look like it did nothing.
+      - name: Report attribution trailers it cannot remove
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+
+          gh api "repos/$REPO/pulls/$PR_NUMBER/commits" --paginate \
+            --jq '.[] | select(.commit.message | test("(?m)^co-authored-by:[^\\n]*\\b(agent|arena|bot|ai|llm|assistant|claude|copilot|codex|gpt|openai|anthropic)\\b"; "i")) | "- `\(.sha[0:7])` \(.commit.message | split("\n")[0])"' \
+            > "$RUNNER_TEMP/trailers.md"
+
+          count=$(grep -c '^- ' "$RUNNER_TEMP/trailers.md" || true)
+
+          {
+            echo "## Attribution report"
+            echo
+            echo "**PR body:** ${{ steps.strip.outputs.result }}"
+            echo
+            if [ "${count:-0}" -eq 0 ]; then
+              echo "**Commits:** no attribution trailers."
+            else
+              echo "**Commits:** $count commit(s) carry an attribution trailer that this workflow cannot remove —"
+              echo "GitHub shows the co-author on the PR and in the merged history."
+              echo
+              cat "$RUNNER_TEMP/trailers.md"
+              echo
+              echo "Prevent it on future commits with \`git commit --no-verify\` (skips the sandbox's"
+              echo "\`commit-msg\` hook) or \`.git/hooks/commit-msg\` removed. Cleaning existing commits"
+              echo "needs a rewrite + force-push."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
