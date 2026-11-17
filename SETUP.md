@@ -96,6 +96,7 @@ which overwrites them with a real deployment URL.
 | `WEATHER_PROVIDER`       | `open-meteo`            | no       | `open-meteo` (live, keyless) or `fixture` (offline samples).                                                                      |
 | `WEATHER_ALLOW_FIXTURE`  | `false`                 | no       | Opt in to the offline fixture when the provider fails. Only the exact string `true` enables it.                                   |
 
+| `RUN_STORE_PATH` | `<repo>/.data/runs.json` | no | Where the local run fallback is written. Only used when no Convex deployment is configured. |
 | `NEXT_PUBLIC_MAP_TILE_PROVIDER` | `osm` | no | Basemap preset: `osm` or `carto`. Use `carto` when OSM answers `403 Access blocked`. |
 | `NEXT_PUBLIC_MAP_TILE_URL` | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` | no | Raster tile template for the basemap. |
 | `NEXT_PUBLIC_MAP_TILE_ATTRIBUTION` | `© OpenStreetMap contributors` | no | Credit the map shows in its always-visible attribution control. Change it with the URL. |
@@ -293,6 +294,19 @@ If the weather provider cannot be reached you get **HTTP 502** with
 CSV; see "Troubleshooting" below if you want the labelled offline fixture.
 
 ---
+
+## 2.8 Where a run is stored
+
+A completed forecast is stored in one of two places, and the run screens read whichever one is active:
+
+| Convex configured?                 | Store                                                                                           | Read by                                                                        |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| yes (`NEXT_PUBLIC_CONVEX_URL` set) | Convex — `forecasts:recordOutlook` / `forecasts:recentRuns` / `forecasts:getRun`                | `/admin/research/runs`, `/admin/research/runs/<id>`, `/admin/research/compare` |
+| no                                 | `.data/runs.json` on this machine (gitignored, newest first, capped at 200, written atomically) | the same screens through `GET /api/runs` and `GET /api/runs/<id>`              |
+
+The local file is a fallback, not a second source of truth: nothing is written to it once Convex is
+configured. Delete it to start a clean local history. The forecast response says which happened in
+`persistence.kind` (`"convex"`, `"local"`) and repeats it in `warnings`.
 
 ## 3. What runs where
 

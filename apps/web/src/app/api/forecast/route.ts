@@ -98,12 +98,12 @@ export async function POST(request: Request) {
   if (bundle.degraded) {
     warnings.push(bundle.degradationReason ?? "Weather data is degraded.");
   }
-  if (!persistence.enabled) {
+  if (!persistence.stored) {
+    warnings.push(`The run was not stored: ${persistence.error}`);
+  } else if (persistence.kind === "local") {
     warnings.push(
-      "Convex is not configured; this outlook exists only in the response.",
+      "No Convex deployment is configured, so this run is stored on this machine only (.data/runs.json).",
     );
-  } else if (!persistence.stored) {
-    warnings.push(`Outlook not saved to Convex: ${persistence.error}`);
   }
 
   return NextResponse.json({

@@ -17,6 +17,9 @@ __pycache__/
 *.tsbuildinfo
 *.py[cod]
 
+# Local fallback run store (lib/run-store.ts) — this machine only
+.data/
+
 # Large datasets and map tiles
 *.pmtiles
 
