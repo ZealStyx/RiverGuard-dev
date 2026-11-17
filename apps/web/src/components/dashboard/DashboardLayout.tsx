@@ -276,6 +276,8 @@ export function DashboardLayout() {
               <RiverMap
                 activeLayer={activeLayer}
                 onLayerChange={setActiveLayer}
+                className="min-[1180px]:sticky min-[1180px]:top-[5.5rem] z-0"
+                cooperativeGestures
               />
               <div className="grid content-start gap-3">
                 <RiskSummary

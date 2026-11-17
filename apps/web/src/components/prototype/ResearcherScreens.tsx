@@ -114,7 +114,14 @@ function DashboardOverview() {
       />
 
       <div className="grid gap-3 min-[1180px]:grid-cols-[minmax(0,1.38fr)_minmax(390px,1fr)]">
-        <RiverMap activeLayer={activeLayer} onLayerChange={setActiveLayer} />
+        {/* Same tall-column problem as the admin dashboard: the map stays a
+            fixed panel and follows the scroll instead of stretching. */}
+        <RiverMap
+          activeLayer={activeLayer}
+          onLayerChange={setActiveLayer}
+          className="min-[1180px]:sticky min-[1180px]:top-4 z-0"
+          cooperativeGestures
+        />
         <div className="grid content-start gap-3">
           <RiskSummary
             selectedDay={selectedDay}

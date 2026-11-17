@@ -50,7 +50,16 @@ The website and Python ML service run on the developer's computer. Convex is the
 - Public operational warnings or automatic evacuation decisions.
 - Automatic background forecast scheduling. A user initiates a forecast from the local dashboard.
 
-The only intended remote application dependency is Convex. The only intended external runtime data API is the weather forecast provider. Map boundaries, hazard layers, and other RiverGuard GIS data required for the demo should be prepared and stored locally. The current frontend map milestone makes one explicit exception: it uses the public OpenStreetMap raster basemap so the MapLibre interaction can be exercised before verified local GIS assets are supplied. Attribution is shown in the map, and this provider must be reviewed or replaced with a cached/local source before production use.
+The only intended remote application dependency is Convex. The only intended external runtime data API is the weather forecast provider. Map boundaries, hazard layers, and other RiverGuard GIS data required for the demo should be prepared and stored locally. The current frontend map milestone makes one explicit exception: it uses the public OpenStreetMap raster basemap so the MapLibre interaction can be exercised before verified local GIS assets are supplied. That layer comes from the volunteer-run `tile.openstreetmap.org`, so it is used under the [OSMF tile usage policy](https://operations.osmfoundation.org/policies/tiles/):
+
+- Attribution (`© OpenStreetMap contributors`, linking to the copyright page) is permanently visible on the map — never collapsed behind a toggle, and the panel layout keeps a clear band so no RiverGuard overlay covers it.
+- Requests come from the browser on the page, so the browser's own `User-Agent` and a real `Referer` are sent; the app sends no `no-cache` headers and does not restrict its referrer policy. Caching is the browser's, honouring OSM's `Cache-Control`/`ETag`.
+- Only the viewport being looked at is fetched: no prefetching, no "download this area", no background tile jobs.
+- The tile URL is not hard-coded in a way that requires a release: `NEXT_PUBLIC_MAP_TILE_URL` and `NEXT_PUBLIC_MAP_TILE_ATTRIBUTION` switch providers (`apps/web/src/components/map/RiverMap.tsx`).
+
+Normal interactive viewing is permitted; bulk, offline, or many-user use is not. This provider must be replaced with a permitted commercial/community provider or self-hosted tiles before any shared or public deployment.
+
+OSM also answers `403 Access blocked` to origins its operators cannot identify or consider abusive — shared or cloud-hosted preview origins included. When that happens the map is not broken; the provider refused. Switch with `NEXT_PUBLIC_MAP_TILE_PROVIDER=carto` (CARTO's public basemaps, OSM data, no key), or point `NEXT_PUBLIC_MAP_TILE_URL`/`NEXT_PUBLIC_MAP_TILE_ATTRIBUTION` at any other raster provider. The map names the active provider in its header and in the error card, so a 403 and a network failure are distinguishable.
 
 ## 2. Study area and available development data
 
