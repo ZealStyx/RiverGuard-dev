@@ -21,9 +21,9 @@ import { RainfallChart } from "@/components/charts/RainfallChart";
 import { RiverMap } from "@/components/map/RiverMap";
 import { StationDetails } from "@/components/stations/StationDetails";
 import { Button, IconButton, Tooltip } from "@/components/ui";
-import type { MapLayerId } from "@/types";
+import type { DatasetMeta, MapLayerId } from "@/types";
 
-import { DEFAULT_LOCATION } from "@/lib/locations";
+import { DEFAULT_LOCATION, LOCATIONS } from "@/lib/locations";
 import { useOutlookFeed } from "@/lib/outlook";
 
 import { ModelContributionPanel } from "./ModelContributionPanel";
@@ -49,7 +49,32 @@ export function DashboardLayout() {
   const [activeLayer, setActiveLayer] = useState<MapLayerId>("base");
   const [activeSection, setActiveSection] = useState("dashboard");
   const [selectedDay, setSelectedDay] = useState(0);
+  const location = LOCATIONS[DEFAULT_LOCATION];
   const outlook = useOutlookFeed(DEFAULT_LOCATION);
+  const [dataset, setDataset] = useState<DatasetMeta | null>(null);
+  const [datasetError, setDatasetError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/dataset")
+      .then(async (response) => {
+        const payload = (await response.json()) as DatasetMeta & {
+          error?: string;
+        };
+        if (!response.ok)
+          throw new Error(payload.error ?? "Dataset unavailable");
+        if (active) setDataset(payload);
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setDatasetError(
+            error instanceof Error ? error.message : "Dataset unavailable",
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const isRunning = outlook.isRunning;
   const snapshot = outlook.snapshot;
   const runNote = outlook.error
@@ -80,6 +105,12 @@ export function DashboardLayout() {
   function runPreview() {
     void outlook.run();
   }
+
+  // Give the outlook panel the observed-state line so a reader can tell what the
+  // model was seeded from, and whether the rain window is a live forecast.
+  const observedNote = snapshot?.observed?.asOfDate
+    ? `Seeded from dataset row ${snapshot.observed.asOfDate} (${snapshot.observed.rainSource ?? "undocumented"})`
+    : undefined;
 
   return (
     <main id="dashboard" className="min-h-screen bg-canvas">
@@ -175,13 +206,30 @@ export function DashboardLayout() {
                 <p className="text-metadata mt-2 text-muted" aria-live="polite">
                   {runNote}
                 </p>
+                {dataset ? (
+                  <p className="text-metadata mt-1 text-muted">
+                    Dataset: {dataset.label} · {dataset.rows.toLocaleString()}{" "}
+                    city-days · {dataset.dateMin} → {dataset.dateMax}
+                    {dataset.realRainFrom
+                      ? ` · real ERA5 rain since ${dataset.realRainFrom}`
+                      : ""}
+                  </p>
+                ) : datasetError ? (
+                  <p className="text-metadata mt-1 text-warning">
+                    Dataset unavailable: {datasetError}
+                  </p>
+                ) : (
+                  <p className="text-metadata mt-1 text-muted">
+                    Reading the dataset…
+                  </p>
+                )}
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <Button
                   variant="primary"
                   size="small"
                   loading={isRunning}
-                  loadingLabel="Refreshing preview"
+                  loadingLabel="Running forecast"
                   onClick={runPreview}
                 >
                   <Play aria-hidden="true" size={16} weight="fill" />
@@ -199,6 +247,30 @@ export function DashboardLayout() {
               </div>
             </div>
 
+            {outlook.error ? (
+              <div
+                role="alert"
+                className="mb-3 rounded-control border border-warning/30 bg-warning/5 px-4 py-3"
+              >
+                <p className="text-button text-ink">{outlook.error}</p>
+                {outlook.errorDetail ? (
+                  <p className="text-metadata mt-1 text-muted">
+                    {outlook.errorDetail}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {snapshot?.warnings.length ? (
+              <ul className="mb-3 grid gap-1 rounded-control border border-line bg-canvas-soft px-4 py-3">
+                {snapshot.warnings.map((warning) => (
+                  <li key={warning} className="text-metadata text-muted">
+                    · {warning}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
             <div className="grid gap-3 min-[1180px]:grid-cols-[minmax(0,1.38fr)_minmax(410px,1fr)]">
               <RiverMap
                 activeLayer={activeLayer}
@@ -206,23 +278,23 @@ export function DashboardLayout() {
               />
               <div className="grid content-start gap-3">
                 <RiskSummary
+                  locationName={snapshot?.locationName ?? location.name}
                   selectedDay={selectedDay}
                   onDayChange={setSelectedDay}
-                  days={snapshot?.days}
-                  source={snapshot?.source ?? "static"}
-                  note={
-                    snapshot
-                      ? `${snapshot.warnings[0] ?? "Weather via " + snapshot.provider}${
-                          snapshot.alerts > 0
-                            ? ` · ${snapshot.alerts} open alert(s)`
-                            : ""
-                        }`
-                      : "Illustrative week from the design prototype, not a forecast."
-                  }
+                  days={snapshot?.days ?? []}
+                  source={snapshot?.source ?? "none"}
+                  degraded={snapshot?.degraded}
+                  note={observedNote}
+                  emptyAction={{ href: "#dashboard", label: "Run forecast" }}
                 />
-                <RainfallChart />
-                <ModelContributionPanel />
-                <StationDetails />
+                <RainfallChart location={location.name} limit={14} />
+                <ModelContributionPanel locationCode={DEFAULT_LOCATION} />
+                {dataset ? (
+                  <StationDetails
+                    dataset={dataset}
+                    model={{ version: snapshot?.modelVersion ?? null }}
+                  />
+                ) : null}
               </div>
             </div>
 

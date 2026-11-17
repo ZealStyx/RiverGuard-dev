@@ -1,10 +1,13 @@
 /**
  * Provider selection.
  *
- * `WEATHER_PROVIDER` picks the primary adapter (`open-meteo` by default). A
- * provider failure falls back to the fixture so a demo never shows a blank
- * screen — unless `WEATHER_ALLOW_FIXTURE=false`, which is what a deployment
- * that must not invent numbers should set.
+ * `WEATHER_PROVIDER` picks the primary adapter (`open-meteo` by default).
+ *
+ * `WEATHER_ALLOW_FIXTURE` defaults to **off**: a provider failure raises, and the
+ * API answers 502 rather than scoring the model on illustrative rainfall. The
+ * observed state still comes from the dataset, so a failed run loses only the
+ * forward weather window. Set it to exactly `true` to opt into the offline
+ * fixture for demos with no network.
  */
 
 import { fixtureProvider } from "./fixture";
@@ -33,7 +36,9 @@ function configuredProvider(): WeatherProviderName {
 }
 
 function fixtureAllowed(): boolean {
-  return process.env.WEATHER_ALLOW_FIXTURE !== "false";
+  // Opt in explicitly. Any other value — unset, "", "1", "yes" — means off, so a
+  // missing variable can never silently reinstate invented rainfall.
+  return process.env.WEATHER_ALLOW_FIXTURE?.trim().toLowerCase() === "true";
 }
 
 export function resolveProvider(options?: WeatherOptions): WeatherProvider {

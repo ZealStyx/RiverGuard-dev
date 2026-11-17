@@ -510,7 +510,7 @@ function PendingApproval() {
       <div className="text-center">
         <p className="text-section">LGU operator access requested</p>
         <p className="text-body mt-1 text-muted">
-          Submitted Nov 11, 2026 · Verification complete
+          Submitted · Verification complete
         </p>
       </div>
       <div className="rounded-control bg-canvas-soft p-3 text-body">

@@ -5,7 +5,7 @@ import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 
-import { supportedCities } from "@/data/dashboard";
+import { LOCATION_CODES, LOCATIONS } from "@/lib/locations";
 import type { MapLayerId } from "@/types";
 
 import { HazardLayerControl } from "./HazardLayerControl";
@@ -240,17 +240,26 @@ export function RiverMap({ activeLayer, onLayerChange }: RiverMapProps) {
             City-level development records
           </p>
         </div>
-        {supportedCities.map((city) => (
-          <div
-            key={city.id}
-            className="hidden bg-canvas-soft/95 px-3 py-3 backdrop-blur-sm sm:block"
-          >
-            <p className="text-metadata flex items-center gap-2 text-ink">
-              <span className="size-2 rounded-full bg-success" /> {city.name}
-            </p>
-            <p className="text-metadata mt-1 text-muted">City-level sample</p>
-          </div>
-        ))}
+        {LOCATION_CODES.map((code) => {
+          const city = LOCATIONS[code];
+          return (
+            <div
+              key={city.code}
+              className="hidden bg-canvas-soft/95 px-3 py-3 backdrop-blur-sm sm:block"
+            >
+              <p className="text-metadata flex items-center gap-2 text-ink">
+                <span className="size-2 rounded-full bg-success" /> {city.name}
+              </p>
+              <p className="text-metadata mt-1 text-muted">
+                City-level dataset
+              </p>
+              <p className="text-metadata text-muted">
+                Alarms {city.alarmLevelsM.join(" / ")} m
+                {city.alarmsVerified ? "" : " (indicative)"}
+              </p>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
