@@ -23,11 +23,19 @@ import type { OutlookDay } from "@/types";
 
 export type OutlookSource = "live" | "convex";
 
+/**
+ * What the model was fed for this run.
+ *
+ * The input is the weather provider's window — today's rain, the antecedent
+ * 3/7/30-day sums and soil moisture — so `source` is always `"weather"`. The
+ * dataset is history for the charts, not a model input.
+ */
 export interface ObservedStateSummary {
-  source: "dataset" | "weather";
-  asOfDate: string | null;
-  rainSource: string | null;
-  qualityStatus: string | null;
+  source: "weather";
+  /** Last day of the provider window, ISO `YYYY-MM-DD`. */
+  asOfDate: string;
+  rainSource: string;
+  qualityStatus: string;
   waterLevelM: number | null;
 }
 
@@ -99,7 +107,8 @@ interface ForecastApiDay {
 interface ForecastApiResponse {
   location: { code: string; name: string };
   weather: { provider: string; degraded: boolean; degradationReason?: string };
-  observedState: ObservedStateSummary;
+  /** Absent when no provider answered, e.g. a 502 weather failure. */
+  observedState: ObservedStateSummary | null;
   forecast: { modelVersion: string; days: ForecastApiDay[]; warning?: string };
   persistence: {
     enabled: boolean;
@@ -137,8 +146,8 @@ export function useOutlookFeed(locationCode: string) {
       if (!response.ok) {
         setError(payload.error ?? `Forecast failed (${response.status})`);
         setErrorDetail(payload.detail ?? null);
-        // A failed run still tells us what the model was seeded from, which is
-        // useful when the failure is the weather provider rather than the CSV.
+        // A failed run still reports what the model was fed, which is useful
+        // when the failure is downstream of the weather call.
         setFailedObserved(payload.observedState ?? null);
         return;
       }

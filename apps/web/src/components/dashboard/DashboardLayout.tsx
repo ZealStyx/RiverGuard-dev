@@ -106,10 +106,10 @@ export function DashboardLayout() {
     void outlook.run();
   }
 
-  // Give the outlook panel the observed-state line so a reader can tell what the
-  // model was seeded from, and whether the rain window is a live forecast.
-  const observedNote = snapshot?.observed?.asOfDate
-    ? `Seeded from dataset row ${snapshot.observed.asOfDate} (${snapshot.observed.rainSource ?? "undocumented"})`
+  // Tell the reader what the model was fed: the weather provider's window, as
+  // of the day the run started. Never the CSV — it is history for the charts.
+  const inputNote = snapshot?.observed
+    ? `Model input: ${snapshot.provider}, rain through ${snapshot.observed.asOfDate}`
     : undefined;
 
   return (
@@ -208,8 +208,9 @@ export function DashboardLayout() {
                 </p>
                 {dataset ? (
                   <p className="text-metadata mt-1 text-muted">
-                    Dataset: {dataset.label} · {dataset.rows.toLocaleString()}{" "}
-                    city-days · {dataset.dateMin} → {dataset.dateMax}
+                    Training dataset: {dataset.label} ·{" "}
+                    {dataset.rows.toLocaleString()} city-days ·{" "}
+                    {dataset.dateMin} → {dataset.dateMax}
                     {dataset.realRainFrom
                       ? ` · real ERA5 rain since ${dataset.realRainFrom}`
                       : ""}
@@ -284,7 +285,7 @@ export function DashboardLayout() {
                   days={snapshot?.days ?? []}
                   source={snapshot?.source ?? "none"}
                   degraded={snapshot?.degraded}
-                  note={observedNote}
+                  note={inputNote}
                   emptyAction={{ href: "#dashboard", label: "Run forecast" }}
                 />
                 <RainfallChart location={location.name} limit={14} />

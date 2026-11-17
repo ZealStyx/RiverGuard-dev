@@ -150,6 +150,8 @@ export interface DataSourceRow {
   name: string;
   provider: string;
   coverage: string;
+  /** What the application actually uses this source for. */
+  role: string;
   status: string;
 }
 
@@ -222,7 +224,9 @@ export function runHistoryRows(
  *
  * The previous list named a "weather forecast" provider as "Provider pending"
  * and a hazard layer as "Unavailable" — both stale guesses. These rows describe
- * what the code reads today.
+ * what the code reads today, and `role` says what each one is for: the CSV trains
+ * the model and backs the historical charts, the weather provider is the only
+ * input a forecast run is scored from, and the basemap is display only.
  */
 export function dataSourceRows(
   dataset: DatasetMeta | null,
@@ -233,6 +237,7 @@ export function dataSourceRows(
       id: "daily-rainfall",
       name: "NCR daily observations (dataset v2)",
       provider: "RiverGuard research dataset",
+      role: "Model training + historical charts",
       coverage: dataset
         ? `${dataset.dateMin} → ${dataset.dateMax} · ${dataset.rows.toLocaleString()} city-days`
         : "Unavailable",
@@ -244,6 +249,7 @@ export function dataSourceRows(
       id: "weather-forecast",
       name: "Daily weather forecast",
       provider: provider ?? "Not yet called in this session",
+      role: "Model input at run time",
       coverage: "Next 14 days per city point",
       status: provider
         ? provider === "open-meteo"
@@ -255,6 +261,7 @@ export function dataSourceRows(
       id: "city-boundaries",
       name: "NCR city boundaries",
       provider: "OpenStreetMap raster tiles",
+      role: "Map display only",
       coverage: "Four supported cities",
       status: "Basemap only — no hazard polygons",
     },

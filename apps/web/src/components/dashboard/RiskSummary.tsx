@@ -3,9 +3,9 @@
 /**
  * The seven-day outlook panel.
  *
- * Every value here is passed in from a completed run or from the observed
- * dataset. There is no built-in week: when there is nothing to show, the panel
- * says so rather than rendering an illustrative set of categories.
+ * Every value here is passed in from a completed run or from the weather
+ * provider's window. There is no built-in week: when there is nothing to show,
+ * the panel says so rather than rendering an illustrative set of categories.
  */
 
 import Link from "next/link";

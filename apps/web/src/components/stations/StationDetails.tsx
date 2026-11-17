@@ -56,6 +56,14 @@ export function StationDetails({
   const rows: Array<[string, string]> = [
     ["Source", `${dataset.label} · ${dataset.file}`],
     [
+      "Role",
+      "Training data for the model, and the rows behind the historical charts",
+    ],
+    [
+      "Runtime input",
+      "Weather provider — model runs are never seeded from this dataset",
+    ],
+    [
       "Rainfall",
       dataset.realRainFrom
         ? `ERA5 reanalysis from ${dataset.realRainFrom}; synthetic-calibrated before that`

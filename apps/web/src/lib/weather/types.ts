@@ -25,6 +25,16 @@ export interface WeatherBundle {
   retrievedAt: string;
   timezone: string;
   location: { code: string; name: string; latitude: number; longitude: number };
+  /**
+   * Calendar date (ISO `YYYY-MM-DD`) the `observed` block describes — the last
+   * day of the provider window, i.e. the state the model starts from.
+   */
+  asOf: string;
+  /**
+   * The model's input state. Derived by the adapter from its own recent window,
+   * so the forecast chain starts from the provider's "today", not from a row in
+   * the CSV.
+   */
   observed: ObservedWeather;
   /** Consecutive forecast days starting tomorrow. */
   days: DailyWeatherPoint[];

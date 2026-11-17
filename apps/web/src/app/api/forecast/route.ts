@@ -10,6 +10,10 @@
  * It lives in the Next server on purpose. The browser must not call the weather
  * provider (no secrets leaking, no CORS games) and Convex must never be asked to
  * reach this machine's loopback address.
+ *
+ * The weather provider is the model's only input source: today's rain, the
+ * antecedent 3/7/30-day sums and soil moisture all come from its own past_days
+ * window. `data/daily_observations.csv` is history for the charts, not a seed.
  */
 
 import { NextResponse } from "next/server";
@@ -17,7 +21,7 @@ import { NextResponse } from "next/server";
 import { persistOutlook } from "@/lib/forecast-persistence";
 import { getLocation } from "@/lib/locations";
 import { MlServiceError, requestDailyForecast } from "@/lib/ml-client";
-import { observedStateFromDataset } from "@/lib/observed-state";
+import { describeModelInput } from "@/lib/model-input";
 import { getWeatherBundle, type WeatherBundle } from "@/lib/weather";
 
 export const runtime = "nodejs";
@@ -49,11 +53,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // The observed state comes from the real dataset. The weather provider only
-  // supplies the forecast window that follows it, so a provider outage can no
-  // longer seed the model with invented antecedent rain.
-  const observed = await observedStateFromDataset(location);
-
   let bundle: WeatherBundle;
   try {
     bundle = await getWeatherBundle(location);
@@ -64,21 +63,18 @@ export async function POST(request: Request) {
           "Weather provider failed and the offline forecast fallback is disabled.",
         detail: error instanceof Error ? error.message : "unknown error",
         // Same key as the success path, so a client reads one shape either way.
-        observedState: observedStateSummary(observed),
+        // There is no input to describe when no provider answered.
+        observedState: null,
       },
       { status: 502 },
     );
   }
 
-  if (observed) {
-    // Dataset state wins over the provider's own derived window: it is the only
-    // source that matches the columns the model was trained on.
-    bundle = {
-      ...bundle,
-      observed: observed.observed,
-      notes: [...bundle.notes, ...observed.notes],
-    };
-  }
+  // The provider window is the model input, unchanged: `bundle.observed` holds
+  // today's rain, the antecedent sums and soil moisture derived from the same
+  // response. Nothing is substituted from the CSV, so the chain starts at the
+  // provider's "today" instead of at the dataset's last row.
+  const inputState = describeModelInput(bundle);
 
   let forecast;
   try {
@@ -89,21 +85,16 @@ export async function POST(request: Request) {
         error: "The local ML service did not produce a forecast.",
         detail: error instanceof Error ? error.message : "unknown error",
         weather: summariseWeather(bundle),
-        observedState: observedStateSummary(observed),
+        observedState: inputState,
       },
       { status: error instanceof MlServiceError ? 503 : 500 },
     );
   }
 
-  const issueDate = forecast.days[0] ? previousDay(forecast.days[0].date) : "";
+  const issueDate = bundle.asOf;
   const persistence = await persistOutlook(bundle, forecast, issueDate);
 
   const warnings: string[] = [];
-  if (!observed) {
-    warnings.push(
-      "No dataset row was available for this location, so the model was seeded from the weather provider instead.",
-    );
-  }
   if (bundle.degraded) {
     warnings.push(bundle.degradationReason ?? "Weather data is degraded.");
   }
@@ -122,21 +113,7 @@ export async function POST(request: Request) {
       alarms: location.alarmLevelsM,
     },
     weather: summariseWeather(bundle),
-    observedState: observed
-      ? {
-          source: observed.source,
-          asOfDate: observed.asOfDate,
-          rainSource: observed.rainSource,
-          qualityStatus: observed.qualityStatus,
-          waterLevelM: observed.waterLevelM,
-        }
-      : {
-          source: "weather",
-          asOfDate: null,
-          rainSource: null,
-          qualityStatus: null,
-          waterLevelM: null,
-        },
+    observedState: inputState,
     forecast: {
       modelVersion: forecast.meta.modelVersion,
       modelKind: forecast.meta.modelKind,
@@ -153,35 +130,6 @@ export async function POST(request: Request) {
   });
 }
 
-type ObservedStateSummary = {
-  source: "dataset" | "weather";
-  asOfDate: string | null;
-  rainSource: string | null;
-  qualityStatus: string | null;
-  waterLevelM: number | null;
-};
-
-function observedStateSummary(
-  observed: Awaited<ReturnType<typeof observedStateFromDataset>>,
-): ObservedStateSummary {
-  if (!observed) {
-    return {
-      source: "weather",
-      asOfDate: null,
-      rainSource: null,
-      qualityStatus: null,
-      waterLevelM: null,
-    };
-  }
-  return {
-    source: observed.source,
-    asOfDate: observed.asOfDate,
-    rainSource: observed.rainSource,
-    qualityStatus: observed.qualityStatus,
-    waterLevelM: observed.waterLevelM,
-  };
-}
-
 function summariseWeather(bundle: WeatherBundle) {
   return {
     provider: bundle.provider,
@@ -194,11 +142,4 @@ function summariseWeather(bundle: WeatherBundle) {
     days: bundle.days,
     notes: bundle.notes,
   };
-}
-
-/** `2026-11-16` -> `2026-11-15` without timezone surprises. */
-function previousDay(isoDate: string): string {
-  const date = new Date(`${isoDate}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() - 1);
-  return date.toISOString().slice(0, 10);
 }

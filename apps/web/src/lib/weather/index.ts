@@ -5,9 +5,9 @@
  *
  * `WEATHER_ALLOW_FIXTURE` defaults to **off**: a provider failure raises, and the
  * API answers 502 rather than scoring the model on illustrative rainfall. The
- * observed state still comes from the dataset, so a failed run loses only the
- * forward weather window. Set it to exactly `true` to opt into the offline
- * fixture for demos with no network.
+ * fixture is the model's whole input when it is used, so the run is marked
+ * `degraded` and labelled; set `WEATHER_ALLOW_FIXTURE` to exactly `true` to opt
+ * into it for demos with no network.
  */
 
 import { fixtureProvider } from "./fixture";
