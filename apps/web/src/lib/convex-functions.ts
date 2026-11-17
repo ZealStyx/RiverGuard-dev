@@ -106,3 +106,16 @@ export const convexFunctions = {
 
 export const convexUrl: string | undefined =
   process.env.NEXT_PUBLIC_CONVEX_URL ?? process.env.CONVEX_URL;
+
+/**
+ * Turn Convex's "Could not find public function for 'forecasts:latestOutlook'"
+ * into something that points at the actual cause: the deployment is behind the
+ * checked-out `convex/` directory. Shared by the browser and the route handlers,
+ * so it lives here rather than in a `"use client"` module.
+ */
+export function convexErrorHint(error: Error): string {
+  if (/could not find public function/i.test(error.message)) {
+    return "this Convex deployment does not expose that function yet — run `npm run convex:dev` with the current `convex/` directory to push it";
+  }
+  return error.message;
+}

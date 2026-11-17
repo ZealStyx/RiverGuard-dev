@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["127.0.0.1",'atlas-unadorned-pediatric.ngrok-free.dev',"localhost", "*.e2b.app"],
+  allowedDevOrigins: [
+    "127.0.0.1",
+    "atlas-unadorned-pediatric.ngrok-free.dev",
+    "localhost",
+    "*.e2b.app",
+  ],
   reactStrictMode: true,
   async redirects() {
     return [

@@ -9,6 +9,7 @@
 import { ConvexHttpClient } from "convex/browser";
 
 import {
+  convexErrorHint,
   convexFunctions,
   convexUrl,
   type RecordOutlookArgs,
@@ -79,7 +80,10 @@ export async function persistOutlook(
     return {
       enabled: true,
       stored: false,
-      error: error instanceof Error ? error.message : "unknown Convex error",
+      error:
+        error instanceof Error
+          ? convexErrorHint(error)
+          : "unknown Convex error",
     };
   }
 }
