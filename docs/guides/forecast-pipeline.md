@@ -71,14 +71,14 @@ Convex subscription, so a reload does not spend another weather call.
 3. The weather adapter fetches one Open-Meteo call: `past_days=30`, `forecast_days=7`, daily
    `precipitation_sum`, `temperature_2m_max`, `temperature_2m_min`, `et0_fao_evapotranspiration`,
    timezone `Asia/Manila`.
-4. **The observed state does not come from the weather provider.** Before calling out, the route
-   reads the latest row for the city from `data/daily_observations.csv` through
-   `apps/web/src/lib/dataset.ts` and uses its rainfall, antecedent 3/7/30-day sums, and soil moisture
-   directly. Those are the same columns the model was trained on, they are shifted one day (no
-   leakage), and they exist even when the provider is down. The provider only supplies the _forward_
-   window. The response reports which source was used in `observedState.source`, plus the row date
-   and the row's `RainSource` / `QualityStatus`.
-5. `POST {ML_API_BASE_URL}/v1/forecast/daily` with that observed state and the seven days.
+4. **The provider's window is the model's input.** The adapter turns the same response into the
+   input state: index `past_days` is today, so `observed.rainfallTodayMm` is today's rain and the
+   antecedent 3/7/30-day sums plus the soil-moisture bucket come from the 30 days before it. No row
+   is read from `data/daily_observations.csv` for a forecast — the CSV only feeds the historical
+   charts and the dataset banner — so the chain cannot start days in the past. The response reports
+   the input in `observedState` (`asOfDate` = last day of that window, `rainSource`, `qualityStatus`)
+   and names the source rows in `weather.notes`.
+5. `POST {ML_API_BASE_URL}/v1/forecast/daily` with that input state and the seven days.
 6. The ML service chains them: predict day _d_, fold its rain into the antecedent sums and the soil
    bucket, predict day _d+1_. Each day comes back with probability, water level, risk level, alarm
    crossing, and a one-sentence reason.
@@ -90,15 +90,15 @@ Convex subscription, so a reload does not spend another weather call.
 
 ## 5. Failure modes
 
-| Symptom                                                                     | Cause                                                    | Behaviour                                                                                                                                                                                  |
-| --------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 503 `The local ML service did not produce a forecast`                       | uvicorn not running, or wrong `ML_API_BASE_URL`          | Weather result is still returned in `weather`; nothing is stored                                                                                                                           |
-| 502 `Weather provider failed and the offline forecast fallback is disabled` | Open-Meteo unreachable and `WEATHER_ALLOW_FIXTURE=false` | Explicit failure instead of invented numbers; the observed state is still returned                                                                                                         |
-| `weather.degraded: true`                                                    | Provider failed and the fixture was allowed              | Runs end to end on a real observed state; the outlook panel renders a warning banner and the run banner lists every warning, so the illustrative rainfall is never presented as a forecast |
-| `observedState.source: "weather"`                                           | The CSV had no row for that city                         | The model is seeded from the provider instead; a warning says so                                                                                                                           |
-| 400 `Unknown locationCode`                                                  | Not one of the four cities                               | Lists the supported codes                                                                                                                                                                  |
-| Outlook not saved                                                           | `NEXT_PUBLIC_CONVEX_URL` unset, or mutation error        | Forecast still returned; `persistence.error` says why                                                                                                                                      |
-| Alert never appears                                                         | No day reached `elevated`                                | Only elevated days raise alerts                                                                                                                                                            |
+| Symptom                                                                     | Cause                                                    | Behaviour                                                                                                                                                                                            |
+| --------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 503 `The local ML service did not produce a forecast`                       | uvicorn not running, or wrong `ML_API_BASE_URL`          | Weather result is still returned in `weather`; nothing is stored                                                                                                                                     |
+| 502 `Weather provider failed and the offline forecast fallback is disabled` | Open-Meteo unreachable and `WEATHER_ALLOW_FIXTURE=false` | Explicit failure instead of invented numbers; no input state exists, so nothing is scored or stored                                                                                                  |
+| `weather.degraded: true`                                                    | Provider failed and the fixture was allowed              | Runs end to end on the labelled fixture — which is now also its input — and the outlook panel renders a warning banner plus every warning, so illustrative rainfall is never presented as a forecast |
+| `observedState.qualityStatus: "degraded"`                                   | The input came from the offline fixture                  | Same as `weather.degraded`; the run is shown with a warning, never as a live forecast                                                                                                                |
+| 400 `Unknown locationCode`                                                  | Not one of the four cities                               | Lists the supported codes                                                                                                                                                                            |
+| Outlook not saved                                                           | `NEXT_PUBLIC_CONVEX_URL` unset, or mutation error        | Forecast still returned; `persistence.error` says why                                                                                                                                                |
+| Alert never appears                                                         | No day reached `elevated`                                | Only elevated days raise alerts                                                                                                                                                                      |
 
 ## 6. What is deliberately not automated
 

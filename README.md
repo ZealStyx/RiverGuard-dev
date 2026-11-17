@@ -179,16 +179,23 @@ It is a **test model**: since water level and flood labels in dataset v2 are der
 its metrics measure how well it recovers the generator. They are not forecast skill. Metrics,
 baselines, and limits: [`ml/README.md`](ml/README.md).
 
-### 2.6 Forecast pipeline (dataset → weather → ML → Convex)
+### 2.6 Forecast pipeline (weather → ML → Convex)
 
-The live path is built: `data/daily_observations.csv` supplies the observed state, an Open-Meteo
-adapter supplies the forward window, a local FastAPI inference service in `services/ml` scores it,
-and a Convex write/read path (`convex/forecasts.ts`, `convex/alerts.ts`) stores the result.
-`POST /api/forecast` orchestrates the four and the research workspace renders them.
+The live path is built: an Open-Meteo adapter supplies both the model's input state and its forward
+window, a local FastAPI inference service in `services/ml` scores it, and a Convex write/read path
+(`convex/forecasts.ts`, `convex/alerts.ts`) stores the result. `POST /api/forecast` orchestrates the
+three and the research workspace renders them.
 
-The dataset — not the weather fixture — is the model's input source. `lib/dataset.ts` is the only
-module that parses the CSV; the observed rainfall, antecedent 3/7/30-day sums, and soil moisture come
-from its own columns, so a provider outage cannot seed the model with invented antecedent rain.
+**The weather provider is the model's only input source.** One Open-Meteo call returns `past_days=30`
+plus `forecast_days=7`; the adapter derives today's rainfall, the antecedent 3/7/30-day sums and soil
+moisture from that window (`lib/weather/open-meteo.ts`), and the model is scored from there. The
+chain therefore starts at the provider's _today_, not at the last row of the CSV.
+
+`data/daily_observations.csv` remains the project's observed history: it backs the rainfall charts,
+the dataset banner and the provenance panel (`GET /api/historical`, `GET /api/dataset`). It is no
+longer read to seed a forecast, so a stale dataset cannot make a run start days in the past. If the
+provider cannot be reached, the run fails loudly (or uses the labelled offline fixture when
+`WEATHER_ALLOW_FIXTURE=true`) rather than substituting CSV rows for live weather.
 
 ```bash
 cd services/ml && uvicorn app.main:app --port 8000   # 1. inference

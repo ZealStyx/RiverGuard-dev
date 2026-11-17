@@ -309,14 +309,6 @@ export function seriesFor(
 }
 
 /** The most recent row for a location, or null when nothing matches. */
-export function latestObservation(
-  dataset: Dataset,
-  location: string,
-): ObservationRow | null {
-  const series = seriesFor(dataset, location);
-  return series.length ? series[series.length - 1] : null;
-}
-
 export function monthlySeries(
   dataset: Dataset,
   location: string,

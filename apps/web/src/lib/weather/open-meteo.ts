@@ -152,6 +152,7 @@ export function openMeteoProvider(options?: {
           latitude: location.latitude,
           longitude: location.longitude,
         },
+        asOf: days[todayIndex],
         observed,
         days: forecastDays,
         historyDays: historyRain.length,
