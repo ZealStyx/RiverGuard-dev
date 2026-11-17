@@ -13,6 +13,13 @@ import { HazardLayerControl } from "./HazardLayerControl";
 export interface RiverMapProps {
   activeLayer: MapLayerId;
   onLayerChange: (layer: MapLayerId) => void;
+  /** Extra classes for the map panel, e.g. sticky positioning on wide screens. */
+  className?: string;
+  /**
+   * Require Ctrl/Cmd + scroll to zoom. Use it where the map sits pinned in a
+   * scrolling page, so a wheel gesture over the map does not trap the page.
+   */
+  cooperativeGestures?: boolean;
 }
 
 type MapStatus = "loading" | "ready" | "error";
@@ -48,7 +55,12 @@ const OSM_STYLE: StyleSpecification = {
   ],
 };
 
-export function RiverMap({ activeLayer, onLayerChange }: RiverMapProps) {
+export function RiverMap({
+  activeLayer,
+  onLayerChange,
+  className = "",
+  cooperativeGestures = false,
+}: RiverMapProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [mapStatus, setMapStatus] = useState<MapStatus>("loading");
@@ -76,6 +88,7 @@ export function RiverMap({ activeLayer, onLayerChange }: RiverMapProps) {
         maxZoom: 19,
         hash: false,
         attributionControl: false,
+        cooperativeGestures,
       });
 
       map.addControl(
@@ -114,7 +127,7 @@ export function RiverMap({ activeLayer, onLayerChange }: RiverMapProps) {
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, [retryKey]);
+  }, [retryKey, cooperativeGestures]);
 
   function resetView() {
     mapRef.current?.fitBounds(NCR_VIEW_BOUNDS, {
@@ -130,12 +143,15 @@ export function RiverMap({ activeLayer, onLayerChange }: RiverMapProps) {
         ? "Static hazard susceptibility is unavailable until a verified GIS layer is supplied."
         : "Experimental flood predictions are unavailable until weather and ML integration is complete.";
 
+  // The map fills whatever height it is given, so a tall sibling column used to
+  // stretch it into a 1000px+ panel. The height is bounded instead, and the
+  // caller decides whether it stays pinned while that column scrolls.
   return (
     <section
       id="map-workspace"
       aria-labelledby="map-title"
       data-dashboard-section
-      className="relative min-h-[610px] overflow-hidden rounded-panel bg-line min-[1180px]:min-h-[680px]"
+      className={`relative h-[610px] scroll-mt-24 overflow-hidden rounded-panel bg-line min-[1180px]:h-[clamp(560px,calc(100dvh-10rem),720px)] min-[1180px]:self-start ${className}`}
     >
       <div
         ref={mapContainerRef}
