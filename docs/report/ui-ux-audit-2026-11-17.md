@@ -117,11 +117,16 @@ retyping the email, since it is only cleared inside `submit()`.
 
 ### 4.3 P1 — The live forecast hides that its rainfall is illustrative
 
-`lib/weather/index.ts` falls back to `lib/weather/fixture.ts` whenever Open-Meteo fails, and that
-fixture uses `Math.random()` for the daily series. The API surfaces this correctly as
-`weather.degraded: true` plus a `warnings[]` entry, and `lib/outlook.ts:124` stores it in
-`snapshot.degraded` — but **nothing in the UI reads `snapshot.degraded`**. Reproduced here with no
-outbound network:
+> **Correction, 2026-11-17.** This section originally said the offline fixture uses
+> `Math.random()`. It does not. `lib/weather/fixture.ts` is a table of fixed constants, so a
+> degraded run is deterministic. `grep -rn "Math.random"` over the TypeScript, Python, and
+> script sources returns no matches. The finding below is otherwise accurate, and the
+> misleading-parts are what matter.
+
+`lib/weather/index.ts` falls back to `lib/weather/fixture.ts` whenever Open-Meteo fails. The API
+surfaces this correctly as `weather.degraded: true` plus a `warnings[]` entry, and
+`lib/outlook.ts` stores it in `snapshot.degraded` — but **nothing in the UI reads
+`snapshot.degraded`**. Reproduced here with no outbound network:
 
 ```json
 { "provider": "fixture", "degraded": true,
@@ -129,11 +134,15 @@ outbound network:
                 Offline fixture in use: these rainfall numbers are illustrative, not a forecast."] }
 ```
 
-The dashboard and the research workspace both show the warning only in a 10 px provenance line
-(`DashboardLayout.tsx:214`, `ResearcherScreens.tsx:116`), under a green-looking pass of day chips
-and a live-looking 7-day rainfall chart. A degraded run needs an inline `Notice tone="warning"`
-next to the outlook, or the day chips must be visibly marked. `WEATHER_ALLOW_FIXTURE=false` is the
-right production default and is currently `true` in `.env.example`.
+The dashboard and the research workspace both show the warning only in a 10 px provenance line,
+under a green-looking pass of day chips and a live-looking 7-day rainfall chart. A degraded run
+needs an inline `Notice tone="warning"` next to the outlook, or the day chips must be visibly
+marked. `WEATHER_ALLOW_FIXTURE=false` is the right production default and is currently `true` in
+`.env.example`.
+
+**Fixed in this branch.** The outlook panel now takes `degraded` and renders a warning under the
+day chips, the run banner lists every warning the route returned, and `RiskSummary` refuses to
+render a day grid at all until a run exists.
 
 ### 4.4 P2 — The settings popover cannot be dismissed cleanly
 

@@ -40,6 +40,21 @@ export interface MlForecastResponse {
   days: MlDailyForecast[];
 }
 
+export interface MlContribution {
+  key: string;
+  label: string;
+  deltaProbability: number;
+  deltaWaterLevelM: number;
+}
+
+export interface MlNextDayResponse {
+  locationCode: string;
+  locationName: string;
+  meta: MlForecastResponse["meta"];
+  day: MlDailyForecast;
+  contributions: MlContribution[];
+}
+
 export class MlServiceError extends Error {
   constructor(
     message: string,
@@ -79,14 +94,8 @@ function isForecastDay(value: unknown): value is MlDailyForecast {
   );
 }
 
-export async function requestDailyForecast(
-  bundle: WeatherBundle,
-  options?: { baseUrl?: string; timeoutMs?: number; issueDate?: string },
-): Promise<MlForecastResponse> {
-  const baseUrl = (options?.baseUrl ?? mlBaseUrl()).replace(/\/+$/, "");
-  const issueDate = options?.issueDate ?? manilaToday();
-
-  const body = {
+function buildRequestBody(bundle: WeatherBundle, issueDate: string) {
+  return {
     locationCode: bundle.location.code,
     issueDate,
     observed: {
@@ -103,10 +112,17 @@ export async function requestDailyForecast(
       tminC: day.tminC,
     })),
   };
+}
 
+async function post<T>(
+  path: string,
+  body: unknown,
+  options?: { baseUrl?: string; timeoutMs?: number },
+): Promise<T> {
+  const baseUrl = (options?.baseUrl ?? mlBaseUrl()).replace(/\/+$/, "");
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}/v1/forecast/daily`, {
+    response = await fetch(`${baseUrl}${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -128,7 +144,19 @@ export async function requestDailyForecast(
     );
   }
 
-  const payload = (await response.json()) as MlForecastResponse;
+  return (await response.json()) as T;
+}
+
+export async function requestDailyForecast(
+  bundle: WeatherBundle,
+  options?: { baseUrl?: string; timeoutMs?: number; issueDate?: string },
+): Promise<MlForecastResponse> {
+  const issueDate = options?.issueDate ?? manilaToday();
+  const payload = await post<MlForecastResponse>(
+    "/v1/forecast/daily",
+    buildRequestBody(bundle, issueDate),
+    options,
+  );
   if (
     !Array.isArray(payload.days) ||
     payload.days.length === 0 ||
@@ -136,6 +164,31 @@ export async function requestDailyForecast(
   ) {
     throw new MlServiceError(
       "ML service returned an unexpected response shape",
+    );
+  }
+  return payload;
+}
+
+/**
+ * Score the next day plus a real sensitivity sweep over each input.
+ *
+ * `contributions` is what the contribution panel plots: the service moves one
+ * feature at a time to both ends of its plausible range, re-scores, and reports
+ * the swing in flood probability and water level.
+ */
+export async function requestNextDayForecast(
+  bundle: WeatherBundle,
+  options?: { baseUrl?: string; timeoutMs?: number; issueDate?: string },
+): Promise<MlNextDayResponse> {
+  const issueDate = options?.issueDate ?? manilaToday();
+  const payload = await post<MlNextDayResponse>(
+    "/v1/forecast/next-day",
+    buildRequestBody(bundle, issueDate),
+    options,
+  );
+  if (!isForecastDay(payload.day) || !Array.isArray(payload.contributions)) {
+    throw new MlServiceError(
+      "ML service returned an unexpected next-day response shape",
     );
   }
   return payload;

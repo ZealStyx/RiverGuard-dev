@@ -8,8 +8,9 @@ import {
   Play,
   Plus,
 } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useQuery } from "convex/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import { RainfallChart } from "@/components/charts/RainfallChart";
 import { MonthlyRainfallChart } from "@/components/charts/MonthlyRainfallChart";
@@ -23,23 +24,31 @@ import {
   OutlookBridge,
 } from "@/components/dashboard/OutlookBridge";
 import { RiskSummary } from "@/components/dashboard/RiskSummary";
-import { DEFAULT_LOCATION } from "@/lib/locations";
+import {
+  DEFAULT_LOCATION,
+  LOCATIONS,
+  locationCodeForName,
+} from "@/lib/locations";
 import { useOutlookFeed } from "@/lib/outlook";
 import { RiverMap } from "@/components/map/RiverMap";
 import { StationDetails } from "@/components/stations/StationDetails";
 import { Button } from "@/components/ui";
 import {
-  dataSources,
-  forecastRuns,
-  modelVersions,
+  dataSourceRows,
+  modelVersionRows,
+  runHistoryRows,
   supportedLocations,
 } from "@/data/prototype";
+import { convexFunctions } from "@/lib/convex-functions";
+import { useDatasetMeta } from "@/lib/use-dataset-meta";
+import { useModelArtifacts } from "@/lib/use-model-artifacts";
 import type { MapLayerId } from "@/types";
 
 import {
   ActionLink,
   CheckControl,
   DataTable,
+  EmptyPanel,
   Metric,
   Notice,
   PageHeading,
@@ -110,12 +119,12 @@ function DashboardOverview() {
             selectedDay={selectedDay}
             onDayChange={setSelectedDay}
             days={outlook.snapshot?.days}
-            source={outlook.snapshot?.source ?? "static"}
+            source={outlook.snapshot?.source}
             note={
-              outlook.snapshot
-                ? (outlook.snapshot.warnings[0] ??
-                  `Weather via ${outlook.snapshot.provider}`)
-                : "Illustrative week from the design prototype, not a forecast."
+              outlook.snapshot?.warnings[0] ??
+              (outlook.snapshot
+                ? `Weather via ${outlook.snapshot.provider}`
+                : undefined)
             }
           />
           <RainfallChart />
@@ -193,6 +202,7 @@ function MapWorkspace() {
 }
 
 export function LocationDetails() {
+  const { dataset } = useDatasetMeta();
   return (
     <>
       <PageHeading
@@ -219,20 +229,20 @@ export function LocationDetails() {
         />
         <Metric
           label="Latest index"
-          value="Elevated"
-          detail="Nov 11, 2026"
+          value="No run"
+          detail="Run a forecast to score this city"
           tone="warning"
         />
         <Metric
           label="Rainfall"
-          value="36 mm"
-          detail="Illustrative daily total"
+          value="See history"
+          detail="Observed rows from the dataset"
           tone="primary"
         />
         <Metric
           label="Quality"
-          value="Unverified"
-          detail="Research use only"
+          value="Research"
+          detail="Observed rain; derived water level"
           tone="warning"
         />
       </div>
@@ -243,7 +253,11 @@ export function LocationDetails() {
             <dt className="text-muted">Resolution</dt>
             <dd>City-level, daily</dd>
             <dt className="text-muted">Available period</dt>
-            <dd>Nov 5–11, 2026 sample</dd>
+            <dd>
+              {dataset
+                ? `${dataset.dateMin} → ${dataset.dateMax} · ${dataset.rows.toLocaleString()} city-days`
+                : "Dataset unavailable"}
+            </dd>
             <dt className="text-muted">Forecast horizon</dt>
             <dd>Up to seven days</dd>
             <dt className="text-muted">Provider</dt>
@@ -481,7 +495,7 @@ function ForecastForm() {
     <>
       <PageHeading
         title="Run experimental forecast"
-        eyebrow="Step 1 of 4"
+        eyebrow="Step 1 of 3"
         description="Configure a manual seven-day forecast for supported locations."
       />
       <Surface
@@ -511,28 +525,26 @@ function ForecastForm() {
           </SelectControl>
           <TextField
             id="issue-period"
-            label="Issue period"
-            value="Nov 11, 2026 · current sample"
+            label="Issue date"
+            value="Set automatically when the run starts (Asia/Manila)"
             readOnly
           />
           <TextField
             id="weather-provider"
-            label="Weather provider"
-            value="RiverGuard research dataset"
+            label="Observed state"
+            value="data/daily_observations.csv"
             readOnly
           />
-          <SelectControl
+          <TextField
             id="model-version"
-            label="Model version"
-            defaultValue="RG-NCR v0.4"
-          >
-            <option>RG-NCR v0.4</option>
-            <option>RG-NCR v0.3</option>
-          </SelectControl>
+            label="Model"
+            value="Read from ml/artifacts/model.json at run time"
+            readOnly
+          />
           <TextField
             id="coverage"
             label="Data coverage"
-            value="City-level daily sample"
+            value="City-level daily observations"
             readOnly
           />
         </div>
@@ -540,13 +552,15 @@ function ForecastForm() {
           <CheckControl
             id="include-explanation"
             label="Include model explanation"
-            description="Show supported feature contributions and limitations in results."
+            description="Show the sensitivity sweep and limitations alongside results."
             checked={includeExplanation}
             onChange={(event) => setIncludeExplanation(event.target.checked)}
           />
         </div>
         <Notice title="Review before running" tone="info" className="mt-3">
-          Confirm the selected location, horizon, provider, and model version.
+          Confirm the selected location and horizon. The observed state is read
+          from the dataset; the weather provider supplies only the forward
+          window.
         </Notice>
         <div className="mt-4 flex justify-end gap-2">
           <ActionLink href="/admin/research" variant="quiet">
@@ -569,22 +583,40 @@ function ForecastForm() {
 }
 
 function ForecastReview() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const requested = searchParams.get("location") ?? "Marikina";
+  const locationCode = locationCodeForName(requested);
+  const locationName = LOCATIONS[locationCode].name;
+  const { dataset } = useDatasetMeta();
+  const { model } = useModelArtifacts();
+
   return (
     <>
       <PageHeading
         title="Review forecast inputs"
-        eyebrow="Step 2 of 4"
-        description="Confirm the sample request before starting the simulated forecast workflow."
+        eyebrow="Step 2 of 3"
+        description="Confirm the request before spending a weather call and a model run."
       />
       <Surface className="mx-auto max-w-4xl" title="Request summary">
         <dl className="grid gap-3 sm:grid-cols-2">
           {[
-            ["Locations", "Marikina"],
+            ["Location", locationName],
             ["Horizon", "Seven days"],
-            ["Issue period", "Nov 11, 2026"],
-            ["Weather provider", "RiverGuard research dataset"],
-            ["Model", "RG-NCR v0.4"],
-            ["Explanation", "Included"],
+            ["Issue date", "Set at run time (Asia/Manila)"],
+            [
+              "Observed state",
+              dataset
+                ? `${dataset.label} · latest row ${dataset.dateMax}`
+                : "Dataset unavailable",
+            ],
+            [
+              "Model",
+              model
+                ? `${model.name} ${model.version}`
+                : "Artifacts unavailable",
+            ],
+            ["Explanation", "Sensitivity sweep included"],
           ].map(([label, value]) => (
             <div key={label} className="rounded-control bg-canvas-soft p-3">
               <dt className="text-metadata text-muted">{label}</dt>
@@ -597,193 +629,246 @@ function ForecastReview() {
           official warning.
         </Notice>
         <div className="mt-4 flex justify-between gap-2">
-          <ActionLink href="/admin/research/forecast/new" variant="quiet">
+          <ActionLink
+            href={`/admin/research/forecast/new?location=${locationCode}`}
+            variant="quiet"
+          >
             Edit inputs
           </ActionLink>
-          <ActionLink href="/admin/research/forecast/progress">
+          <Button
+            size="small"
+            onClick={() =>
+              router.push(
+                `/admin/research/forecast/progress?location=${locationCode}`,
+              )
+            }
+          >
             <Play size={14} /> Run experimental forecast
-          </ActionLink>
+          </Button>
         </div>
       </Surface>
     </>
   );
 }
 
+/**
+ * Runs the real pipeline and reports what it is doing.
+ *
+ * This used to advance a timer through four invented stages and then redirect to
+ * `/runs/RG-NCR-041`. It now makes the actual `POST /api/forecast` and shows the
+ * returned run in place: there is no stored-run route to redirect to.
+ */
 function ForecastProgress() {
-  const router = useRouter();
-  const [step, setStep] = useState(0);
-  const steps = [
-    "Requesting weather",
-    "Validating inputs",
-    "Running models",
-    "Saving snapshot",
+  const searchParams = useSearchParams();
+  const locationCode = locationCodeForName(
+    searchParams.get("location") ?? "Marikina",
+  );
+  const feed = useOutlookFeed(locationCode);
+  const started = useRef(false);
+  const { run } = feed;
+
+  const stages = [
+    "Reading the observed state",
+    "Fetching the weather window",
+    "Scoring seven days",
+    "Storing the run",
   ];
+
   useEffect(() => {
-    if (step >= steps.length) {
-      const destination = window.setTimeout(
-        () => router.push("/admin/research/runs/RG-NCR-041"),
-        650,
-      );
-      return () => window.clearTimeout(destination);
-    }
-    const timer = window.setTimeout(
-      () => setStep((current) => current + 1),
-      550,
-    );
-    return () => window.clearTimeout(timer);
-  }, [router, step, steps.length]);
+    if (started.current) return;
+    started.current = true;
+    void run();
+  }, [run]);
+
+  const snapshot = feed.snapshot;
+  const stageIndex = snapshot ? stages.length - 1 : feed.isRunning ? 1 : 0;
+
   return (
     <>
       <PageHeading
         title="Forecast in progress"
-        eyebrow="Step 3 of 4"
-        description="Simulating the planned local forecast workflow. You will be redirected when the sample run completes."
+        eyebrow="Step 3 of 3"
+        description="Running the dataset → weather → model pipeline."
+        actions={
+          <ActionLink href="/admin/research/runs" variant="quiet">
+            Run history
+          </ActionLink>
+        }
       />
       <Surface
         className="mx-auto max-w-4xl"
-        title={step >= steps.length ? "Sample run complete" : steps[step]}
-        description="Run RG-NCR-041 · Marikina · Seven-day horizon"
+        title={
+          feed.error
+            ? "Run failed"
+            : snapshot
+              ? "Run complete"
+              : (stages[stageIndex] ?? "Starting")
+        }
+        description={`${LOCATIONS[locationCode].name} · seven-day horizon`}
       >
-        <Stepper steps={steps} current={Math.min(step, steps.length - 1)} />
-        <div className="mt-6 h-2 overflow-hidden rounded-full bg-line">
-          <div
-            className="h-full bg-brand-secondary transition-all"
-            style={{ width: `${Math.max(12, (step / steps.length) * 100)}%` }}
-          />
-        </div>
-        <p className="text-body mt-3 text-muted">
-          {step >= steps.length
-            ? "Opening the completed illustrative result…"
-            : "Keep this page open while the sample workflow advances."}
-        </p>
+        <Stepper steps={stages} current={stageIndex} />
+
+        {feed.error ? (
+          <div className="mt-4" role="alert">
+            <Notice title="The run did not complete" tone="danger">
+              {feed.error}
+            </Notice>
+            {feed.errorDetail ? (
+              <p className="text-metadata mt-2 text-muted">
+                {feed.errorDetail}
+              </p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button size="small" onClick={() => void run()}>
+                <ArrowClockwise size={14} /> Try again
+              </Button>
+              <ActionLink href="/admin/research/forecast/new" variant="quiet">
+                Edit inputs
+              </ActionLink>
+            </div>
+          </div>
+        ) : null}
+
+        {snapshot ? (
+          <div className="mt-4 grid gap-2">
+            <dl className="grid gap-2 sm:grid-cols-2">
+              {[
+                ["Model", snapshot.modelVersion ?? "unknown"],
+                ["Weather provider", snapshot.provider],
+                ["Observed state", snapshot.observed?.asOfDate ?? "unknown"],
+                [
+                  "Outcome",
+                  snapshot.degraded ? "Degraded weather inputs" : "Completed",
+                ],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-control bg-canvas-soft p-3">
+                  <dt className="text-metadata text-muted">{label}</dt>
+                  <dd className="text-body mt-1 font-medium">{value}</dd>
+                </div>
+              ))}
+            </dl>
+            {snapshot.warnings.length ? (
+              <ul className="grid gap-1 rounded-control border border-line px-3 py-2">
+                {snapshot.warnings.map((warning) => (
+                  <li key={warning} className="text-metadata text-warning">
+                    · {warning}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div className="mt-2">
+              <RiskSummary
+                selectedDay={0}
+                onDayChange={() => undefined}
+                locationCode={locationCode}
+                days={snapshot.days}
+                source={snapshot.source}
+                note={
+                  snapshot.observed?.asOfDate
+                    ? `Seeded from dataset row ${snapshot.observed.asOfDate}`
+                    : undefined
+                }
+                degraded={snapshot.degraded}
+              />
+            </div>
+            <p className="text-metadata text-muted">
+              {snapshot.source === "convex"
+                ? "Stored in Convex and restored on reload."
+                : "Convex is not configured, so this run exists only on this page. Set NEXT_PUBLIC_CONVEX_URL to keep it."}
+            </p>
+          </div>
+        ) : feed.isRunning ? (
+          <div className="mt-6 h-2 overflow-hidden rounded-full bg-line">
+            <div className="h-full w-1/2 animate-pulse bg-brand-secondary" />
+          </div>
+        ) : null}
       </Surface>
     </>
   );
 }
 
-function ForecastResults() {
-  const [selectedDay, setSelectedDay] = useState(0);
+/**
+ * A run URL that does not resolve to a stored run.
+ *
+ * These routes used to render a fixed "RG-NCR-041 · Complete" narrative for any
+ * id in the path, so every link looked like a real run. Now an id only renders if
+ * it came from storage, and until Convex is configured nothing does.
+ */
+function RunDetailNotFound({ runId }: { runId: string }) {
   return (
     <>
       <PageHeading
-        title="Forecast results"
-        eyebrow="RG-NCR-041 · Complete"
-        description="Experimental seven-day city-level result created Nov 11, 2026 at 09:40 PHT."
-        actions={
-          <>
-            <ActionLink href="/admin/research/runs/RG-NCR-041/day/2026-11-11">
-              View selected day
-            </ActionLink>
-            <ActionLink href="/admin/research/compare" variant="quiet">
-              Compare run
-            </ActionLink>
-          </>
-        }
+        title="Run not found"
+        eyebrow="Forecast runs"
+        description="This workspace has no stored run with that identifier."
       />
-      <Notice title="Experimental result" tone="warning">
-        This is an experimental outlook, not an exact flood probability or
-        official warning.
-      </Notice>
-      <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <div className="grid gap-3">
-          <RiskSummary selectedDay={selectedDay} onDayChange={setSelectedDay} />
-          <RainfallChart />
-        </div>
-        <div className="grid content-start gap-3">
-          <ModelContributionPanel />
-          <StationDetails />
-          <Surface title="Research note">
-            <TextAreaField
-              id="research-note"
-              label="Note"
-              placeholder="Record an observation about this experimental run…"
-            />
-            <Button size="small" variant="secondary" className="mt-3">
-              <FloppyDisk size={14} /> Save note
-            </Button>
-          </Surface>
-        </div>
-      </div>
+      <EmptyPanel
+        title={`No run “${runId}”`}
+        description="Run results are read from the database. A run exists only after someone presses Run forecast, and only while a Convex deployment is configured."
+        actionHref="/admin/research/runs"
+        actionLabel="Back to run history"
+      />
     </>
   );
 }
 
-function DayDetail() {
+function CompareRunsUnavailable() {
   return (
     <>
       <PageHeading
-        title="Marikina · November 11"
-        eyebrow="Forecast day detail"
-        description="Day-level explanation, uncertainty, quality notes, and separately labeled hazard context."
-        actions={
-          <ActionLink href="/admin/research/runs/RG-NCR-041" variant="quiet">
-            Back to run
-          </ActionLink>
-        }
+        title="Compare forecast runs"
+        eyebrow="Model comparison"
+        description="Side-by-side comparison of stored runs."
       />
-      <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric
-          label="Experimental index"
-          value="Elevated"
-          detail="Category, not probability"
-          tone="warning"
-        />
-        <Metric
-          label="Forecast rainfall"
-          value="73 mm"
-          detail="RiverGuard research dataset"
-          tone="primary"
-        />
-        <Metric
-          label="Confidence"
-          value="Not calibrated"
-          detail="Do not infer certainty"
-          tone="warning"
-        />
-        <Metric
-          label="Quality"
-          value="Sample"
-          detail="Not operationally validated"
-          tone="secondary"
-        />
-      </div>
-      <div className="grid gap-3 xl:grid-cols-2">
-        <RainfallChart />
-        <ModelContributionPanel />
-        <Surface title="How this was estimated">
-          <p className="text-body text-muted">
-            The illustrative result combines forecast rainfall, a sample
-            basin-response feature, and antecedent wetness. Contribution
-            describes model behavior, not a physical causal claim.
-          </p>
-          <ActionLink
-            href="/admin/models/rg-ncr-04?view=research"
-            variant="quiet"
-            className="mt-3"
-          >
-            View model card
-          </ActionLink>
-        </Surface>
-        <Surface title="Static hazard context">
-          <p className="text-body text-muted">
-            Long-term susceptibility belongs to a separate layer and does not
-            change this dated forecast result.
-          </p>
-          <ActionLink
-            href="/admin/research/map"
-            variant="quiet"
-            className="mt-3"
-          >
-            View separate layers
-          </ActionLink>
-        </Surface>
-      </div>
+      <EmptyPanel
+        title="Nothing to compare"
+        description="Comparison needs at least two stored runs. This page previously showed two invented runs and called the difference a model comparison."
+        actionHref="/admin/research/runs"
+        actionLabel="Back to run history"
+      />
     </>
+  );
+}
+
+/**
+ * Stored runs. Kept in a separate component so `useQuery` is never called when
+ * no deployment is configured — `useQuery` needs a ConvexProvider.
+ */
+function StoredRunTable() {
+  const runs = useQuery(convexFunctions.recentRuns, { limit: 25 });
+  const rows: Array<Record<string, string>> = runHistoryRows(runs ?? []);
+  return (
+    <Surface
+      title="Run history"
+      description={
+        runs === undefined
+          ? "Loading stored runs…"
+          : runs.length === 0
+            ? "No runs stored yet — run a forecast to create one"
+            : `${runs.length} stored run(s)`
+      }
+    >
+      <DataTable
+        columns={[
+          { key: "run", label: "Run ID" },
+          { key: "created", label: "Created" },
+          { key: "location", label: "Location" },
+          { key: "model", label: "Model" },
+          { key: "status", label: "Status" },
+          { key: "warning", label: "Warnings" },
+        ]}
+        rows={rows}
+        actions={(row) => (
+          <ActionLink href={`/admin/research/runs/${row.run}`} variant="quiet">
+            View
+          </ActionLink>
+        )}
+      />
+    </Surface>
   );
 }
 
 function RunHistory() {
-  const rows = forecastRuns.map((run) => ({ ...run }));
   return (
     <>
       <PageHeading
@@ -805,7 +890,7 @@ function RunHistory() {
           </SelectControl>
           <SelectControl id="run-model" label="Model">
             <option>All models</option>
-            <option>RG-NCR v0.4</option>
+            <option>Current deployed model</option>
           </SelectControl>
           <SelectControl id="run-status" label="Status">
             <option>All statuses</option>
@@ -816,89 +901,25 @@ function RunHistory() {
           <TextField id="run-date" label="Created after" type="date" />
         </div>
       </Surface>
-      <Surface title="Run history" description="Four illustrative records">
-        <DataTable
-          columns={[
-            { key: "id", label: "Run ID" },
-            { key: "created", label: "Created" },
-            { key: "location", label: "Location" },
-            { key: "model", label: "Model" },
-            { key: "status", label: "Status" },
-            { key: "warning", label: "Warnings" },
-          ]}
-          rows={rows}
-          actions={(row) => (
-            <ActionLink href={`/admin/research/runs/${row.id}`} variant="quiet">
-              View
-            </ActionLink>
-          )}
-        />
-      </Surface>
+      {convexConfigured ? (
+        <StoredRunTable />
+      ) : (
+        <Surface title="Run history" description="No deployment configured">
+          <p className="text-body text-muted">
+            Forecast runs are stored in Convex. Set{" "}
+            <code className="rounded bg-canvas px-1 py-0.5">
+              NEXT_PUBLIC_CONVEX_URL
+            </code>{" "}
+            to list them here; until then a run exists only in the response that
+            produced it.
+          </p>
+        </Surface>
+      )}
       <div className="mt-3 flex justify-end">
         <ActionLink href="/admin/research/compare" variant="secondary">
           Compare selected
         </ActionLink>
       </div>
-    </>
-  );
-}
-
-function CompareRuns() {
-  return (
-    <>
-      <PageHeading
-        title="Compare forecast runs"
-        eyebrow="Model comparison"
-        description="Compare two illustrative runs with aligned locations, valid dates, inputs, and quality warnings."
-        actions={
-          <ActionLink href="/admin/research/runs" variant="quiet">
-            Back to history
-          </ActionLink>
-        }
-      />
-      <div className="grid gap-3 lg:grid-cols-2">
-        {["RG-NCR-041", "RG-NCR-040"].map((id, index) => (
-          <Surface
-            key={id}
-            title={id}
-            description={
-              index === 0
-                ? "Created Nov 11 · RG-NCR v0.4"
-                : "Created Nov 10 · RG-NCR v0.4"
-            }
-          >
-            <div className="grid grid-cols-2 gap-2">
-              <Metric
-                label="Peak category"
-                value={index === 0 ? "Elevated" : "Moderate"}
-                detail="Experimental index"
-                tone={index === 0 ? "warning" : "secondary"}
-              />
-              <Metric
-                label="Peak rainfall"
-                value={index === 0 ? "82 mm" : "61 mm"}
-                detail="Sample input"
-                tone="primary"
-              />
-            </div>
-            <dl className="text-body mt-3 grid grid-cols-[110px_1fr] gap-2">
-              <dt className="text-muted">Location</dt>
-              <dd>Marikina</dd>
-              <dt className="text-muted">Quality</dt>
-              <dd>Sample · unverified</dd>
-              <dt className="text-muted">Warnings</dt>
-              <dd>{index === 0 ? "None recorded" : "One missing reading"}</dd>
-            </dl>
-          </Surface>
-        ))}
-      </div>
-      <Surface className="mt-3" title="Comparison interpretation">
-        <Notice title="Do not over-interpret differences">
-          Changes between runs may reflect provider inputs, missing
-          observations, model version, or issue time. They are not direct
-          evidence of changing ground conditions.
-        </Notice>
-      </Surface>
     </>
   );
 }
@@ -912,6 +933,25 @@ export function DataSourceCatalog({
   embedded?: boolean;
   basePath?: string;
 }) {
+  return (
+    <DataSourceCatalogInner
+      detail={detail}
+      embedded={embedded}
+      basePath={basePath}
+    />
+  );
+}
+
+function DataSourceCatalogInner({
+  detail,
+  embedded = false,
+  basePath = "/admin/data-sources",
+}: {
+  detail?: string;
+  embedded?: boolean;
+  basePath?: string;
+}) {
+  const { dataset } = useDatasetMeta();
   if (detail === "new") return <DataSourceForm basePath={basePath} />;
   if (detail) return <DataSourceDetail basePath={basePath} />;
   const catalog = (
@@ -930,10 +970,10 @@ export function DataSourceCatalog({
           { key: "coverage", label: "Coverage" },
           { key: "status", label: "Provenance status" },
         ]}
-        rows={dataSources.map((source) => ({ ...source }))}
+        rows={dataSourceRows(dataset).map((source) => ({ ...source }))}
         actions={(row) => (
           <ActionLink
-            href={`${basePath}/${dataSources.find((source) => source.name === row.name)?.id ?? "daily-rainfall"}?view=research`}
+            href={`${basePath}/${dataSourceRows(dataset).find((source) => source.name === row.name)?.id ?? "daily-rainfall"}?view=research`}
             variant="quiet"
           >
             View
@@ -961,12 +1001,13 @@ function DataSourceDetail({
 }: {
   basePath?: string;
 }) {
+  const { dataset } = useDatasetMeta();
   return (
     <>
       <PageHeading
-        title="NCR daily rainfall sample"
+        title="NCR daily observations (dataset v2)"
         eyebrow="Data-source metadata"
-        description="Unverified research dataset used for experimental forecast analysis."
+        description="Research dataset backing every observation in this workspace."
         actions={
           <>
             <ActionLink
@@ -988,15 +1029,25 @@ function DataSourceDetail({
         <dl className="grid gap-3 sm:grid-cols-2">
           {[
             ["Provider", "RiverGuard research dataset"],
-            ["Type", "Daily rainfall sample"],
+            ["Type", "Daily observations (dataset v2)"],
             ["Geography", "Quezon City, Marikina, Manila, Pasig"],
-            ["Time coverage", "Nov 5–11, 2026"],
+            [
+              "Time coverage",
+              dataset
+                ? `${dataset.dateMin} → ${dataset.dateMax}`
+                : "Unavailable",
+            ],
             ["Resolution", "City-level, daily"],
-            ["Units", "Millimetres"],
+            ["Units", "Millimetres (rain), metres (water level)"],
             ["License", "Not established"],
-            ["Access date", "Nov 11, 2026"],
-            ["Provenance status", "Unverified"],
-            ["Local reference", "data/samples/sensor_readings.csv"],
+            [
+              "Real rain segment",
+              dataset?.realRainFrom
+                ? `ERA5 reanalysis from ${dataset.realRainFrom}; synthetic before that`
+                : "Not reported",
+            ],
+            ["Provenance status", "Research use only"],
+            ["Local reference", "data/daily_observations.csv"],
           ].map(([label, value]) => (
             <div key={label} className="rounded-control bg-canvas-soft p-3">
               <dt className="text-metadata text-muted">{label}</dt>
@@ -1095,6 +1146,17 @@ export function Models({
   detail?: string;
   basePath?: string;
 }) {
+  return <ModelsInner detail={detail} basePath={basePath} />;
+}
+
+function ModelsInner({
+  detail,
+  basePath = "/admin/models",
+}: {
+  detail?: string;
+  basePath?: string;
+}) {
+  const artifacts = useModelArtifacts();
   if (detail) return <ModelDetail basePath={basePath} />;
   return (
     <>
@@ -1103,48 +1165,76 @@ export function Models({
         eyebrow="Experimental methodology"
         description="Review responsibility, supported coverage, evaluation status, and readiness before selecting a model."
       />
-      <div className="grid gap-3 lg:grid-cols-3">
-        {modelVersions.map((model) => (
-          <Surface
-            key={model.id}
-            title={model.name}
-            description={model.responsibility}
-          >
-            <dl className="text-body grid gap-2">
-              <div>
-                <dt className="text-metadata text-muted">Validation</dt>
-                <dd>{model.validation}</dd>
-              </div>
-              <div>
-                <dt className="text-metadata text-muted">Status</dt>
-                <dd>
-                  <StatusBadge
-                    tone={model.status === "Experimental" ? "info" : "neutral"}
-                  >
-                    {model.status}
-                  </StatusBadge>
-                </dd>
-              </div>
-            </dl>
-            <ActionLink
-              href={`${basePath}/${model.id}?view=research`}
-              variant="quiet"
-              className="mt-4 w-full"
+      {artifacts.loading ? (
+        <p className="text-body text-muted">Reading model artifacts…</p>
+      ) : artifacts.error ? (
+        <Notice title="Model artifacts unavailable" tone="warning">
+          {artifacts.error}
+        </Notice>
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-3">
+          {modelVersionRows(artifacts.model, artifacts.metrics).map((model) => (
+            <Surface
+              key={model.id}
+              title={model.name}
+              description={model.responsibility}
             >
-              View model card
-            </ActionLink>
-          </Surface>
-        ))}
-      </div>
+              <dl className="text-body grid gap-2">
+                <div>
+                  <dt className="text-metadata text-muted">Validation</dt>
+                  <dd>{model.validation}</dd>
+                </div>
+                <div>
+                  <dt className="text-metadata text-muted">Status</dt>
+                  <dd>
+                    <StatusBadge
+                      tone={
+                        model.status === "Experimental"
+                          ? "info"
+                          : model.status === "Research use only"
+                            ? "warning"
+                            : "neutral"
+                      }
+                    >
+                      {model.status}
+                    </StatusBadge>
+                  </dd>
+                </div>
+              </dl>
+              <ActionLink
+                href={`${basePath}/${model.id}?view=research`}
+                variant="quiet"
+                className="mt-4 w-full"
+              >
+                View model card
+              </ActionLink>
+            </Surface>
+          ))}
+        </div>
+      )}
     </>
   );
 }
 
 function ModelDetail({ basePath = "/admin/models" }: { basePath?: string }) {
+  const { model, metrics, loading, error } = useModelArtifacts();
+
+  if (loading) {
+    return <p className="text-body text-muted">Reading model artifacts…</p>;
+  }
+  if (error || !model) {
+    return (
+      <Notice title="Model artifacts unavailable" tone="warning">
+        {error ??
+          "ml/artifacts/model.json is missing. Train the model to write it."}
+      </Notice>
+    );
+  }
+
   return (
     <>
       <PageHeading
-        title="RG-NCR v0.4"
+        title={`${model.name} ${model.version}`}
         eyebrow="Experimental model card"
         description="Model responsibility, feature contract, evaluation status, and known limitations."
         actions={
@@ -1154,36 +1244,74 @@ function ModelDetail({ basePath = "/admin/models" }: { basePath?: string }) {
         }
       />
       <Notice title="Experimental status" tone="warning">
-        This version has not been calibrated or validated for operational
-        flood-warning decisions.
+        {metrics?.caveat || model.warning}
       </Notice>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <Surface title="Responsibility">
           <dl className="text-body grid grid-cols-[125px_1fr] gap-2">
             <dt className="text-muted">Target</dt>
-            <dd>Experimental city-level risk category</dd>
-            <dt className="text-muted">Locations</dt>
-            <dd>Four supported sample cities</dd>
-            <dt className="text-muted">Horizon</dt>
-            <dd>Up to seven days</dd>
+            <dd>{model.target}</dd>
+            <dt className="text-muted">Model</dt>
+            <dd>{model.kind}</dd>
+            <dt className="text-muted">Cities</dt>
+            <dd>{model.cities.map((city) => city.name).join(", ")}</dd>
             <dt className="text-muted">Inputs</dt>
-            <dd>Rainfall forecast, basin response, antecedent wetness</dd>
+            <dd>
+              Forecast rain, observed antecedent rain (3/7/30 d), soil moisture,
+              temperature, month, elevation
+            </dd>
             <dt className="text-muted">Dataset</dt>
-            <dd>RiverGuard research dataset v0.1</dd>
+            <dd>{model.dataset}</dd>
+            <dt className="text-muted">Trained on</dt>
+            <dd>{model.trainedOn}</dd>
+            <dt className="text-muted">Threshold tuned on</dt>
+            <dd>{model.thresholdTunedOn}</dd>
           </dl>
         </Surface>
         <Surface title="Evaluation">
           <dl className="text-body grid grid-cols-[125px_1fr] gap-2">
-            <dt className="text-muted">Method</dt>
-            <dd>Draft historical holdout</dd>
-            <dt className="text-muted">Metrics</dt>
-            <dd>Not approved for display</dd>
-            <dt className="text-muted">Calibration</dt>
-            <dd>Not complete</dd>
-            <dt className="text-muted">Readiness</dt>
-            <dd>Research evaluation required</dd>
+            <dt className="text-muted">Evaluated on</dt>
+            <dd>{model.evaluatedOn}</dd>
+            {metrics ? (
+              <>
+                <dt className="text-muted">Test rows</dt>
+                <dd>
+                  {metrics.samples.test.toLocaleString()} ·{" "}
+                  {metrics.samples.positives.test} positive
+                </dd>
+                <dt className="text-muted">Classifier</dt>
+                <dd>
+                  AP {metrics.classifier.averagePrecision.toFixed(3)} · ROC-AUC{" "}
+                  {metrics.classifier.rocAuc.toFixed(4)} · Brier{" "}
+                  {metrics.classifier.brier.toFixed(4)}
+                </dd>
+                <dt className="text-muted">At threshold</dt>
+                <dd>
+                  {metrics.classifier.precision.toFixed(3)} precision ·{" "}
+                  {metrics.classifier.recall.toFixed(3)} recall ·{" "}
+                  {metrics.classifier.falsePositives} false alarms
+                </dd>
+                <dt className="text-muted">Regressor</dt>
+                <dd>
+                  MAE {metrics.regressor.maeM.toFixed(3)} m · persistence{" "}
+                  {metrics.regressor.persistenceMaeM.toFixed(3)} m
+                </dd>
+                <dt className="text-muted">Calibration</dt>
+                <dd>
+                  Not calibrated — scores rank risk, not observed frequency
+                </dd>
+              </>
+            ) : (
+              <>
+                <dt className="text-muted">Metrics</dt>
+                <dd>metrics.json is missing</dd>
+              </>
+            )}
             <dt className="text-muted">Limitations</dt>
-            <dd>Coarse spatial resolution; incomplete provenance</dd>
+            <dd>
+              Coarse spatial resolution; water level and flood labels are
+              derived from rainfall in dataset v2.
+            </dd>
           </dl>
         </Surface>
       </div>
@@ -1192,7 +1320,7 @@ function ModelDetail({ basePath = "/admin/models" }: { basePath?: string }) {
 }
 
 export function ResearcherScreen({ segments }: { segments: string[] }) {
-  const [first, second, third] = segments;
+  const [first, second] = segments;
   if (!first) return <DashboardOverview />;
   if (first === "map") return <MapWorkspace />;
   if (first === "locations") return <LocationDetails />;
@@ -1202,9 +1330,8 @@ export function ResearcherScreen({ segments }: { segments: string[] }) {
   if (first === "forecast" && second === "progress")
     return <ForecastProgress />;
   if (first === "runs" && !second) return <RunHistory />;
-  if (first === "runs" && second && third === "day") return <DayDetail />;
-  if (first === "runs" && second) return <ForecastResults />;
-  if (first === "compare") return <CompareRuns />;
+  if (first === "runs" && second) return <RunDetailNotFound runId={second} />;
+  if (first === "compare") return <CompareRunsUnavailable />;
   if (first === "data-sources") return <DataSourceCatalog detail={second} />;
   if (first === "models") return <Models detail={second} />;
   return <DashboardOverview />;

@@ -128,16 +128,16 @@ Items 1 and 3 are **partially** covered, item 2 is not covered at all. The devel
 
 ### 2.4 Development dataset v2 (`data/`)
 
-| Property | Value |
-|---|---|
-| Workbook | `data/RiverGuard_NCR_Dataset_v2.xlsx` (11 sheets) |
-| Flattened table | `data/daily_observations.csv` |
-| Rows | 15,884 daily records × 23 columns |
-| Date range | 2016-01-01 → 2026-11-14 (3,971 days × 4 cities) |
-| Locations | Quezon City, Marikina, Manila, Pasig |
-| Flood positives | 328 (2.06 %): Manila 86, Marikina 78, Pasig 83, Quezon City 81 |
-| Split | train 2016–2023 (11,688 rows / 256 positives), validation 2024 (1,464 / 19), test 2025-01-01 → 2026-11-14 (2,732 / 53) |
-| Rainfall provenance | `synthetic` 14,416 rows · `ERA5-reanalysis` 1,460 rows · `ERA5-anchor` 8 rows |
+| Property            | Value                                                                                                                  |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Workbook            | `data/RiverGuard_NCR_Dataset_v2.xlsx` (11 sheets)                                                                      |
+| Flattened table     | `data/daily_observations.csv`                                                                                          |
+| Rows                | 15,884 daily records × 23 columns                                                                                      |
+| Date range          | 2016-01-01 → 2026-11-14 (3,971 days × 4 cities)                                                                        |
+| Locations           | Quezon City, Marikina, Manila, Pasig                                                                                   |
+| Flood positives     | 328 (2.06 %): Manila 86, Marikina 78, Pasig 83, Quezon City 81                                                         |
+| Split               | train 2016–2023 (11,688 rows / 256 positives), validation 2024 (1,464 / 19), test 2025-01-01 → 2026-11-14 (2,732 / 53) |
+| Rainfall provenance | `synthetic` 14,416 rows · `ERA5-reanalysis` 1,460 rows · `ERA5-anchor` 8 rows                                          |
 
 Every row carries a `RainSource` value and a `DataSource`/`Notes` explanation, so the synthetic and
 real parts are separable without guessing.
@@ -179,11 +179,16 @@ It is a **test model**: since water level and flood labels in dataset v2 are der
 its metrics measure how well it recovers the generator. They are not forecast skill. Metrics,
 baselines, and limits: [`ml/README.md`](ml/README.md).
 
-### 2.6 Forecast pipeline (weather → ML → Convex)
+### 2.6 Forecast pipeline (dataset → weather → ML → Convex)
 
-The live path is built: an Open-Meteo adapter, a local FastAPI inference service in `services/ml`, and
-a Convex write/read path (`convex/forecasts.ts`, `convex/alerts.ts`), orchestrated by
-`POST /api/forecast` and rendered on the research workspace.
+The live path is built: `data/daily_observations.csv` supplies the observed state, an Open-Meteo
+adapter supplies the forward window, a local FastAPI inference service in `services/ml` scores it,
+and a Convex write/read path (`convex/forecasts.ts`, `convex/alerts.ts`) stores the result.
+`POST /api/forecast` orchestrates the four and the research workspace renders them.
+
+The dataset — not the weather fixture — is the model's input source. `lib/dataset.ts` is the only
+module that parses the CSV; the observed rainfall, antecedent 3/7/30-day sums, and soil moisture come
+from its own columns, so a provider outage cannot seed the model with invented antecedent rain.
 
 ```bash
 cd services/ml && uvicorn app.main:app --port 8000   # 1. inference
@@ -192,7 +197,6 @@ npm run dev                                          # 3. http://localhost:3000/
 ```
 
 Setup, request flow, and failure modes: [`docs/guides/forecast-pipeline.md`](docs/guides/forecast-pipeline.md).
-
 
 ## 3. Main capabilities
 

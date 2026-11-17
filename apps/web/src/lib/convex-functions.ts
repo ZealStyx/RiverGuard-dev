@@ -65,6 +65,18 @@ export interface RecordOutlookResult {
   alerts: number;
 }
 
+export interface RecentRun {
+  runId: string;
+  requestedAt: number;
+  completedAt: number | null;
+  provider: string;
+  status: string;
+  locations: string[];
+  days: number;
+  alerts: number;
+  modelVersion: string | null;
+}
+
 export const convexFunctions = {
   recordOutlook: makeFunctionReference<
     "mutation",
@@ -76,6 +88,9 @@ export const convexFunctions = {
     { locationCode: string },
     LatestOutlook | null
   >("forecasts:latestOutlook"),
+  recentRuns: makeFunctionReference<"query", { limit?: number }, RecentRun[]>(
+    "forecasts:recentRuns",
+  ),
   listOpenAlerts: makeFunctionReference<
     "query",
     { locationCode: string; limit?: number },

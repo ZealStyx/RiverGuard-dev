@@ -1,12 +1,10 @@
 "use client";
 
 import {
-  CheckCircle,
   FloppyDisk,
   Plus,
   ShieldCheck,
   UserPlus,
-  Warning,
   X,
 } from "@phosphor-icons/react";
 import Link from "next/link";
@@ -14,17 +12,15 @@ import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { RainfallChart } from "@/components/charts/RainfallChart";
+import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { RiskSummary } from "@/components/dashboard/RiskSummary";
 import { RiverMap } from "@/components/map/RiverMap";
 import { Button } from "@/components/ui";
 import { cx } from "@/lib/classnames";
-import {
-  accessRequests,
-  auditEvents,
-  reviewQueue,
-  supportedLocations,
-  systemUsers,
-} from "@/data/prototype";
+import { supportedLocations } from "@/data/prototype";
+import { convexConfigured } from "@/components/dashboard/OutlookBridge";
+import { convexFunctions, type RecentRun } from "@/lib/convex-functions";
+import { useQuery } from "convex/react";
 import type { MapLayerId } from "@/types";
 
 import {
@@ -68,7 +64,11 @@ function ResidentHome() {
           detail="Supported location"
           tone="secondary"
         />
-        <Metric label="Updated" value="09:40" detail="Nov 11, 2026 PHT" />
+        <Metric
+          label="Updated"
+          value="Not yet run"
+          detail="Press Run forecast to fetch"
+        />
         <Metric
           label="Data quality"
           value="Research"
@@ -86,9 +86,9 @@ function ResidentHome() {
         <RiskSummary selectedDay={selectedDay} onDayChange={setSelectedDay} />
         <Surface title="What this means">
           <p className="text-body text-muted">
-            The elevated index indicates that the experimental model would flag
-            this date for closer review. It does not describe household, street,
-            or barangay conditions.
+            Once a run completes, the index on the left shows whether the
+            experimental model would flag that date for closer review. It never
+            describes household, street, or barangay conditions.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <ActionLink href="/resident/outlook">
@@ -332,8 +332,8 @@ function LguHome() {
         />
         <Metric
           label="Latest run"
-          value="09:40"
-          detail="RG-NCR-041"
+          value="None"
+          detail="No stored run for this area"
           tone="primary"
         />
         <Metric
@@ -370,16 +370,10 @@ function LguHome() {
           </div>
         </Surface>
         <Surface title="Review activity">
-          <DataTable
-            columns={[
-              { key: "run", label: "Run" },
-              { key: "review", label: "Review" },
-              { key: "updated", label: "Updated" },
-            ]}
-            rows={reviewQueue
-              .slice(0, 2)
-              .map(({ run, review, updated }) => ({ run, review, updated }))}
-          />
+          <p className="text-body text-muted">
+            No reviews are recorded. Review decisions are not persisted by this
+            prototype, so there is nothing to list here yet.
+          </p>
         </Surface>
       </div>
     </>
@@ -474,13 +468,9 @@ function LguOutlook({
     <>
       <PageHeading
         title="Forecast outlook & map"
-        eyebrow="Marikina · RG-NCR-041"
+        eyebrow="Marikina · assigned area"
         description="Review the latest seven-day outlook and assigned-area map in one workspace."
-        actions={
-          <ActionLink href="/lgu/reviews/RG-NCR-041">
-            Review this run
-          </ActionLink>
-        }
+        actions={<ActionLink href="/lgu/reviews">Review queue</ActionLink>}
       />
       <LguWorkspaceViewSwitcher activeView={activeView} />
       {activeView === "map" ? (
@@ -498,12 +488,12 @@ function LguOutlook({
                   City-level research coverage
                 </p>
               </div>
-              <StatusBadge tone="warning">Needs review</StatusBadge>
+              <StatusBadge tone="warning">No run stored</StatusBadge>
             </div>
             <dl className="text-body mt-4 grid gap-2 border-t border-line pt-3 sm:grid-cols-2 xl:grid-cols-1">
               <div>
                 <dt className="text-metadata text-muted">Latest run</dt>
-                <dd>RG-NCR-041 · Nov 11, 2026</dd>
+                <dd>None stored for this area</dd>
               </div>
               <div>
                 <dt className="text-metadata text-muted">Map coverage</dt>
@@ -537,149 +527,44 @@ function ReviewQueue({ detail }: { detail?: string }) {
         eyebrow="Assigned assessments"
         description="Track new, drafted, reviewed, and escalated experimental runs."
       />
-      <Surface title="Queue">
-        <DataTable
-          columns={[
-            { key: "run", label: "Run" },
-            { key: "location", label: "Location" },
-            { key: "valid", label: "Valid period" },
-            { key: "quality", label: "Quality" },
-            { key: "review", label: "Review status" },
-            { key: "reviewer", label: "Reviewer" },
-            { key: "updated", label: "Updated" },
-          ]}
-          rows={reviewQueue.map((item) => ({ ...item }))}
-          actions={(row) => (
-            <ActionLink href={`/lgu/reviews/${row.run}`} variant="quiet">
-              Review
-            </ActionLink>
-          )}
-        />
+      <Surface title="Queue" description="Stored runs awaiting LGU review">
+        {convexConfigured ? (
+          <StoredRunReviewQueue />
+        ) : (
+          <p className="text-body text-muted">
+            Review items come from stored forecast runs. Set{" "}
+            <code className="rounded bg-canvas px-1 py-0.5">
+              NEXT_PUBLIC_CONVEX_URL
+            </code>{" "}
+            to read them.
+          </p>
+        )}
       </Surface>
     </>
   );
 }
 
 function ReviewForm() {
-  const [status, setStatus] = useState("In review");
-  const [saved, setSaved] = useState(false);
+  // Reviews attach to a stored run. The form used to render a fixed "Liza
+  // Torres · Marikina" record under any run id in the path.
   return (
     <>
       <PageHeading
         title="Forecast review"
-        eyebrow="RG-NCR-041 · Marikina"
-        description="Record an internal assessment without converting the model output into an official warning."
+        eyebrow="Review queue"
+        description="Record an internal assessment against a stored forecast run."
         actions={
           <ActionLink href="/lgu/reviews" variant="quiet">
             Back to queue
           </ActionLink>
         }
       />
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <Surface title="Review form">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TextField
-              id="reviewer"
-              label="Reviewer"
-              value="Liza Torres"
-              readOnly
-            />
-            <TextField
-              id="review-time"
-              label="Review time"
-              value="Nov 11, 2026 · 10:05 PHT"
-              readOnly
-            />
-            <SelectControl
-              id="review-status"
-              label="Review status"
-              value={status}
-              onChange={(event) => setStatus(event.target.value)}
-            >
-              <option>In review</option>
-              <option>Reviewed with limitations</option>
-              <option>Escalated for official assessment</option>
-            </SelectControl>
-            <TextField
-              id="follow-owner"
-              label="Follow-up owner"
-              placeholder="Assign when required"
-            />
-            <div className="sm:col-span-2">
-              <TextAreaField
-                id="review-notes"
-                label="Internal notes"
-                placeholder="Describe evidence checked, limitations, and next steps…"
-              />
-            </div>
-            <TextField
-              id="support-reference"
-              label="Supporting reference"
-              placeholder="Official reference or internal ticket"
-            />
-            <SelectControl id="follow-status" label="Follow-up status">
-              <option>Not required</option>
-              <option>Open</option>
-              <option>Complete</option>
-            </SelectControl>
-          </div>
-          <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <Button variant="quiet" size="small" onClick={() => setSaved(true)}>
-              Save draft
-            </Button>
-            <Button
-              variant="secondary"
-              size="small"
-              onClick={() => {
-                setStatus("Reviewed with limitations");
-                setSaved(true);
-              }}
-            >
-              <CheckCircle size={14} /> Mark reviewed
-            </Button>
-            <Button
-              variant="danger"
-              size="small"
-              onClick={() => {
-                setStatus("Escalated for official assessment");
-                setSaved(true);
-              }}
-            >
-              <Warning size={14} /> Escalate
-            </Button>
-          </div>
-          {saved ? (
-            <p
-              className="text-metadata mt-2 text-right text-success"
-              role="status"
-            >
-              Review updated: {status}.
-            </p>
-          ) : null}
-        </Surface>
-        <Surface title="Evidence summary">
-          <p className="text-major-status text-warning">
-            Elevated experimental index
-          </p>
-          <dl className="text-body mt-3 grid grid-cols-[95px_1fr] gap-2">
-            <dt className="text-muted">Quality</dt>
-            <dd>Research · unverified</dd>
-            <dt className="text-muted">Valid period</dt>
-            <dd>Nov 11–17</dd>
-            <dt className="text-muted">Model</dt>
-            <dd>RG-NCR v0.4</dd>
-            <dt className="text-muted">Limitation</dt>
-            <dd>City-level only</dd>
-          </dl>
-          <Notice
-            title="Not an approval to publish"
-            tone="warning"
-            className="mt-4"
-          >
-            Review completion records an internal assessment only.
-          </Notice>
-        </Surface>
-      </div>
+      <EmptyPanel
+        title="No run selected"
+        description="A review needs a stored run to attach to. Pick one from the queue once a Convex deployment is configured and a forecast has been run."
+        actionHref="/lgu/reviews"
+        actionLabel="Back to queue"
+      />
     </>
   );
 }
@@ -709,19 +594,18 @@ function LguAlerts({ detail }: { detail?: string }) {
           actionHref="/lgu/alerts/new"
           actionLabel="Create draft"
         />
-        <Surface
-          title="Approval-state preview"
-          description="Draft awaiting an authorized review"
-        >
+        <Surface title="Approval workflow" description="Not yet exercised">
           <p className="text-body text-muted">
-            RG-ALERT-001 · Marikina · Publication disabled
+            No draft has been created, so there is no approval state to show.
+            The workflow below explains what a draft would require before it
+            could be published.
           </p>
           <ActionLink
-            href="/lgu/alerts/approval"
+            href="/lgu/alerts/new"
             variant="quiet"
             className="mt-4 w-full"
           >
-            Open approval review
+            Start a draft
           </ActionLink>
         </Surface>
       </div>
@@ -730,7 +614,6 @@ function LguAlerts({ detail }: { detail?: string }) {
 }
 
 function AlertApproval() {
-  const [decision, setDecision] = useState("");
   return (
     <>
       <PageHeading
@@ -743,74 +626,12 @@ function AlertApproval() {
           </ActionLink>
         }
       />
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <Surface
-          title="Draft RG-ALERT-001"
-          description="Approval requested · Marikina"
-        >
-          <dl className="grid gap-3 sm:grid-cols-2">
-            {[
-              ["Affected area", "Marikina (city-level)"],
-              ["Valid period", "Nov 11, 2026"],
-              ["Draft severity", "For official assessment"],
-              ["Supporting run", "RG-NCR-041"],
-              ["Official reference", "Not attached"],
-              ["Expiration", "Nov 11, 18:00 PHT"],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-control bg-canvas-soft p-3">
-                <dt className="text-metadata text-muted">{label}</dt>
-                <dd className="text-body mt-1">{value}</dd>
-              </div>
-            ))}
-          </dl>
-          <TextAreaField
-            id="approval-note"
-            label="Decision note"
-            className="mt-3"
-            placeholder="Record required revisions or the authorization basis…"
-          />
-          <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <Button
-              size="small"
-              variant="quiet"
-              onClick={() => setDecision("Returned for revision")}
-            >
-              Return for revision
-            </Button>
-            <Button
-              size="small"
-              variant="danger"
-              onClick={() => setDecision("Rejected")}
-            >
-              Reject
-            </Button>
-            <Button
-              size="small"
-              variant="secondary"
-              onClick={() => setDecision("Approved")}
-            >
-              Approve draft
-            </Button>
-          </div>
-          {decision ? (
-            <p
-              className="text-metadata mt-2 text-right text-success"
-              role="status"
-            >
-              {decision}.
-            </p>
-          ) : null}
-        </Surface>
-        <Surface title="Publication control">
-          <Notice title="Publish remains disabled" tone="danger">
-            Approval and publication are separate high-consequence actions.
-            Publication requires an authorized channel.
-          </Notice>
-          <Button className="mt-4 w-full" size="small" disabled>
-            Publish through approved channel
-          </Button>
-        </Surface>
-      </div>
+      <EmptyPanel
+        title="No draft awaiting approval"
+        description="Approval acts on a submitted draft. Nothing has been submitted, so there is no draft here to approve, return, or reject."
+        actionHref="/lgu/alerts/new"
+        actionLabel="Start a draft"
+      />
     </>
   );
 }
@@ -834,7 +655,7 @@ function AlertDraft() {
           <TextField
             id="alert-period"
             label="Valid period"
-            defaultValue="Nov 11, 2026"
+            placeholder="From the run you are drafting against"
           />
           <SelectControl id="alert-severity" label="Draft severity">
             <option>For assessment</option>
@@ -843,7 +664,7 @@ function AlertDraft() {
           <TextField
             id="alert-run"
             label="Supporting run"
-            defaultValue="RG-NCR-041"
+            placeholder="Paste a stored run id"
           />
           <TextAreaField
             id="alert-summary"
@@ -971,18 +792,11 @@ function AdminHome() {
           </div>
         </Surface>
         <Surface title="Recent audit activity">
-          <DataTable
-            columns={[
-              { key: "time", label: "Time" },
-              { key: "action", label: "Action" },
-              { key: "outcome", label: "Outcome" },
-            ]}
-            rows={auditEvents.map(({ time, action, outcome }) => ({
-              time,
-              action,
-              outcome,
-            }))}
-          />
+          <p className="text-body text-muted">
+            No audit events are recorded. Nothing in this prototype writes an
+            audit trail, so this panel is intentionally empty rather than
+            illustrative.
+          </p>
         </Surface>
       </div>
     </>
@@ -999,25 +813,10 @@ function AccessRequests({ detail }: { detail?: string }) {
         description="Review verified identity, organization, requested role, location scope, and reason before assigning access."
       />
       <Surface title="Pending requests">
-        <DataTable
-          columns={[
-            { key: "name", label: "Name" },
-            { key: "organization", label: "Organization" },
-            { key: "role", label: "Requested role" },
-            { key: "locations", label: "Locations" },
-            { key: "submitted", label: "Submitted" },
-            { key: "status", label: "Verification" },
-          ]}
-          rows={accessRequests.map((request) => ({ ...request }))}
-          actions={(row) => (
-            <ActionLink
-              href={`/admin/requests/${row.name.toLowerCase().replace(" ", "-")}`}
-              variant="quiet"
-            >
-              Review
-            </ActionLink>
-          )}
-        />
+        <p className="text-body text-muted">
+          No access requests are recorded. Account provisioning is not wired to
+          a backend in this prototype.
+        </p>
       </Surface>
     </>
   );
@@ -1119,10 +918,7 @@ function RequestReview() {
 
 function UsersRoles() {
   const [message, setMessage] = useState("");
-  const [modal, setModal] = useState<
-    "invite" | (typeof systemUsers)[number] | null
-  >(null);
-  const editingUser = modal !== "invite" && modal ? modal : null;
+  const [modal, setModal] = useState<"invite" | null>(null);
   return (
     <>
       <PageHeading
@@ -1142,32 +938,10 @@ function UsersRoles() {
         }
       />
       <Surface title="Approved users">
-        <DataTable
-          columns={[
-            { key: "name", label: "Name" },
-            { key: "organization", label: "Organization" },
-            { key: "role", label: "Role" },
-            { key: "status", label: "Status" },
-            { key: "locations", label: "Assigned locations" },
-            { key: "mfa", label: "MFA" },
-            { key: "lastAccess", label: "Last access" },
-          ]}
-          rows={systemUsers.map((user) => ({ ...user }))}
-          actions={(row) => (
-            <Button
-              size="small"
-              variant="quiet"
-              onClick={() => {
-                setMessage("");
-                setModal(
-                  systemUsers.find((user) => user.name === row.name) ?? null,
-                );
-              }}
-            >
-              Edit
-            </Button>
-          )}
-        />
+        <p className="text-body text-muted">
+          No user records are available. Authentication and user administration
+          are outside this research prototype, so no names are shown.
+        </p>
       </Surface>
       {message ? (
         <p className="text-metadata mt-2 text-success" role="status">
@@ -1190,12 +964,10 @@ function UsersRoles() {
             <div className="flex items-start justify-between gap-4 border-b border-line pb-3">
               <div>
                 <h2 id="user-modal-title" className="text-section">
-                  {editingUser ? "Edit user access" : "Invite user"}
+                  Invite user
                 </h2>
                 <p className="text-metadata mt-0.5 text-muted">
-                  {editingUser
-                    ? "Update role, assigned locations, and account controls."
-                    : "Send an invitation for a RiverGuard workspace account."}
+                  Send an invitation for a RiverGuard workspace account.
                 </p>
               </div>
               <button
@@ -1212,41 +984,33 @@ function UsersRoles() {
               onSubmit={(event) => {
                 event.preventDefault();
                 setModal(null);
-                setMessage(
-                  editingUser
-                    ? `${editingUser.name} access updated`
-                    : "Invitation sent",
-                );
+                setMessage("Invitation queued (not delivered — no backend)");
               }}
             >
               <div className="grid gap-3 sm:grid-cols-2">
                 <TextField
                   id="user-modal-name"
                   label="Full name"
-                  defaultValue={editingUser?.name}
+                  placeholder="Full name"
                   required
                 />
                 <TextField
                   id="user-modal-email"
                   label="Email"
                   type="email"
-                  defaultValue={
-                    editingUser
-                      ? `${editingUser.name.toLowerCase().replaceAll(" ", ".")}@riverguard.local`
-                      : ""
-                  }
+                  placeholder="name@organisation.gov.ph"
                   required
                 />
                 <TextField
                   id="user-modal-organization"
                   label="Organization"
-                  defaultValue={editingUser?.organization}
+                  placeholder="Organisation"
                   required
                 />
                 <SelectControl
                   id="user-modal-role"
                   label="Role"
-                  defaultValue={editingUser?.role ?? "LGU operator"}
+                  defaultValue="LGU operator"
                 >
                   <option>Resident</option>
                   <option>LGU operator</option>
@@ -1255,9 +1019,7 @@ function UsersRoles() {
                 <SelectControl
                   id="user-modal-location"
                   label="Assigned locations"
-                  defaultValue={
-                    editingUser?.locations ?? "Supported NCR cities"
-                  }
+                  defaultValue="Supported NCR cities"
                 >
                   <option>Supported NCR cities</option>
                   <option>Marikina</option>
@@ -1269,7 +1031,7 @@ function UsersRoles() {
                 <SelectControl
                   id="user-modal-mfa"
                   label="MFA requirement"
-                  defaultValue={editingUser?.mfa ?? "Optional"}
+                  defaultValue="Optional"
                 >
                   <option>Optional</option>
                   <option>Enabled</option>
@@ -1286,7 +1048,7 @@ function UsersRoles() {
                   Cancel
                 </Button>
                 <Button type="submit" size="small">
-                  {editingUser ? "Save changes" : "Send invitation"}
+                  Send invitation
                 </Button>
               </div>
             </form>
@@ -1390,7 +1152,7 @@ function ConfigurationScreen({
         ["Location name", "Marikina"],
         ["Representative coordinates", "14.6507, 121.1029"],
         ["Support status", "Supported"],
-        ["Compatible model", "RG-NCR v0.4"],
+        ["Compatible model", "Current deployed model"],
         ["Boundary asset", "Not supplied"],
         ["Limitation", "City-level only"],
       ],
@@ -1424,11 +1186,11 @@ function ConfigurationScreen({
       title: "Model versions",
       description: "Control model compatibility and readiness labels.",
       fields: [
-        ["Version", "RG-NCR v0.4"],
+        ["Version", "See Models and evaluation for the deployed version"],
         ["Responsibility", "Experimental city-level outlook"],
-        ["Input schema", "Draft v0.4"],
+        ["Input schema", "Declared in ml/artifacts/model.json"],
         ["Locations", "Four supported cities"],
-        ["Validation reference", "Research validation pending"],
+        ["Validation reference", "ml/artifacts/metrics.json"],
         ["Status", "Experimental"],
       ],
     },
@@ -1511,16 +1273,10 @@ function AuditLog() {
         </div>
       </Surface>
       <Surface title="Recorded activity">
-        <DataTable
-          columns={[
-            { key: "time", label: "Timestamp" },
-            { key: "actor", label: "Actor" },
-            { key: "action", label: "Action" },
-            { key: "resource", label: "Resource" },
-            { key: "outcome", label: "Outcome" },
-          ]}
-          rows={auditEvents.map((event) => ({ ...event }))}
-        />
+        <p className="text-body text-muted">
+          No audit events are recorded. This prototype does not write an audit
+          trail, so the log is empty by design.
+        </p>
       </Surface>
     </>
   );
@@ -1572,7 +1328,7 @@ function AdminSettings() {
 
 export function AdminScreen({ segments }: { segments: string[] }) {
   const [screen, detail] = segments;
-  if (!screen) return <AdminHome />;
+  if (!screen) return <DashboardLayout />;
   if (screen === "research")
     return <ResearcherScreen segments={segments.slice(1)} />;
   if (screen === "requests") return <AccessRequests detail={detail} />;
@@ -1590,4 +1346,60 @@ export function AdminScreen({ segments }: { segments: string[] }) {
   if (screen === "audit") return <AuditLog />;
   if (screen === "settings") return <AdminSettings />;
   return <AdminHome />;
+}
+
+/**
+ * LGU review queue, built from stored runs.
+ *
+ * A review row exists only because a run exists. This is a separate component so
+ * `useQuery` is never called without a ConvexProvider.
+ */
+function StoredRunReviewQueue() {
+  const runs = useQuery(convexFunctions.recentRuns, { limit: 10 });
+  if (runs === undefined) {
+    return <p className="text-body text-muted">Loading stored runs…</p>;
+  }
+  if (runs.length === 0) {
+    return (
+      <p className="text-body text-muted">
+        No stored runs yet. Run a forecast from the research workspace to create
+        one.
+      </p>
+    );
+  }
+  const rows: Array<Record<string, string>> = runs.map((run: RecentRun) => ({
+    run: run.runId,
+    location: run.locations.length ? run.locations.join(", ") : "—",
+    valid: `${run.days} day(s)`,
+    quality: run.status === "completed" ? "Complete" : run.status,
+    review:
+      run.alerts > 0 ? `${run.alerts} elevated day(s)` : "Nothing flagged",
+    reviewer: "Unassigned",
+    updated: new Date(run.requestedAt).toLocaleString("en-PH", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Manila",
+    }),
+  }));
+  return (
+    <DataTable
+      columns={[
+        { key: "run", label: "Run" },
+        { key: "location", label: "Location" },
+        { key: "valid", label: "Valid period" },
+        { key: "quality", label: "Quality" },
+        { key: "review", label: "Review status" },
+        { key: "reviewer", label: "Reviewer" },
+        { key: "updated", label: "Updated" },
+      ]}
+      rows={rows}
+      actions={(row) => (
+        <ActionLink href={`/lgu/reviews/${row.run}`} variant="quiet">
+          Review
+        </ActionLink>
+      )}
+    />
+  );
 }

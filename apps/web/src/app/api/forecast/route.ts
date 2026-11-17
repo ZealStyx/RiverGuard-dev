@@ -17,7 +17,8 @@ import { NextResponse } from "next/server";
 import { persistOutlook } from "@/lib/forecast-persistence";
 import { getLocation } from "@/lib/locations";
 import { MlServiceError, requestDailyForecast } from "@/lib/ml-client";
-import { getWeatherBundle } from "@/lib/weather";
+import { observedStateFromDataset } from "@/lib/observed-state";
+import { getWeatherBundle, type WeatherBundle } from "@/lib/weather";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,17 +49,35 @@ export async function POST(request: Request) {
     );
   }
 
-  let bundle;
+  // The observed state comes from the real dataset. The weather provider only
+  // supplies the forecast window that follows it, so a provider outage can no
+  // longer seed the model with invented antecedent rain.
+  const observed = await observedStateFromDataset(location);
+
+  let bundle: WeatherBundle;
   try {
     bundle = await getWeatherBundle(location);
   } catch (error) {
     return NextResponse.json(
       {
-        error: "Weather provider failed and fixture fallback is disabled.",
+        error:
+          "Weather provider failed and the offline forecast fallback is disabled.",
         detail: error instanceof Error ? error.message : "unknown error",
+        // Same key as the success path, so a client reads one shape either way.
+        observedState: observedStateSummary(observed),
       },
       { status: 502 },
     );
+  }
+
+  if (observed) {
+    // Dataset state wins over the provider's own derived window: it is the only
+    // source that matches the columns the model was trained on.
+    bundle = {
+      ...bundle,
+      observed: observed.observed,
+      notes: [...bundle.notes, ...observed.notes],
+    };
   }
 
   let forecast;
@@ -70,6 +89,7 @@ export async function POST(request: Request) {
         error: "The local ML service did not produce a forecast.",
         detail: error instanceof Error ? error.message : "unknown error",
         weather: summariseWeather(bundle),
+        observedState: observedStateSummary(observed),
       },
       { status: error instanceof MlServiceError ? 503 : 500 },
     );
@@ -79,6 +99,11 @@ export async function POST(request: Request) {
   const persistence = await persistOutlook(bundle, forecast, issueDate);
 
   const warnings: string[] = [];
+  if (!observed) {
+    warnings.push(
+      "No dataset row was available for this location, so the model was seeded from the weather provider instead.",
+    );
+  }
   if (bundle.degraded) {
     warnings.push(bundle.degradationReason ?? "Weather data is degraded.");
   }
@@ -97,6 +122,21 @@ export async function POST(request: Request) {
       alarms: location.alarmLevelsM,
     },
     weather: summariseWeather(bundle),
+    observedState: observed
+      ? {
+          source: observed.source,
+          asOfDate: observed.asOfDate,
+          rainSource: observed.rainSource,
+          qualityStatus: observed.qualityStatus,
+          waterLevelM: observed.waterLevelM,
+        }
+      : {
+          source: "weather",
+          asOfDate: null,
+          rainSource: null,
+          qualityStatus: null,
+          waterLevelM: null,
+        },
     forecast: {
       modelVersion: forecast.meta.modelVersion,
       modelKind: forecast.meta.modelKind,
@@ -113,7 +153,34 @@ export async function POST(request: Request) {
   });
 }
 
-type WeatherBundle = Awaited<ReturnType<typeof getWeatherBundle>>;
+type ObservedStateSummary = {
+  source: "dataset" | "weather";
+  asOfDate: string | null;
+  rainSource: string | null;
+  qualityStatus: string | null;
+  waterLevelM: number | null;
+};
+
+function observedStateSummary(
+  observed: Awaited<ReturnType<typeof observedStateFromDataset>>,
+): ObservedStateSummary {
+  if (!observed) {
+    return {
+      source: "weather",
+      asOfDate: null,
+      rainSource: null,
+      qualityStatus: null,
+      waterLevelM: null,
+    };
+  }
+  return {
+    source: observed.source,
+    asOfDate: observed.asOfDate,
+    rainSource: observed.rainSource,
+    qualityStatus: observed.qualityStatus,
+    waterLevelM: observed.waterLevelM,
+  };
+}
 
 function summariseWeather(bundle: WeatherBundle) {
   return {

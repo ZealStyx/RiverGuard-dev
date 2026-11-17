@@ -280,6 +280,76 @@ export const latestOutlook = query({
   },
 });
 
+/**
+ * Recent runs, newest first, for the admin run-history screen.
+ *
+ * The screen used to render four invented run IDs. Runs only exist once someone
+ * presses "Run forecast", so an empty deployment returns an empty list.
+ */
+export const recentRuns = query({
+  args: { limit: v.optional(v.number()) },
+  returns: v.array(
+    v.object({
+      runId: v.string(),
+      requestedAt: v.number(),
+      completedAt: v.union(v.number(), v.null()),
+      provider: v.string(),
+      status: v.string(),
+      locations: v.array(v.string()),
+      days: v.number(),
+      alerts: v.number(),
+      modelVersion: v.union(v.string(), v.null()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const runs = await ctx.db
+      .query("forecastRuns")
+      .withIndex("by_requested_at", (index: any) => index)
+      .order("desc")
+      .take(Math.min(args.limit ?? 20, 100));
+
+    return await Promise.all(
+      runs.map(async (run: any) => {
+        const forecasts = await ctx.db
+          .query("forecasts")
+          .withIndex("by_run_valid_at", (index: any) =>
+            index.eq("runId", run._id),
+          )
+          .collect();
+        const modelVersionId = forecasts.find(
+          (row: any) => row.modelVersionId,
+        )?.modelVersionId;
+        const model = modelVersionId ? await ctx.db.get(modelVersionId) : null;
+        const assessments = await ctx.db
+          .query("riskAssessments")
+          .filter((row: any) =>
+            forecasts.some((forecast: any) => forecast._id === row.forecastId),
+          )
+          .collect();
+
+        return {
+          runId: run.runId ?? String(run._id),
+          requestedAt: run.requestedAt ?? 0,
+          completedAt: run.completedAt ?? null,
+          provider: run.provider ?? "",
+          status: run.status ?? "unknown",
+          locations: [
+            ...new Set(forecasts.map((row: any) => String(row.locationCode))),
+          ],
+          days: forecasts.length,
+          alerts: assessments.filter(
+            (row: any) =>
+              row.riskLevel === "elevated" || row.riskLevel === "moderate",
+          ).length,
+          modelVersion: model
+            ? String((model as any).version ?? (model as any).name ?? "")
+            : null,
+        };
+      }),
+    );
+  },
+});
+
 /** Housekeeping used by the cron: finish runs that never completed. */
 export const failStaleRuns = mutation({
   args: { olderThanMs: v.optional(v.number()) },

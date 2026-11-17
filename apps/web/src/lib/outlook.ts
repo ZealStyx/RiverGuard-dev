@@ -4,13 +4,15 @@
  * Client-side outlook feed.
  *
  * Two sources, one shape:
- *   - a POST to /api/forecast (weather -> ML -> Convex) that returns the run it
- *     just performed;
+ *   - a POST to /api/forecast (dataset observed state -> weather -> ML -> Convex)
+ *     that returns the run it just performed;
  *   - a Convex subscription to the latest stored run, so a reload shows the last
  *     forecast without spending another weather or ML call.
  *
- * The static placeholder in @/data/dashboard stays the fallback so the dashboard
- * renders even with no ML service, no network, and no deployment.
+ * There is deliberately no static fallback any more. If neither source has a
+ * run, the feed reports "no run" and the UI must say so — it may not substitute
+ * an illustrative week, because an illustrative week is indistinguishable from
+ * a forecast once it is drawn on a chart.
  */
 
 import { useQuery } from "convex/react";
@@ -19,13 +21,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { convexFunctions } from "@/lib/convex-functions";
 import type { OutlookDay } from "@/types";
 
-import { outlookDays as staticOutlook } from "@/data/dashboard";
+export type OutlookSource = "live" | "convex";
 
-export type OutlookSource = "live" | "convex" | "static";
+export interface ObservedStateSummary {
+  source: "dataset" | "weather";
+  asOfDate: string | null;
+  rainSource: string | null;
+  qualityStatus: string | null;
+  waterLevelM: number | null;
+}
 
 export interface OutlookSnapshot {
   days: OutlookDay[];
-  source: Exclude<OutlookSource, "static">;
+  source: OutlookSource;
   updatedAt: number;
   locationName: string;
   modelVersion: string | null;
@@ -33,6 +41,11 @@ export interface OutlookSnapshot {
   degraded: boolean;
   alerts: number;
   warnings: string[];
+  /** Why the run is degraded, when it is. */
+  degradationReason: string | null;
+  observed: ObservedStateSummary | null;
+  /** The model's own caveat string, carried through from the ML service. */
+  modelWarning: string | null;
 }
 
 const LABELS: Record<string, OutlookDay["label"]> = {
@@ -53,6 +66,9 @@ export function toOutlookDay(row: {
   probability?: number;
   waterLevelM?: number;
   alertLevel?: OutlookDay["alertLevel"];
+  rainfallMm?: number;
+  reasons?: string[];
+  exceedsOperatingThreshold?: boolean;
 }): OutlookDay {
   const parsed = new Date(`${row.date}T00:00:00+08:00`);
   return {
@@ -63,11 +79,10 @@ export function toOutlookDay(row: {
     probability: row.probability,
     waterLevelM: row.waterLevelM,
     alertLevel: row.alertLevel ?? "none",
+    rainfallMm: row.rainfallMm,
+    reasons: row.reasons,
+    exceedsOperatingThreshold: row.exceedsOperatingThreshold,
   };
-}
-
-export function staticOutlookDays(): OutlookDay[] {
-  return staticOutlook;
 }
 
 interface ForecastApiDay {
@@ -76,12 +91,16 @@ interface ForecastApiDay {
   probability: number;
   waterLevelM: number;
   alertLevel: OutlookDay["alertLevel"];
+  rainfallMm: number;
+  reasons: string[];
+  exceedsOperatingThreshold: boolean;
 }
 
 interface ForecastApiResponse {
   location: { code: string; name: string };
-  weather: { provider: string; degraded: boolean };
-  forecast: { modelVersion: string; days: ForecastApiDay[] };
+  weather: { provider: string; degraded: boolean; degradationReason?: string };
+  observedState: ObservedStateSummary;
+  forecast: { modelVersion: string; days: ForecastApiDay[]; warning?: string };
   persistence: {
     enabled: boolean;
     stored: boolean;
@@ -97,10 +116,16 @@ export function useOutlookFeed(locationCode: string) {
   const [snapshot, setSnapshot] = useState<OutlookSnapshot | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Verbose server detail for the failed run, shown behind a disclosure. */
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  /** Observed state from a run that failed downstream, for context in the UI. */
+  const [failedObserved, setFailedObserved] =
+    useState<ObservedStateSummary | null>(null);
 
   const run = useCallback(async () => {
     setIsRunning(true);
     setError(null);
+    setErrorDetail(null);
     try {
       const response = await fetch("/api/forecast", {
         method: "POST",
@@ -111,6 +136,10 @@ export function useOutlookFeed(locationCode: string) {
 
       if (!response.ok) {
         setError(payload.error ?? `Forecast failed (${response.status})`);
+        setErrorDetail(payload.detail ?? null);
+        // A failed run still tells us what the model was seeded from, which is
+        // useful when the failure is the weather provider rather than the CSV.
+        setFailedObserved(payload.observedState ?? null);
         return;
       }
 
@@ -122,8 +151,11 @@ export function useOutlookFeed(locationCode: string) {
         modelVersion: payload.forecast.modelVersion,
         provider: payload.weather.provider,
         degraded: payload.weather.degraded,
+        degradationReason: payload.weather.degradationReason ?? null,
         alerts: payload.persistence.alerts ?? 0,
         warnings: payload.warnings ?? [],
+        observed: payload.observedState ?? null,
+        modelWarning: payload.forecast.warning ?? null,
       });
     } catch (cause) {
       setError(
@@ -140,7 +172,15 @@ export function useOutlookFeed(locationCode: string) {
     );
   }, []);
 
-  return { snapshot, isRunning, error, run, adopt };
+  return {
+    snapshot,
+    isRunning,
+    error,
+    errorDetail,
+    failedObserved,
+    run,
+    adopt,
+  };
 }
 
 /** Subscription to the stored outlook. Rendered only when Convex is configured. */
@@ -160,8 +200,11 @@ export function useStoredOutlook(
       modelVersion: data.modelVersion,
       provider: data.provider,
       degraded: false,
+      degradationReason: null,
       alerts: data.alerts,
       warnings: [],
+      observed: null,
+      modelWarning: null,
     };
   }, [data, locationCode]);
 
