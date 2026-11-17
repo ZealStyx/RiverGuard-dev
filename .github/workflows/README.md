@@ -28,7 +28,9 @@ Whole lines that match an attribution signature:
   *"Rainfall comes from Open-Meteo ERA5"*, *"Assisted by the Marikina MDRRMO"*.
 - `Signed-off-by:` trailers (DCO is legitimate authorship metadata).
 - Commit messages and commit author/committer identity — those cannot be changed without
-  rewriting history. The team's convention is simply not to add attribution there.
+  rewriting history. The team's convention is simply not to add attribution there; see
+  ["It still says Arena on my PR"](#it-still-says-arena-on-my-pr) for the sandbox hook that adds a
+  `Co-authored-by: arena-agent` trailer anyway.
 
 ### Scope and safety
 
@@ -45,6 +47,59 @@ The workflow needs `pull-requests: write`. If the repository has restricted work
 `gh pr edit` will fail with a 403:
 
 > Settings → Actions → General → Workflow permissions → **Read and write permissions**
+
+### "It still says Arena on my PR"
+
+The workflow only ever rewrites the **pull-request description**. It cannot touch commits, so any
+attribution that lives in a commit message stays visible on the PR page and in the merged history —
+GitHub lists trailer co-authors next to the commit, and `Co-authored-by` lines land in `main`.
+
+In this environment that is the norm, because the sandbox installs a `commit-msg` hook that appends
+a trailer to **every** commit you make:
+
+```bash
+$ cat .git/hooks/commit-msg
+TRAILER='Co-authored-by: arena-agent <297053741+arena-agent@users.noreply.github.com>'
+```
+
+So a PR opened from an agent session looks like this even when its body is clean:
+
+```
+$ gh api repos/OWNER/REPO/pulls/19/commits --jq '.[].commit.message'
+docs(report): add UI/UX audit and progress re-check for 17 Nov 2026
+Co-authored-by: arena-agent <297053741+arena-agent@users.noreply.github.com>
+```
+
+How to get rid of it:
+
+| Goal | Command |
+|---|---|
+| Stop it on a new commit | `git commit --no-verify` — skips `commit-msg` (and `pre-commit`) hooks |
+| Stop it for the session | `rm .git/hooks/commit-msg` — untracked, but the sandbox may recreate it |
+| Clean commits already pushed | rewrite the messages and force-push the PR branch |
+| Keep it out of `main` | merge with **Squash** and edit the squash message (drop the trailer) |
+
+The run summary of every workflow run now lists any commits that carry a trailer, so a "clean"
+PR body plus a dirty commit log is visible instead of silent.
+
+### What a real Arena footer looks like
+
+Arena writes footers such as `🤖 Generated with [Arena.ai Agent Mode](https://arena.ai)`,
+`🤖 Generated with [Arena.ai](https://arena.ai)`, `🤖 Generated with Arena.ai agent mode`, and
+sometimes no body footer at all (only the commit trailer above). The robot-emoji and
+`generated … with … arena` rules catch all of those variants, so a footer that reaches the body is
+removed on the next `opened`/`edited` event.
+
+Check whether it worked without the Actions log:
+
+```bash
+# who edited the description last, and what changed
+gh api graphql -f query='{ repository(owner:"OWNER", name:"REPO") { pullRequest(number: 20) {
+  userContentEdits(first: 5) { nodes { editedAt editor { login } diff } } } } }'
+```
+
+An edit by `github-actions` a few seconds after the PR was opened means the job ran and rewrote the
+body.
 
 ### Run it locally
 
