@@ -167,6 +167,7 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [smsSent, setSmsSent] = useState(false);
+  const [method, setMethod] = useState<"email" | "google" | "sms">("email");
   async function finishSignIn() {
     await ensureCurrent({});
     router.push("/resident");
@@ -194,9 +195,7 @@ function LoginForm() {
       );
       if (!signedInUser.emailVerified) {
         await signOut();
-        throw new Error(
-          "Please verify your email address before signing in.",
-        );
+        throw new Error("Please verify your email address before signing in.");
       }
       await finishSignIn();
     } catch (signInError) {
@@ -234,94 +233,131 @@ function LoginForm() {
   return (
     <div className="grid gap-4">
       {error ? <p className="text-metadata text-danger">{error}</p> : null}
-      <form onSubmit={signInWithEmailAccount} className="grid gap-3">
-        <TextField
-          id="login-email"
-          label="Email"
-          type="email"
-          name="login-email"
-          autoComplete="email"
-          required
-        />
-        <PasswordField
-          id="login-password"
-          label="Password"
-          name="login-password"
-          autoComplete="current-password"
-          required
-        />
-        <Link
-          href="/auth/forgot-password"
-          className="text-metadata text-brand-primary"
+      <div className="overflow-hidden rounded-control border border-line bg-surface shadow-sm">
+        <div
+          className="flex items-end gap-1 border-b border-line bg-canvas px-2 pt-2"
+          role="tablist"
+          aria-label="Sign-in method"
         >
-          Forgot password?
-        </Link>
-        <Button
-          type="submit"
-          loading={loading}
-          loadingLabel="Logging in"
-          className="w-full"
-        >
-          Log in with email
-        </Button>
-      </form>
-      <div className="flex items-center gap-3 text-metadata text-muted">
-        <span className="h-px flex-1 bg-line" />
-        or
-        <span className="h-px flex-1 bg-line" />
+          {(["email", "google", "sms"] as const).map((tab) => {
+            const labels = {
+              email: "Email",
+              google: "Google",
+              sms: "SMS",
+            };
+            const isActive = method === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setMethod(tab)}
+                className={`text-metadata relative rounded-t-control border border-b-0 px-3 py-2 transition ${
+                  isActive
+                    ? "z-10 -mb-px border-line bg-surface font-semibold text-ink"
+                    : "border-transparent text-muted hover:text-ink"
+                }`}
+              >
+                {labels[tab]}
+              </button>
+            );
+          })}
+        </div>
+        <div className="grid gap-4 p-4 sm:p-5" role="tabpanel">
+          {method === "email" ? (
+            <form onSubmit={signInWithEmailAccount} className="grid gap-3">
+              <TextField
+                id="login-email"
+                label="Email"
+                type="email"
+                name="login-email"
+                autoComplete="email"
+                required
+              />
+              <PasswordField
+                id="login-password"
+                label="Password"
+                name="login-password"
+                autoComplete="current-password"
+                required
+              />
+              <Link
+                href="/auth/forgot-password"
+                className="text-metadata text-brand-primary"
+              >
+                Forgot password?
+              </Link>
+              <Button
+                type="submit"
+                loading={loading}
+                loadingLabel="Logging in"
+                className="w-full"
+              >
+                Log in with email
+              </Button>
+            </form>
+          ) : null}
+          {method === "google" ? (
+            <div className="grid gap-3">
+              <p className="text-metadata text-muted">
+                Use your Google account to securely sign in to RiverGuard.
+              </p>
+              <Button
+                type="button"
+                onClick={signInWithGoogleAccount}
+                loading={loading}
+                loadingLabel="Connecting to Google"
+                className="w-full"
+              >
+                Continue with Google
+              </Button>
+            </div>
+          ) : null}
+          {method === "sms" ? (
+            !smsSent ? (
+              <form onSubmit={sendSms} className="grid gap-3">
+                <TextField
+                  id="login-phone"
+                  label="Mobile number"
+                  type="tel"
+                  name="login-phone"
+                  autoComplete="tel"
+                  placeholder="+63 912 345 6789"
+                  required
+                />
+                <Button
+                  type="submit"
+                  loading={loading}
+                  loadingLabel="Sending code"
+                  className="w-full"
+                >
+                  Continue with SMS
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={verifySms} className="grid gap-3">
+                <TextField
+                  id="login-code"
+                  label="Verification code"
+                  inputMode="numeric"
+                  name="login-code"
+                  autoComplete="one-time-code"
+                  required
+                />
+                <Button
+                  type="submit"
+                  loading={loading}
+                  loadingLabel="Verifying code"
+                  className="w-full"
+                >
+                  Verify SMS code
+                </Button>
+              </form>
+            )
+          ) : null}
+        </div>
       </div>
-      <Button
-        type="button"
-        onClick={signInWithGoogleAccount}
-        loading={loading}
-        loadingLabel="Connecting to Google"
-        variant="secondary"
-        className="w-full"
-      >
-        Continue with Google
-      </Button>
-      {!smsSent ? (
-        <form onSubmit={sendSms} className="grid gap-3">
-          <TextField
-            id="login-phone"
-            label="Mobile number"
-            type="tel"
-            name="login-phone"
-            autoComplete="tel"
-            placeholder="+63 912 345 6789"
-            required
-          />
-          <Button
-            type="submit"
-            loading={loading}
-            loadingLabel="Sending code"
-            variant="secondary"
-            className="w-full"
-          >
-            Continue with SMS
-          </Button>
-        </form>
-      ) : (
-        <form onSubmit={verifySms} className="grid gap-3">
-          <TextField
-            id="login-code"
-            label="Verification code"
-            inputMode="numeric"
-            name="login-code"
-            autoComplete="one-time-code"
-            required
-          />
-          <Button
-            type="submit"
-            loading={loading}
-            loadingLabel="Verifying code"
-            variant="secondary"
-            className="w-full"
-          >
-            Verify SMS code
-          </Button>
-        </form>
-      )}
       <div id="recaptcha-container" />
       <Link
         href="/auth/signup"
@@ -650,7 +686,9 @@ function Verification() {
   return (
     <div className="grid min-w-0 gap-3">
       {isEmailVerification ? (
-        <Notice title={resent ? "Verification email resent" : "Check your email"}>
+        <Notice
+          title={resent ? "Verification email resent" : "Check your email"}
+        >
           We sent a verification link to {user?.email ?? "your email address"}.
           Open the email and click the link to confirm your address.
         </Notice>
@@ -671,7 +709,9 @@ function Verification() {
           inputMode="numeric"
           autoComplete="one-time-code"
           value={code}
-          onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+          onChange={(event) =>
+            setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+          }
           required
         />
       ) : null}
@@ -698,7 +738,8 @@ function Verification() {
                   const next = code.padEnd(6, "").split("");
                   next[index] = digit;
                   setCode(next.join("").slice(0, 6));
-                  if (digit && index < 5) codeInputs.current[index + 1]?.focus();
+                  if (digit && index < 5)
+                    codeInputs.current[index + 1]?.focus();
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Backspace" && !code[index] && index > 0) {
@@ -710,11 +751,11 @@ function Verification() {
           </div>
         </div>
       ) : null}
-        {verificationError ? (
-          <p className="text-metadata text-danger">{verificationError}</p>
-        ) : null}
-        {!isSmsVerification ? (
-          <div className="mt-1 flex items-center justify-between text-metadata">
+      {verificationError ? (
+        <p className="text-metadata text-danger">{verificationError}</p>
+      ) : null}
+      {!isSmsVerification ? (
+        <div className="mt-1 flex items-center justify-between text-metadata">
           <button
             type="button"
             disabled={secondsRemaining > 0}
@@ -722,7 +763,8 @@ function Verification() {
               if (isEmailVerification) {
                 void sendEmailVerification().then(
                   () => setResent(true),
-                  (error: unknown) => setVerificationError(formatAuthError(error)),
+                  (error: unknown) =>
+                    setVerificationError(formatAuthError(error)),
                 );
               } else {
                 setResent(true);
@@ -747,8 +789,8 @@ function Verification() {
           <span className="text-muted">
             Expires in 00:{String(secondsRemaining).padStart(2, "0")}
           </span>
-          </div>
-        ) : null}
+        </div>
+      ) : null}
       <Button
         loading={checking}
         onClick={async () => {
@@ -771,7 +813,9 @@ function Verification() {
           try {
             await user?.reload();
             if (!user?.emailVerified) {
-              throw new Error("Click the verification link in your email first.");
+              throw new Error(
+                "Click the verification link in your email first.",
+              );
             }
             await ensureCurrent({});
             setVerified(true);
