@@ -96,6 +96,7 @@ which overwrites them with a real deployment URL.
 | `WEATHER_PROVIDER`       | `open-meteo`            | no       | `open-meteo` (live, keyless) or `fixture` (offline samples).                                                                      |
 | `WEATHER_ALLOW_FIXTURE`  | `false`                 | no       | Opt in to the offline fixture when the provider fails. Only the exact string `true` enables it.                                   |
 
+| `NEXT_PUBLIC_MAP_TILE_PROVIDER` | `osm` | no | Basemap preset: `osm` or `carto`. Use `carto` when OSM answers `403 Access blocked`. |
 | `NEXT_PUBLIC_MAP_TILE_URL` | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` | no | Raster tile template for the basemap. |
 | `NEXT_PUBLIC_MAP_TILE_ATTRIBUTION` | `© OpenStreetMap contributors` | no | Credit the map shows in its always-visible attribution control. Change it with the URL. |
 
@@ -125,6 +126,20 @@ built to follow it:
 Interactive use by one person on a local machine is permitted. A shared or public
 deployment must switch to a provider that allows it, or self-host tiles — the
 same rule as the execution policy in [`README.md`](README.md) §1.
+
+**If the map says "Access blocked" (HTTP 403):** OSM's volunteers block traffic
+they cannot identify or consider abusive, and a shared/cloud preview origin
+often qualifies. Their rules, their call — it is not a bug in this app. Switch
+provider without touching code:
+
+```bash
+# apps/web/.env.local
+NEXT_PUBLIC_MAP_TILE_PROVIDER=carto
+```
+
+`carto` uses CARTO's public basemaps (OSM data, no key, attribution shown).
+Any other raster provider works through `NEXT_PUBLIC_MAP_TILE_URL` plus
+`NEXT_PUBLIC_MAP_TILE_ATTRIBUTION`.
 
 ### Step 4 — Install and start the ML service
 

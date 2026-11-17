@@ -15,7 +15,7 @@ const layers: Array<{
 }> = [
   {
     id: "base",
-    label: "OpenStreetMap basemap",
+    label: "Basemap (OpenStreetMap data)",
     description: "Roads, rivers, land, and place labels",
     available: true,
   },

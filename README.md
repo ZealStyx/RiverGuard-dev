@@ -59,6 +59,8 @@ The only intended remote application dependency is Convex. The only intended ext
 
 Normal interactive viewing is permitted; bulk, offline, or many-user use is not. This provider must be replaced with a permitted commercial/community provider or self-hosted tiles before any shared or public deployment.
 
+OSM also answers `403 Access blocked` to origins its operators cannot identify or consider abusive — shared or cloud-hosted preview origins included. When that happens the map is not broken; the provider refused. Switch with `NEXT_PUBLIC_MAP_TILE_PROVIDER=carto` (CARTO's public basemaps, OSM data, no key), or point `NEXT_PUBLIC_MAP_TILE_URL`/`NEXT_PUBLIC_MAP_TILE_ATTRIBUTION` at any other raster provider. The map names the active provider in its header and in the error card, so a 403 and a network failure are distinguishable.
+
 ## 2. Study area and available development data
 
 ### 2.1 NCR target area

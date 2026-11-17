@@ -56,26 +56,74 @@ const NCR_VIEW_BOUNDS: [[number, number], [number, number]] = [
  * serving many users from this layer is not: a public deployment must point
  * these variables at a provider that permits it, or self-host tiles.
  */
-const DEFAULT_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const DEFAULT_TILE_ATTRIBUTION =
+const OSM_ATTRIBUTION =
   '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>';
+const CARTO_ATTRIBUTION =
+  '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a> · <a href="https://carto.com/attributions" target="_blank" rel="noreferrer">© CARTO</a>';
 
-const TILE_URL =
-  process.env.NEXT_PUBLIC_MAP_TILE_URL?.trim() || DEFAULT_TILE_URL;
-const TILE_ATTRIBUTION =
-  process.env.NEXT_PUBLIC_MAP_TILE_ATTRIBUTION?.trim() ||
-  DEFAULT_TILE_ATTRIBUTION;
-const USING_OSM_TILES = TILE_URL.includes("tile.openstreetmap.org");
+interface BasemapPreset {
+  /** Shown in the map header, the error card, and the layer summary. */
+  label: string;
+  url: string;
+  attribution: string;
+  maxzoom: number;
+}
+
+/**
+ * Tile providers this build knows by name.
+ *
+ * `osm` is the default because it is the only one whose terms are written down
+ * for this use. It is also the one that blocks: OSM's volunteers answer `403
+ * Access blocked` to origins they consider unidentifiable or abusive, which is
+ * their right under § 7 of the policy and which a shared preview/sandbox origin
+ * can trip. Set `NEXT_PUBLIC_MAP_TILE_PROVIDER=carto` when that happens, or
+ * point `NEXT_PUBLIC_MAP_TILE_URL` at any other raster provider.
+ */
+const BASEMAP_PRESETS: Record<string, BasemapPreset> = {
+  osm: {
+    label: "OpenStreetMap Standard",
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: OSM_ATTRIBUTION,
+    maxzoom: 19,
+  },
+  carto: {
+    // CARTO's public basemaps: OSM data, no key, attribution required.
+    label: "CARTO Light (OpenStreetMap data)",
+    url: "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+    attribution: CARTO_ATTRIBUTION,
+    maxzoom: 20,
+  },
+};
+
+function resolveBasemap(): BasemapPreset {
+  const customUrl = process.env.NEXT_PUBLIC_MAP_TILE_URL?.trim();
+  if (customUrl) {
+    return {
+      label: "Custom tile provider",
+      url: customUrl,
+      attribution:
+        process.env.NEXT_PUBLIC_MAP_TILE_ATTRIBUTION?.trim() || OSM_ATTRIBUTION,
+      maxzoom: 19,
+    };
+  }
+  const requested = (process.env.NEXT_PUBLIC_MAP_TILE_PROVIDER ?? "osm")
+    .trim()
+    .toLowerCase();
+  return BASEMAP_PRESETS[requested] ?? BASEMAP_PRESETS.osm;
+}
+
+const BASEMAP = resolveBasemap();
+const USING_OSM_TILES = BASEMAP.url.includes("tile.openstreetmap.org");
 
 const BASEMAP_STYLE: StyleSpecification = {
   version: 8,
   sources: {
     basemap: {
       type: "raster",
-      tiles: [TILE_URL],
+      tiles: [BASEMAP.url],
       tileSize: 256,
-      maxzoom: 19,
-      attribution: TILE_ATTRIBUTION,
+      maxzoom: BASEMAP.maxzoom,
+      attribution: BASEMAP.attribution,
     },
   },
   layers: [
@@ -149,9 +197,11 @@ export function RiverMap({
       map.on("error", (event) => {
         if (cancelled) return;
         setMapStatus("error");
+        const detail = event.error?.message;
         setMapError(
-          event.error?.message ??
-            "The OpenStreetMap tiles could not be loaded. Check the local network connection and retry.",
+          detail
+            ? `${BASEMAP.label}: ${detail}`
+            : `${BASEMAP.label} did not serve these tiles. The provider may be refusing the request (HTTP 403) or the network may be blocking it.`,
         );
       });
 
@@ -175,7 +225,7 @@ export function RiverMap({
 
   const layerSummary =
     activeLayer === "base"
-      ? "OpenStreetMap basemap: roads, rivers, land, and place labels."
+      ? `${BASEMAP.label}: roads, rivers, land, and place labels.`
       : activeLayer === "static"
         ? "Static hazard susceptibility is unavailable until a verified GIS layer is supplied."
         : "Experimental flood predictions are unavailable until weather and ML integration is complete.";
@@ -196,7 +246,7 @@ export function RiverMap({
       <div className="relative min-h-0 flex-1">
         <div
           ref={mapContainerRef}
-          aria-label="Interactive OpenStreetMap basemap of the National Capital Region"
+          aria-label="Interactive basemap of the National Capital Region"
           className="absolute inset-0 h-full w-full"
         />
 
@@ -209,7 +259,7 @@ export function RiverMap({
                   NCR (Metro Manila)
                 </h2>
                 <p className="text-metadata mt-0.5 text-muted">
-                  Interactive OpenStreetMap basemap
+                  Interactive basemap · {BASEMAP.label}
                 </p>
               </div>
             </div>
@@ -235,7 +285,7 @@ export function RiverMap({
         {mapStatus === "loading" ? (
           <div className="absolute inset-x-4 top-24 flex justify-center">
             <div className="rounded-control border border-line bg-canvas-soft/95 px-3 py-2 text-metadata text-muted shadow-lg">
-              Loading OpenStreetMap basemap…
+              Loading {BASEMAP.label}…
             </div>
           </div>
         ) : null}
@@ -245,7 +295,8 @@ export function RiverMap({
             <div className="max-w-md rounded-control border border-danger/30 bg-canvas-soft/95 p-3 text-ink shadow-lg">
               <p className="text-button">Map tiles unavailable</p>
               <p className="text-metadata mt-1 text-muted">
-                {mapError ?? "The basemap could not be loaded."}
+                {mapError ?? "The basemap could not be loaded."} Retry, or point
+                the map at another provider with NEXT_PUBLIC_MAP_TILE_PROVIDER.
               </p>
               <button
                 type="button"
@@ -274,7 +325,7 @@ export function RiverMap({
             </p>
             {USING_OSM_TILES ? (
               <p className="text-metadata mt-2 text-muted">
-                Basemap from OpenStreetMap&apos;s volunteer tile servers:{" "}
+                Tiles from OpenStreetMap&apos;s volunteer servers:{" "}
                 <a
                   className="underline underline-offset-2 hover:text-ink"
                   href="https://www.openstreetmap.org/fixthemap"
