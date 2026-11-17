@@ -96,8 +96,35 @@ which overwrites them with a real deployment URL.
 | `WEATHER_PROVIDER`       | `open-meteo`            | no       | `open-meteo` (live, keyless) or `fixture` (offline samples).                                                                      |
 | `WEATHER_ALLOW_FIXTURE`  | `false`                 | no       | Opt in to the offline fixture when the provider fails. Only the exact string `true` enables it.                                   |
 
+| `NEXT_PUBLIC_MAP_TILE_URL` | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` | no | Raster tile template for the basemap. |
+| `NEXT_PUBLIC_MAP_TILE_ATTRIBUTION` | `© OpenStreetMap contributors` | no | Credit the map shows in its always-visible attribution control. Change it with the URL. |
+
 Only `NEXT_PUBLIC_*` values reach the browser. Never put keys or credentials in
 those.
+
+#### Basemap tiles and the OpenStreetMap policy
+
+The map uses OpenStreetMap's volunteer-run tile server, which comes with a
+[usage policy](https://operations.osmfoundation.org/policies/tiles/). The app is
+built to follow it:
+
+- **Attribution stays visible** — the attribution control is created with
+  `compact: false`, and the panel keeps a clear band beneath its overlays, so the
+  credit is never behind a toggle or covered by app chrome. A "report a map
+  issue" link points at OSM's fixthemap page.
+- **Identifiable requests** — tiles are fetched by the browser from the page
+  itself, so the browser's `User-Agent` and a real `Referer` are sent. No
+  `no-cache` headers, no restrictive referrer policy.
+- **Caching** — the browser cache does the work and honours OSM's
+  `Cache-Control`/`ETag`; the app never bypasses it.
+- **No bulk or offline fetching** — only the tiles for the current viewport are
+  requested: no prefetch, no "download this area", no background job.
+- **Swappable** — `NEXT_PUBLIC_MAP_TILE_URL` and `NEXT_PUBLIC_MAP_TILE_ATTRIBUTION`
+  change providers without a code change.
+
+Interactive use by one person on a local machine is permitted. A shared or public
+deployment must switch to a provider that allows it, or self-host tiles — the
+same rule as the execution policy in [`README.md`](README.md) §1.
 
 ### Step 4 — Install and start the ML service
 

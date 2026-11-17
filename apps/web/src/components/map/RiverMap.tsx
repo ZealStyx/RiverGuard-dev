@@ -31,23 +31,58 @@ const NCR_VIEW_BOUNDS: [[number, number], [number, number]] = [
   [121.24, 14.88],
 ];
 
-const OSM_STYLE: StyleSpecification = {
+/**
+ * Basemap tiles and the OpenStreetMap tile usage policy
+ * (https://operations.osmfoundation.org/policies/tiles/).
+ *
+ * The default layer is the OSM Standard raster tiles from the volunteer-run
+ * `tile.openstreetmap.org`, which is donated capacity with rules attached. How
+ * this map keeps to them:
+ *
+ * - Attribution is always on screen: `AttributionControl` below is created with
+ *   `compact: false`, and the panel layout keeps a clear band above the footer
+ *   so no RiverGuard overlay can cover it. It is never behind a toggle.
+ * - Tiles are requested by the browser on the page, so the browser's own
+ *   User-Agent and a real `Referer` are sent. Nothing here sets a no-referrer
+ *   policy or a no-cache header; caching is the browser's, honouring OSM's
+ *   `Cache-Control`/`ETag`.
+ * - The URL is the exact HTTPS template and is overridable through
+ *   `NEXT_PUBLIC_MAP_TILE_URL` (with `NEXT_PUBLIC_MAP_TILE_ATTRIBUTION` for the
+ *   new provider's credit), so switching providers needs no code change.
+ * - Only the tiles for the viewport being looked at are fetched. There is no
+ *   prefetch, no "download this area", and no background tile fetching.
+ *
+ * Normal interactive viewing like this is permitted. Bulk use, offline use, or
+ * serving many users from this layer is not: a public deployment must point
+ * these variables at a provider that permits it, or self-host tiles.
+ */
+const DEFAULT_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const DEFAULT_TILE_ATTRIBUTION =
+  '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>';
+
+const TILE_URL =
+  process.env.NEXT_PUBLIC_MAP_TILE_URL?.trim() || DEFAULT_TILE_URL;
+const TILE_ATTRIBUTION =
+  process.env.NEXT_PUBLIC_MAP_TILE_ATTRIBUTION?.trim() ||
+  DEFAULT_TILE_ATTRIBUTION;
+const USING_OSM_TILES = TILE_URL.includes("tile.openstreetmap.org");
+
+const BASEMAP_STYLE: StyleSpecification = {
   version: 8,
   sources: {
-    osm: {
+    basemap: {
       type: "raster",
-      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      tiles: [TILE_URL],
       tileSize: 256,
       maxzoom: 19,
-      attribution:
-        '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>',
+      attribution: TILE_ATTRIBUTION,
     },
   },
   layers: [
     {
-      id: "osm-raster",
+      id: "basemap-raster",
       type: "raster",
-      source: "osm",
+      source: "basemap",
       paint: {
         "raster-opacity": 1,
       },
@@ -81,7 +116,7 @@ export function RiverMap({
 
       const map = new maplibregl.Map({
         container: mapContainerRef.current,
-        style: OSM_STYLE,
+        style: BASEMAP_STYLE,
         bounds: NCR_VIEW_BOUNDS,
         fitBoundsOptions: { padding: 28 },
         minZoom: 9,
@@ -96,8 +131,10 @@ export function RiverMap({
         "top-right",
       );
       map.addControl(new maplibregl.FullscreenControl(), "top-right");
+      // Never collapsed: the OSM tile policy forbids hiding attribution behind
+      // a toggle, and this control is the canonical place for it.
       map.addControl(
-        new maplibregl.AttributionControl({ compact: true }),
+        new maplibregl.AttributionControl({ compact: false }),
         "bottom-right",
       );
 
@@ -151,105 +188,124 @@ export function RiverMap({
       id="map-workspace"
       aria-labelledby="map-title"
       data-dashboard-section
-      className={`relative h-[610px] scroll-mt-24 overflow-hidden rounded-panel bg-line min-[1180px]:h-[clamp(560px,calc(100dvh-10rem),720px)] min-[1180px]:self-start ${className}`}
+      className={`relative flex h-[610px] scroll-mt-24 flex-col overflow-hidden rounded-panel bg-line min-[1180px]:h-[clamp(560px,calc(100dvh-10rem),720px)] min-[1180px]:self-start ${className}`}
     >
-      <div
-        ref={mapContainerRef}
-        aria-label="Interactive OpenStreetMap basemap of the National Capital Region"
-        className="absolute inset-0 h-full w-full"
-      />
+      {/* The canvas area. Everything that floats over the map lives in here, and
+          the footer strip below is a sibling, so the attribution control at the
+          bottom-right of the canvas can never be painted over. */}
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={mapContainerRef}
+          aria-label="Interactive OpenStreetMap basemap of the National Capital Region"
+          className="absolute inset-0 h-full w-full"
+        />
 
-      <div className="pointer-events-none absolute top-4 left-4 flex items-start gap-2">
-        <div className="pointer-events-auto rounded-control border border-line bg-canvas-soft/95 px-3 py-2.5 shadow-lg backdrop-blur-sm">
-          <div className="flex items-center gap-2">
-            <MapTrifold aria-hidden="true" size={18} weight="duotone" />
+        <div className="pointer-events-none absolute top-4 left-4 flex items-start gap-2">
+          <div className="pointer-events-auto rounded-control border border-line bg-canvas-soft/95 px-3 py-2.5 shadow-lg backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+              <MapTrifold aria-hidden="true" size={18} weight="duotone" />
+              <div>
+                <h2 id="map-title" className="text-section">
+                  NCR (Metro Manila)
+                </h2>
+                <p className="text-metadata mt-0.5 text-muted">
+                  Interactive OpenStreetMap basemap
+                </p>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={resetView}
+            aria-label="Reset NCR map view"
+            title="Reset NCR map view"
+            className="pointer-events-auto inline-flex size-9 items-center justify-center rounded-control border border-line bg-canvas-soft/95 text-muted shadow-lg hover:bg-canvas hover:text-ink"
+          >
+            <ArrowCounterClockwise aria-hidden="true" size={17} />
+          </button>
+        </div>
+
+        <div className="absolute top-4 right-4 hidden lg:block">
+          <HazardLayerControl
+            activeLayer={activeLayer}
+            onLayerChange={onLayerChange}
+          />
+        </div>
+
+        {mapStatus === "loading" ? (
+          <div className="absolute inset-x-4 top-24 flex justify-center">
+            <div className="rounded-control border border-line bg-canvas-soft/95 px-3 py-2 text-metadata text-muted shadow-lg">
+              Loading OpenStreetMap basemap…
+            </div>
+          </div>
+        ) : null}
+
+        {mapStatus === "error" ? (
+          <div className="absolute inset-x-4 top-24 flex justify-center">
+            <div className="max-w-md rounded-control border border-danger/30 bg-canvas-soft/95 p-3 text-ink shadow-lg">
+              <p className="text-button">Map tiles unavailable</p>
+              <p className="text-metadata mt-1 text-muted">
+                {mapError ?? "The basemap could not be loaded."}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setMapStatus("loading");
+                  setMapError(null);
+                  setRetryKey((value) => value + 1);
+                }}
+                className="text-button mt-2 rounded-control border border-line px-2.5 py-1.5 hover:bg-canvas"
+              >
+                Retry map
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="absolute right-4 bottom-14 left-4 flex flex-col items-stretch justify-between gap-3 sm:right-5 sm:left-5 lg:flex-row lg:items-end">
+          <div className="w-full rounded-panel border border-line bg-canvas-soft/95 p-3 text-ink shadow-lg backdrop-blur-sm lg:max-w-[270px]">
+            <p className="text-button">
+              {activeLayer === "base" ? "Basemap" : "RiverGuard overlay"}
+            </p>
+            <p className="text-metadata mt-2 text-muted">{layerSummary}</p>
+            <p className="text-metadata mt-2 border-t border-line pt-2 text-muted">
+              No RiverGuard prediction or hazard geometry is being fabricated on
+              this map.
+            </p>
+            {USING_OSM_TILES ? (
+              <p className="text-metadata mt-2 text-muted">
+                Basemap from OpenStreetMap&apos;s volunteer tile servers:{" "}
+                <a
+                  className="underline underline-offset-2 hover:text-ink"
+                  href="https://www.openstreetmap.org/fixthemap"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  report a map issue
+                </a>
+                .
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex max-w-sm items-start gap-2.5 rounded-panel bg-canvas-soft/95 p-3 text-ink shadow-lg backdrop-blur-sm">
+            <Info aria-hidden="true" size={20} className="mt-0.5 shrink-0" />
             <div>
-              <h2 id="map-title" className="text-section">
-                NCR (Metro Manila)
-              </h2>
+              <p className="text-button">RiverGuard data coverage</p>
+              <p className="text-metadata mt-1 text-muted">
+                City-level development coverage: Quezon City, Marikina, Manila,
+                and Pasig.
+              </p>
               <p className="text-metadata mt-0.5 text-muted">
-                Interactive OpenStreetMap basemap
+                Boundaries, stations, and hazard layers still require verified
+                local GIS files.
               </p>
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={resetView}
-          aria-label="Reset NCR map view"
-          title="Reset NCR map view"
-          className="pointer-events-auto inline-flex size-9 items-center justify-center rounded-control border border-line bg-canvas-soft/95 text-muted shadow-lg hover:bg-canvas hover:text-ink"
-        >
-          <ArrowCounterClockwise aria-hidden="true" size={17} />
-        </button>
       </div>
 
-      <div className="absolute top-4 right-4 hidden lg:block">
-        <HazardLayerControl
-          activeLayer={activeLayer}
-          onLayerChange={onLayerChange}
-        />
-      </div>
-
-      {mapStatus === "loading" ? (
-        <div className="absolute inset-x-4 top-24 flex justify-center">
-          <div className="rounded-control border border-line bg-canvas-soft/95 px-3 py-2 text-metadata text-muted shadow-lg">
-            Loading OpenStreetMap basemap…
-          </div>
-        </div>
-      ) : null}
-
-      {mapStatus === "error" ? (
-        <div className="absolute inset-x-4 top-24 flex justify-center">
-          <div className="max-w-md rounded-control border border-danger/30 bg-canvas-soft/95 p-3 text-ink shadow-lg">
-            <p className="text-button">Map tiles unavailable</p>
-            <p className="text-metadata mt-1 text-muted">
-              {mapError ?? "The basemap could not be loaded."}
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setMapStatus("loading");
-                setMapError(null);
-                setRetryKey((value) => value + 1);
-              }}
-              className="text-button mt-2 rounded-control border border-line px-2.5 py-1.5 hover:bg-canvas"
-            >
-              Retry map
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="absolute right-4 bottom-28 left-4 flex flex-col items-stretch justify-between gap-3 sm:right-5 sm:bottom-24 sm:left-5 lg:flex-row lg:items-end">
-        <div className="w-full rounded-panel border border-line bg-canvas-soft/95 p-3 text-ink shadow-lg backdrop-blur-sm lg:max-w-[270px]">
-          <p className="text-button">
-            {activeLayer === "base" ? "Basemap" : "RiverGuard overlay"}
-          </p>
-          <p className="text-metadata mt-2 text-muted">{layerSummary}</p>
-          <p className="text-metadata mt-2 border-t border-line pt-2 text-muted">
-            No RiverGuard prediction or hazard geometry is being fabricated on
-            this map.
-          </p>
-        </div>
-
-        <div className="flex max-w-sm items-start gap-2.5 rounded-panel bg-canvas-soft/95 p-3 text-ink shadow-lg backdrop-blur-sm">
-          <Info aria-hidden="true" size={20} className="mt-0.5 shrink-0" />
-          <div>
-            <p className="text-button">RiverGuard data coverage</p>
-            <p className="text-metadata mt-1 text-muted">
-              City-level development coverage: Quezon City, Marikina, Manila,
-              and Pasig.
-            </p>
-            <p className="text-metadata mt-0.5 text-muted">
-              Boundaries, stations, and hazard layers still require verified
-              local GIS files.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="absolute right-0 bottom-0 left-0 grid gap-px bg-line text-ink sm:grid-cols-[190px_repeat(4,1fr)]">
+      <div className="grid shrink-0 gap-px bg-line text-ink sm:grid-cols-[190px_repeat(4,1fr)]">
         <div className="bg-canvas-soft/95 px-4 py-3 backdrop-blur-sm">
           <p className="text-button">Supported data</p>
           <p className="text-metadata mt-0.5 text-muted">
