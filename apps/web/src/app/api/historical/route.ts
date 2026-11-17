@@ -1,196 +1,150 @@
-import { readFile } from "node:fs/promises";
-import { access } from "node:fs/promises";
-import path from "node:path";
+/**
+ * GET /api/historical
+ *
+ * Observed daily rows straight out of `data/daily_observations.csv`. Read the
+ * dataset through `@/lib/dataset`, which is the only module that parses the CSV.
+ *
+ *   ?location=Marikina   city name or slug (required)
+ *   ?start=2026-11-01    inclusive ISO date (optional)
+ *   ?end=2026-11-14      inclusive ISO date (optional)
+ *   ?limit=14            max rows, most recent first (default 30, max 3650)
+ *   ?mode=daily|monthly  aggregate view (default daily)
+ */
+
 import { NextResponse } from "next/server";
 
-interface HistoricalRow {
-  Date: string;
-  Location: string;
-  Rainfall_mm: string;
-  WaterLevel_m: string;
-  RainSource: string;
-  QualityStatus: string;
-}
+import {
+  DATASET_LABEL,
+  DatasetUnavailableError,
+  loadDataset,
+  monthlySeries,
+  seriesFor,
+} from "@/lib/dataset";
+import { LOCATIONS } from "@/lib/locations";
 
-interface MonthlyRow {
-  Month: string;
-  Rain_Manila_mm: string;
-  Rain_Marikina_mm: string;
-  Rain_Pasig_mm: string;
-  Rain_QuezonCity_mm: string;
-}
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-function parseCsv(text: string) {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let value = "";
-  let quoted = false;
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    const next = text[index + 1];
-    if (char === '"' && quoted && next === '"') {
-      value += '"';
-      index += 1;
-    } else if (char === '"') {
-      quoted = !quoted;
-    } else if (char === "," && !quoted) {
-      row.push(value);
-      value = "";
-    } else if ((char === "\n" || char === "\r") && !quoted) {
-      if (char === "\r" && next === "\n") index += 1;
-      row.push(value);
-      rows.push(row);
-      row = [];
-      value = "";
-    } else {
-      value += char;
-    }
-  }
-  if (value.length > 0 || row.length > 0) {
-    row.push(value);
-    rows.push(row);
-  }
-  return rows.filter((current) => current.some((cell) => cell.length > 0));
-}
-
-function parseMeasurement(value: string) {
-  if (!value.trim()) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-async function findDatasetPath() {
-  const candidates = [
-    path.join(process.cwd(), "data", "daily_observations.csv"),
-    path.join(process.cwd(), "..", "..", "data", "daily_observations.csv"),
-  ];
-  for (const candidate of candidates) {
-    try {
-      await access(candidate);
-      return candidate;
-    } catch {
-      // Continue to the next workspace layout candidate.
-    }
-  }
-  return null;
-}
-
-async function findMonthlyPath() {
-  const candidates = [
-    path.join(process.cwd(), "data", "monthly_summary.csv"),
-    path.join(process.cwd(), "..", "..", "data", "monthly_summary.csv"),
-  ];
-  for (const candidate of candidates) {
-    try {
-      await access(candidate);
-      return candidate;
-    } catch {
-      // Continue to the next workspace layout candidate.
-    }
-  }
-  return null;
+function friendlyName(location: string): string | null {
+  const slug = location.trim().toLowerCase().replace(/\s+/g, "-");
+  const match = Object.values(LOCATIONS).find(
+    (entry) =>
+      entry.code === slug ||
+      entry.name.toLowerCase() === location.trim().toLowerCase(),
+  );
+  return match?.name ?? null;
 }
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const location = url.searchParams.get("location") ?? "Marikina";
-  const mode = url.searchParams.get("mode") ?? "daily";
-  const start = url.searchParams.get("start");
-  const end = url.searchParams.get("end");
-  const limit = Math.min(
-    Math.max(Number(url.searchParams.get("limit") ?? 7), 1),
-    60,
-  );
-  const datasetPath = await findDatasetPath();
-  if (!datasetPath) {
+  const rawLocation = (url.searchParams.get("location") ?? "").trim();
+  if (!rawLocation) {
     return NextResponse.json(
-      { error: "Historical dataset is not available in this checkout." },
-      { status: 503 },
+      {
+        error: "A `location` query parameter is required.",
+        supported: Object.values(LOCATIONS).map((entry) => entry.name),
+      },
+      { status: 400 },
     );
   }
 
-  if (mode === "monthly") {
-    const monthlyPath = await findMonthlyPath();
-    if (!monthlyPath) {
-      return NextResponse.json(
-        { error: "Monthly summary is not available in this checkout." },
-        { status: 503 },
-      );
+  const mode = url.searchParams.get("mode") === "monthly" ? "monthly" : "daily";
+  const start = url.searchParams.get("start") ?? undefined;
+  const end = url.searchParams.get("end") ?? undefined;
+  const limit = Math.min(
+    Math.max(Number(url.searchParams.get("limit") ?? 30) || 30, 1),
+    3650,
+  );
+
+  try {
+    const dataset = await loadDataset();
+    const locationName = friendlyName(rawLocation) ?? rawLocation;
+
+    if (mode === "monthly") {
+      const monthly = monthlySeries(dataset, locationName);
+      if (monthly.length === 0) {
+        return NextResponse.json(
+          { error: `No monthly records are available for ${locationName}.` },
+          { status: 404 },
+        );
+      }
+      const months = Math.min(limit, monthly.length);
+      return NextResponse.json({
+        dataset: DATASET_LABEL,
+        datasetMeta: dataset.meta,
+        location: locationName,
+        mode: "monthly",
+        months,
+        series: monthly.slice(-months),
+      });
     }
-    const column = `Rain_${location.replace(" ", "")}_mm` as keyof MonthlyRow;
-    if (
-      ![
-        "Rain_Manila_mm",
-        "Rain_Marikina_mm",
-        "Rain_Pasig_mm",
-        "Rain_QuezonCity_mm",
-      ].includes(column)
-    ) {
+
+    const series = seriesFor(dataset, locationName);
+    if (series.length === 0) {
       return NextResponse.json(
-        { error: `No monthly rainfall series is available for ${location}.` },
+        { error: `No records are available for ${locationName}.` },
         { status: 404 },
       );
     }
-    const rows = parseCsv(
-      await readFile(/* turbopackIgnore: true */ monthlyPath, "utf8"),
-    );
-    const [header, ...body] = rows;
-    const monthly = body
-      .map(
-        (cells) =>
-          Object.fromEntries(
-            header.map((name, position) => [name, cells[position] ?? ""]),
-          ) as unknown as MonthlyRow,
+
+    const filtered = series
+      .filter(
+        (row) => (!start || row.date >= start) && (!end || row.date <= end),
       )
-      .filter((row) => row[column] !== undefined)
-      .slice(-24)
-      .map((row) => ({ month: row.Month, rainfall: Number(row[column]) }));
+      .slice(-limit);
+
+    if (filtered.length === 0) {
+      return NextResponse.json(
+        {
+          error: `No records for ${locationName} between ${start ?? "the first row"} and ${end ?? "the last row"}.`,
+          available: {
+            dateMin: series[0].date,
+            dateMax: series[series.length - 1].date,
+          },
+        },
+        { status: 404 },
+      );
+    }
+
     return NextResponse.json({
-      dataset: "RiverGuard NCR Dataset v2",
-      location,
-      readings: monthly,
+      dataset: DATASET_LABEL,
+      datasetMeta: dataset.meta,
+      location: locationName,
+      mode: "daily",
+      dateMin: filtered[0].date,
+      dateMax: filtered[filtered.length - 1].date,
+      readings: filtered.map((row) => ({
+        isoDate: row.date,
+        date: new Intl.DateTimeFormat("en-US", {
+          month: "short",
+          day: "numeric",
+          timeZone: "Asia/Manila",
+        }).format(new Date(`${row.date}T00:00:00+08:00`)),
+        rainfall: row.rainfallMm,
+        waterLevel: row.waterLevelM,
+        waterLevelChange24h: row.waterLevelChange24hM,
+        soilMoisture: row.soilMoisturePct,
+        antecedent3d: row.antecedentRain3dMm,
+        antecedent7d: row.antecedentRain7dMm,
+        antecedent30d: row.antecedentRain30dMm,
+        floodOccurrence: row.floodOccurrence,
+        riskLevel: row.riskLevel,
+        rainSource: row.rainSource,
+        qualityStatus: row.qualityStatus,
+        split: row.split,
+        stationId: row.stationId,
+      })),
     });
-  }
-
-  const rows = parseCsv(
-    await readFile(/* turbopackIgnore: true */ datasetPath, "utf8"),
-  );
-  const [header, ...body] = rows;
-  const filtered = body
-    .map((cells) => {
-      const row = Object.fromEntries(
-        header.map((name, position) => [name, cells[position] ?? ""]),
-      ) as unknown as HistoricalRow;
-      return row;
-    })
-    .filter((row) => row.Location === location)
-    .filter((row) => (!start || row.Date >= start) && (!end || row.Date <= end))
-    .sort((left, right) => left.Date.localeCompare(right.Date))
-    .slice(-limit);
-
-  if (filtered.length === 0) {
+  } catch (error) {
+    if (error instanceof DatasetUnavailableError) {
+      return NextResponse.json({ error: error.message }, { status: 503 });
+    }
     return NextResponse.json(
-      { error: `No historical records are available for ${location}.` },
-      { status: 404 },
+      {
+        error: "The historical dataset could not be read.",
+        detail: error instanceof Error ? error.message : "unknown error",
+      },
+      { status: 500 },
     );
   }
-
-  return NextResponse.json({
-    dataset: "RiverGuard NCR Dataset v2",
-    location,
-    dateMin: filtered[0].Date,
-    dateMax: filtered[filtered.length - 1].Date,
-    readings: filtered.map((row) => ({
-      isoDate: row.Date,
-      date: new Intl.DateTimeFormat("en-US", {
-        month: "short",
-        day: "numeric",
-        timeZone: "Asia/Manila",
-      }).format(new Date(`${row.Date}T00:00:00+08:00`)),
-      rainfall: parseMeasurement(row.Rainfall_mm),
-      waterLevel: parseMeasurement(row.WaterLevel_m),
-      rainSource: row.RainSource,
-      qualityStatus: row.QualityStatus,
-    })),
-  });
 }

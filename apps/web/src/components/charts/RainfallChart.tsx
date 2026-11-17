@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * Observed rainfall and derived water level from the real dataset.
+ *
+ * Every number comes from `GET /api/historical`, which reads
+ * `data/daily_observations.csv`. There is no illustrative fallback: if the
+ * dataset cannot be read, the panel says so and offers a retry. Substituting a
+ * hard-coded week here is what made previous builds look like they had data.
+ */
+
 import {
   Area,
   AreaChart,
@@ -9,7 +18,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   ChartContainer,
@@ -17,59 +26,128 @@ import {
   ChartTooltipContent,
   StatusLabel,
 } from "@/components/ui";
-import { historicalReadings } from "@/data/dashboard";
+import type { HistoricalReading } from "@/types";
+
+import { LOCATIONS, type LocationCode } from "@/lib/locations";
+
+type LoadState = "loading" | "ready" | "empty" | "error";
+
+interface HistoricalResponse {
+  dataset: string;
+  location: string;
+  dateMin: string;
+  dateMax: string;
+  readings: HistoricalReading[];
+  error?: string;
+  detail?: string;
+}
+
+function isLocationCode(value: string): value is LocationCode {
+  return value in LOCATIONS;
+}
 
 export function RainfallChart({
   endDate,
   location = "Marikina",
   startDate,
+  limit = 14,
+  compact = false,
 }: {
   endDate?: string;
   location?: string;
   startDate?: string;
+  limit?: number;
+  compact?: boolean;
 } = {}) {
-  const [readings, setReadings] = useState(historicalReadings);
-  const [datasetLabel, setDatasetLabel] = useState("Dataset v2 · loading");
-  const [state, setState] = useState<
-    "loading" | "ready" | "fallback" | "empty"
-  >("loading");
+  const [readings, setReadings] = useState<HistoricalReading[]>([]);
+  const [range, setRange] = useState<{ min: string; max: string } | null>(null);
+  const [dataset, setDataset] = useState<string>("");
+  const [state, setState] = useState<LoadState>("loading");
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  // The request whose result is currently in `state`. Any change to the query
+  // means the data on screen is stale, which is how "loading" is derived rather
+  // than assigned inside the effect.
+  const [resolvedKey, setResolvedKey] = useState<string | null>(null);
+
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+
+  const requestKey = `${location}|${limit}|${startDate ?? ""}|${endDate ?? ""}|${attempt}`;
+  const isStale = resolvedKey !== requestKey;
 
   useEffect(() => {
     let active = true;
-    const params = new URLSearchParams({ location, limit: "14" });
-    if (startDate) params.set("start", startDate);
-    if (endDate) params.set("end", endDate);
+
+    const [requestedLocation, requestedLimit, requestedStart, requestedEnd] =
+      requestKey.split("|");
+    const params = new URLSearchParams({
+      location: requestedLocation,
+      limit: requestedLimit,
+    });
+    if (requestedStart) params.set("start", requestedStart);
+    if (requestedEnd) params.set("end", requestedEnd);
+
     fetch(`/api/historical?${params.toString()}`)
       .then(async (response) => {
-        if (response.status === 404) return { empty: true as const };
-        if (!response.ok) throw new Error("Historical dataset unavailable");
-        return (await response.json()) as {
-          dataset: string;
-          readings: typeof historicalReadings;
-        };
+        const payload = (await response.json()) as HistoricalResponse;
+        if (!response.ok) {
+          throw new Error(
+            payload.error ??
+              `Historical data request failed (${response.status})`,
+          );
+        }
+        return payload;
       })
       .then((payload) => {
         if (!active) return;
-        if ("empty" in payload) {
-          setReadings([]);
-          setDatasetLabel("Dataset v2 · no records");
-          setState("empty");
-          return;
-        }
-        setReadings(payload.readings);
-        setDatasetLabel("Dataset v2 · historical");
-        setState("ready");
+        setReadings(payload.readings ?? []);
+        setRange({ min: payload.dateMin, max: payload.dateMax });
+        setDataset(payload.dataset);
+        setErrorDetail(null);
+        setState(payload.readings?.length ? "ready" : "empty");
+        setResolvedKey(requestKey);
       })
-      .catch(() => {
-        if (active) {
-          setDatasetLabel("Dataset v2 · fallback preview");
-          setState("fallback");
-        }
+      .catch((error: unknown) => {
+        if (!active) return;
+        setErrorDetail(
+          error instanceof Error
+            ? error.message
+            : "Historical data unavailable",
+        );
+        setState("error");
+        setResolvedKey(requestKey);
       });
+
     return () => {
       active = false;
     };
-  }, [endDate, location, startDate]);
+  }, [requestKey]);
+
+  const shownState: LoadState = isStale ? "loading" : state;
+  const latest = readings.length ? readings[readings.length - 1] : null;
+  const locationConfig = isLocationCode(
+    location.toLowerCase().replace(/\s+/g, "-"),
+  )
+    ? LOCATIONS[location.toLowerCase().replace(/\s+/g, "-") as LocationCode]
+    : null;
+  const alarms = locationConfig?.alarmLevelsM ?? null;
+  const alarmsVerified = locationConfig?.alarmsVerified ?? false;
+
+  // Real water level in Marikina sits near 13 m, well under the 15 m first
+  // alarm, so drawing all three alarm lines flattens the series into the axis.
+  // Plot the band only when the series actually gets near it.
+  const peak = readings.reduce(
+    (high, row) => Math.max(high, row.waterLevel ?? -Infinity),
+    -Infinity,
+  );
+  const showAlarms = alarms !== null && peak >= alarms[0] - 2.5;
+
+  // The water level is a proxy, never a gauge reading, so it is labelled every
+  // time. The rainfall series is not annotated per-range by design.
+  const waterIsDerived = Boolean(latest?.qualityStatus?.includes("derived"));
+  const dataNote = waterIsDerived
+    ? "Water level is a rainfall-derived proxy in this dataset, not a gauge reading."
+    : null;
 
   return (
     <section
@@ -81,25 +159,59 @@ export function RainfallChart({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="historical-context-title" className="text-section">
-            Historical context
+            Observed history
           </h2>
           <p className="text-metadata mt-0.5 text-muted">
-            Daily rainfall and documented derived water-level proxy · {location}
+            Daily rainfall and derived water-level proxy · {location}
+            {range ? ` · ${range.min} → ${range.max}` : ""}
           </p>
         </div>
         <StatusLabel className="border-line bg-canvas text-muted">
-          {datasetLabel}
+          {shownState === "ready" && dataset
+            ? `${dataset} · ${readings.length} days`
+            : shownState === "loading"
+              ? "Loading…"
+              : shownState === "error"
+                ? "Unavailable"
+                : "No records"}
         </StatusLabel>
       </div>
 
       <div className="mt-3 grid gap-3" aria-label="Historical context charts">
-        {state === "loading" ? (
-          <p className="text-metadata flex h-full items-center justify-center text-muted">
-            Loading historical records…
+        {shownState === "loading" ? (
+          <p
+            className={`text-metadata flex items-center justify-center text-muted ${
+              compact ? "h-[180px]" : "h-[300px]"
+            }`}
+          >
+            Loading observed records…
           </p>
-        ) : state === "empty" ? (
-          <p className="text-metadata flex h-full items-center justify-center text-muted">
-            No Dataset v2 records match this date range.
+        ) : shownState === "error" ? (
+          <div
+            className={`flex flex-col items-start justify-center gap-2 rounded-control border border-warning/30 bg-warning/5 p-4 ${
+              compact ? "h-[180px]" : "h-[300px]"
+            }`}
+            role="alert"
+          >
+            <p className="text-button">Observed history is unavailable</p>
+            <p className="text-metadata text-muted">
+              {errorDetail ?? "The dataset could not be read."}
+            </p>
+            <button
+              type="button"
+              onClick={retry}
+              className="text-button rounded-control border border-line bg-canvas px-2.5 py-1.5 hover:bg-canvas-soft"
+            >
+              Retry
+            </button>
+          </div>
+        ) : shownState === "empty" ? (
+          <p
+            className={`text-metadata flex items-center justify-center text-muted ${
+              compact ? "h-[180px]" : "h-[300px]"
+            }`}
+          >
+            No dataset rows match this location and date range.
           </p>
         ) : (
           <>
@@ -107,7 +219,7 @@ export function RainfallChart({
               <p className="text-metadata mb-1 font-semibold text-ink">
                 Daily rainfall · mm
               </p>
-              <div className="h-[135px]">
+              <div className={compact ? "h-[135px]" : "h-[190px]"}>
                 <ChartContainer
                   config={{
                     rainfall: {
@@ -179,7 +291,7 @@ export function RainfallChart({
                   Not a direct gauge observation
                 </p>
               </div>
-              <div className="h-[135px]">
+              <div className={compact ? "h-[135px]" : "h-[190px]"}>
                 <ChartContainer
                   config={{
                     waterLevel: {
@@ -207,36 +319,37 @@ export function RainfallChart({
                       tickLine={false}
                       tick={{ fontSize: 9 }}
                       unit=" m"
+                      domain={["auto", "auto"]}
                     />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                    {location === "Marikina" ? (
+                    {showAlarms && alarms ? (
                       <>
                         <ReferenceLine
-                          y={15}
+                          y={alarms[0]}
                           stroke="var(--color-warning)"
                           strokeDasharray="4 4"
                           label={{
-                            value: "1st alarm 15 m",
+                            value: `1st alarm ${alarms[0]} m`,
                             fontSize: 9,
                             fill: "var(--color-warning)",
                           }}
                         />
                         <ReferenceLine
-                          y={16}
+                          y={alarms[1]}
                           stroke="var(--color-danger)"
                           strokeDasharray="4 4"
                           label={{
-                            value: "2nd alarm 16 m",
+                            value: `2nd alarm ${alarms[1]} m`,
                             fontSize: 9,
                             fill: "var(--color-danger)",
                           }}
                         />
                         <ReferenceLine
-                          y={18}
+                          y={alarms[2]}
                           stroke="var(--color-danger)"
                           strokeDasharray="4 4"
                           label={{
-                            value: "3rd alarm 18 m",
+                            value: `3rd alarm ${alarms[2]} m`,
                             fontSize: 9,
                             fill: "var(--color-danger)",
                           }}
@@ -264,11 +377,20 @@ export function RainfallChart({
           </>
         )}
       </div>
-      {state === "fallback" ? (
-        <p className="text-metadata mt-2 text-warning">
-          Live Dataset v2 records were unavailable, so the compact preview is
-          shown.
-        </p>
+
+      {shownState === "ready" ? (
+        <div className="mt-2 grid gap-1">
+          {dataNote ? (
+            <p className="text-metadata text-warning">{dataNote}</p>
+          ) : null}
+          <p className="text-metadata text-muted">
+            Source: {latest?.rainSource ?? "undocumented"}
+            {latest?.stationId ? ` · station ${latest.stationId}` : ""}
+            {!showAlarms && alarms
+              ? ` · alarm lines hidden: the series peaks at ${peak.toFixed(2)} m, more than 2.5 m below the ${alarms[0]} m first alarm${alarmsVerified ? "" : " (indicative)"}`
+              : ""}
+          </p>
+        </div>
       ) : null}
     </section>
   );

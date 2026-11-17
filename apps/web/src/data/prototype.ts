@@ -115,230 +115,210 @@ export const roleDefinitions: Record<ProductRole, RoleDefinition> = {
   },
 };
 
-export const supportedLocations = [
-  {
-    name: "Quezon City",
-    support: "Supported",
-    status: "Moderate",
-    updated: "09:40 PHT",
-  },
-  {
-    name: "Marikina",
-    support: "Supported",
-    status: "Elevated",
-    updated: "09:40 PHT",
-  },
-  {
-    name: "Manila",
-    support: "Supported",
-    status: "Lower",
-    updated: "09:40 PHT",
-  },
-  {
-    name: "Pasig",
-    support: "Supported",
-    status: "Moderate",
-    updated: "09:40 PHT",
-  },
-] as const;
+/**
+ * The rest of this file describes what the running system can actually prove.
+ *
+ * Everything below used to be a literal: "RG-NCR-041", "Nov 11, 09:40", three
+ * named staff, a three-row review queue. None of it came from anywhere, so the
+ * screens looked populated while nothing had happened. Those tables are gone.
+ *
+ * What remains is either a type, a static catalogue of supported cities (which
+ * does exist — see lib/locations.ts), or a helper that derives a row set from
+ * the real dataset and the trained model artifacts. Screens that have no real
+ * source show an empty state instead.
+ */
 
-export const forecastRuns = [
-  {
-    id: "RG-NCR-041",
-    created: "Nov 11, 09:40",
-    location: "Marikina",
-    model: "RG-NCR v0.4",
-    status: "Complete",
-    warning: "Unverified source",
-  },
-  {
-    id: "RG-NCR-040",
-    created: "Nov 10, 09:42",
-    location: "Marikina",
-    model: "RG-NCR v0.4",
-    status: "Complete",
-    warning: "None",
-  },
-  {
-    id: "RG-NCR-039",
-    created: "Nov 9, 09:38",
-    location: "Quezon City",
-    model: "RG-NCR v0.3",
-    status: "Partial",
-    warning: "Missing reading",
-  },
-  {
-    id: "RG-NCR-038",
-    created: "Nov 8, 09:45",
-    location: "Pasig",
-    model: "RG-NCR v0.3",
-    status: "Failed",
-    warning: "Provider timeout",
-  },
-] as const;
+import type { DatasetMeta, ModelContribution } from "@/types";
 
-export const dataSources = [
-  {
-    id: "daily-rainfall",
-    name: "NCR daily rainfall research dataset",
-    provider: "RiverGuard research dataset",
-    coverage: "Nov 5–11, 2026",
-    status: "Unverified",
-  },
-  {
-    id: "city-boundaries",
-    name: "NCR city boundaries",
-    provider: "Illustrative local asset",
-    coverage: "Four supported cities",
-    status: "Illustrative",
-  },
-  {
-    id: "weather-forecast",
-    name: "Seven-day weather outlook",
-    provider: "Provider pending",
-    coverage: "Representative city points",
-    status: "Configuration pending",
-  },
-  {
-    id: "hazard-context",
-    name: "Static hazard context",
-    provider: "Source pending verification",
-    coverage: "NCR subset",
-    status: "Unavailable",
-  },
-] as const;
+import { LOCATION_CODES, LOCATIONS } from "@/lib/locations";
+import type {
+  ModelArtifactSummary,
+  ModelMetricsSummary,
+} from "@/lib/ml-artifacts";
 
-export const modelVersions = [
-  {
-    id: "rg-ncr-04",
-    name: "RG-NCR v0.4",
-    responsibility: "Experimental city-level outlook",
-    validation: "Research validation pending",
-    status: "Experimental",
-  },
-  {
-    id: "rg-ncr-03",
-    name: "RG-NCR v0.3",
-    responsibility: "Baseline comparison",
-    validation: "Historical holdout draft",
-    status: "Archived",
-  },
-  {
-    id: "static-hazard",
-    name: "Static hazard layer",
-    responsibility: "Long-term susceptibility context",
-    validation: "Source verification pending",
-    status: "Unavailable",
-  },
-] as const;
+export interface RunHistoryRow extends Record<string, string> {
+  run: string;
+  created: string;
+  location: string;
+  model: string;
+  status: string;
+  warning: string;
+}
 
-export const accessRequests = [
-  {
-    name: "Alyssa Reyes",
-    organization: "Quezon City DRRMO",
-    role: "LGU operator",
-    locations: "Supported NCR cities",
-    submitted: "Nov 11, 08:20",
-    status: "Verified",
-  },
-  {
-    name: "Marco Santos",
-    organization: "Marikina DRRMO",
-    role: "LGU operator",
-    locations: "Marikina",
-    submitted: "Nov 10, 16:05",
-    status: "Needs review",
-  },
-  {
-    name: "Dana Cruz",
-    organization: "Manila DRRMO",
-    role: "LGU operator",
-    locations: "Manila",
-    submitted: "Nov 10, 11:15",
-    status: "Needs review",
-  },
-] as const;
+export interface DataSourceRow {
+  id: string;
+  name: string;
+  provider: string;
+  coverage: string;
+  status: string;
+}
 
-export const systemUsers = [
-  {
-    name: "Dr. Ana Lim",
-    organization: "RiverGuard research",
-    role: "Administrator",
-    status: "Active",
-    locations: "All",
-    mfa: "Enabled",
-    lastAccess: "Today, 09:18",
-  },
-  {
-    name: "Paolo Mendoza",
-    organization: "University research team",
-    role: "Administrator",
-    status: "Active",
-    locations: "Supported NCR cities",
-    mfa: "Enabled",
-    lastAccess: "Today, 08:42",
-  },
-  {
-    name: "Liza Torres",
-    organization: "Marikina DRRMO",
-    role: "LGU operator",
-    status: "Active",
-    locations: "Marikina",
-    mfa: "Enabled",
-    lastAccess: "Yesterday, 17:20",
-  },
-] as const;
+export interface ModelVersionRow {
+  id: string;
+  name: string;
+  responsibility: string;
+  validation: string;
+  status: string;
+}
 
-export const reviewQueue = [
-  {
-    run: "RG-NCR-041",
-    location: "Marikina",
-    valid: "Nov 11–17",
-    quality: "Research",
-    review: "Needs review",
-    reviewer: "Unassigned",
-    updated: "09:40",
-  },
-  {
-    run: "RG-NCR-040",
-    location: "Marikina",
-    valid: "Nov 10–16",
-    quality: "Research",
-    review: "Reviewed with limitations",
-    reviewer: "L. Torres",
-    updated: "Yesterday",
-  },
-  {
-    run: "RG-NCR-039",
-    location: "Quezon City",
-    valid: "Nov 9–15",
-    quality: "Partial",
-    review: "Escalated",
-    reviewer: "M. Dela Cruz",
-    updated: "Nov 9",
-  },
-] as const;
+export interface LocationRow {
+  name: string;
+  support: string;
+  status: string;
+  updated: string;
+}
 
-export const auditEvents = [
-  {
-    time: "Nov 11, 09:32",
-    actor: "Dr. Ana Lim",
-    action: "Updated model status",
-    resource: "RG-NCR v0.4",
-    outcome: "Success",
-  },
-  {
-    time: "Nov 11, 08:44",
-    actor: "RiverGuard system",
-    action: "Created forecast fixture",
-    resource: "RG-NCR-041",
-    outcome: "Success",
-  },
-  {
-    time: "Nov 10, 16:18",
-    actor: "Dr. Ana Lim",
-    action: "Reviewed access request",
-    resource: "Marco Santos",
-    outcome: "Pending information",
-  },
-] as const;
+/** Supported cities, from the one table that defines them. */
+export const supportedLocations: LocationRow[] = LOCATION_CODES.map((code) => ({
+  name: LOCATIONS[code].name,
+  support: "Supported",
+  // No outlook has been run for these rows yet; see `outlookRowsFromSnapshot`.
+  status: "No run",
+  updated: "—",
+}));
+
+/**
+ * A stored run, as the screens need it.
+ *
+ * `forecastRuns` previously carried four invented run IDs. Runs only exist when
+ * someone presses "Run forecast" and Convex stores the result, so this is a
+ * mapping function rather than a constant.
+ */
+export function runHistoryRows(
+  runs: Array<{
+    runId: string;
+    requestedAt: number;
+    completedAt: number | null;
+    status: string;
+    locations: string[];
+    days: number;
+    alerts: number;
+    modelVersion: string | null;
+  }>,
+): RunHistoryRow[] {
+  return runs.map((run) => ({
+    run: run.runId,
+    created: new Date(run.requestedAt).toLocaleString("en-PH", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Manila",
+    }),
+    location: run.locations.length ? run.locations.join(", ") : "—",
+    model: run.modelVersion ?? "unknown",
+    status:
+      run.status === "completed"
+        ? `Complete · ${run.days} day(s)`
+        : run.status === "failed"
+          ? "Failed"
+          : "In progress",
+    warning: run.alerts > 0 ? `${run.alerts} elevated day(s)` : "None",
+  }));
+}
+
+/**
+ * Data sources, derived from the dataset that is actually on disk.
+ *
+ * The previous list named a "weather forecast" provider as "Provider pending"
+ * and a hazard layer as "Unavailable" — both stale guesses. These rows describe
+ * what the code reads today.
+ */
+export function dataSourceRows(
+  dataset: DatasetMeta | null,
+  provider?: string | null,
+): DataSourceRow[] {
+  return [
+    {
+      id: "daily-rainfall",
+      name: "NCR daily observations (dataset v2)",
+      provider: "RiverGuard research dataset",
+      coverage: dataset
+        ? `${dataset.dateMin} → ${dataset.dateMax} · ${dataset.rows.toLocaleString()} city-days`
+        : "Unavailable",
+      status: dataset
+        ? `${dataset.locations.length} cities · ERA5 rain from ${dataset.realRainFrom ?? "n/a"}`
+        : "Unreadable",
+    },
+    {
+      id: "weather-forecast",
+      name: "Daily weather forecast",
+      provider: provider ?? "Not yet called in this session",
+      coverage: "Next 14 days per city point",
+      status: provider
+        ? provider === "open-meteo"
+          ? "Live"
+          : "Degraded — offline fallback"
+        : "Run a forecast to resolve",
+    },
+    {
+      id: "city-boundaries",
+      name: "NCR city boundaries",
+      provider: "OpenStreetMap raster tiles",
+      coverage: "Four supported cities",
+      status: "Basemap only — no hazard polygons",
+    },
+  ];
+}
+
+/** Model versions, derived from `ml/artifacts/model.json` + `metrics.json`. */
+export function modelVersionRows(
+  model: ModelArtifactSummary | null,
+  metrics: ModelMetricsSummary | null,
+): ModelVersionRow[] {
+  if (!model) {
+    return [
+      {
+        id: "unavailable",
+        name: "No model artifacts",
+        responsibility: "Train the model to populate this table",
+        validation: "ml/artifacts/model.json is missing",
+        status: "Unavailable",
+      },
+    ];
+  }
+
+  const alarmCities = model.cities
+    .map(
+      (city) =>
+        `${city.name}: ${city.alarmLevelsM.join("/")} m${city.alarmsVerified ? "" : " (indicative)"}`,
+    )
+    .join(" · ");
+
+  return [
+    {
+      id: model.version,
+      name: `${model.name} ${model.version}`,
+      responsibility: model.kind,
+      validation: metrics
+        ? `Test ${metrics.samples.test.toLocaleString()} rows · AP ${metrics.classifier.averagePrecision.toFixed(3)} · ROC-AUC ${metrics.classifier.rocAuc.toFixed(4)} · Brier ${metrics.classifier.brier.toFixed(4)}`
+        : "Metrics file missing",
+      status: "Experimental",
+    },
+    {
+      id: "alarm-levels",
+      name: "Alarm thresholds",
+      responsibility: alarmCities,
+      validation: metrics
+        ? `Operating threshold ${model.operatingThreshold.toFixed(4)} · tuned on ${model.thresholdTunedOn}`
+        : `Operating threshold ${model.operatingThreshold.toFixed(4)}`,
+      status: "Indicative unless marked verified",
+    },
+    {
+      id: "model-caveat",
+      name: "Known limitation",
+      responsibility: metrics?.caveat || model.warning,
+      validation: metrics
+        ? `Test precision ${metrics.classifier.precision.toFixed(3)} · recall ${metrics.classifier.recall.toFixed(3)} · ${metrics.classifier.falsePositives} false alarms of ${metrics.classifier.truePositives + metrics.classifier.falsePositives} flags`
+        : "No test metrics",
+      status: "Research use only",
+    },
+  ];
+}
+
+/** Attribution rows, when a sweep has been run. Never a placeholder set. */
+export function contributionRows(
+  contributions: ModelContribution[] | null,
+): ModelContribution[] {
+  return contributions ?? [];
+}

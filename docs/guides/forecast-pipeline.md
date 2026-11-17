@@ -11,13 +11,13 @@ fails when. Complements [`docs/plan/phase-04-api-integration-hosting.md`](../pla
 
 ## 1. What runs where
 
-| Component | Where | Talks to | Responsibility |
-|---|---|---|---|
-| Dashboard (`apps/web`) | Local Next.js, port 3000 | Convex (read), `/api/forecast` | Shows the outlook, triggers a run |
-| `/api/forecast` route | Same Next process | Open-Meteo, ML service, Convex | The only orchestrator; holds provider secrets |
-| ML service (`services/ml`) | Local FastAPI, port 8000 | nothing | Feature engineering + inference |
-| Weather provider | Public API | — | 30 past days + 7 forecast days per point |
-| Convex | Cloud deployment | — | Stores runs, forecasts, assessments, alerts |
+| Component                  | Where                    | Talks to                       | Responsibility                                |
+| -------------------------- | ------------------------ | ------------------------------ | --------------------------------------------- |
+| Dashboard (`apps/web`)     | Local Next.js, port 3000 | Convex (read), `/api/forecast` | Shows the outlook, triggers a run             |
+| `/api/forecast` route      | Same Next process        | Open-Meteo, ML service, Convex | The only orchestrator; holds provider secrets |
+| ML service (`services/ml`) | Local FastAPI, port 8000 | nothing                        | Feature engineering + inference               |
+| Weather provider           | Public API               | —                              | 30 past days + 7 forecast days per point      |
+| Convex                     | Cloud deployment         | —                              | Stores runs, forecasts, assessments, alerts   |
 
 Two directions that must never be reversed:
 
@@ -71,12 +71,16 @@ Convex subscription, so a reload does not spend another weather call.
 3. The weather adapter fetches one Open-Meteo call: `past_days=30`, `forecast_days=7`, daily
    `precipitation_sum`, `temperature_2m_max`, `temperature_2m_min`, `et0_fao_evapotranspiration`,
    timezone `Asia/Manila`.
-4. From that series the adapter derives the model's observed inputs: today's rain, the antecedent
-   3/7/30-day sums (excluding today, matching the dataset's shifted windows), and soil moisture from a
-   water-balance bucket warmed up over the 30-day window.
-5. `POST {ML_API_BASE_URL}/v1/forecast/daily` with the observed state and the seven days.
-6. The ML service chains them: predict day *d*, fold its rain into the antecedent sums and the soil
-   bucket, predict day *d+1*. Each day comes back with probability, water level, risk level, alarm
+4. **The observed state does not come from the weather provider.** Before calling out, the route
+   reads the latest row for the city from `data/daily_observations.csv` through
+   `apps/web/src/lib/dataset.ts` and uses its rainfall, antecedent 3/7/30-day sums, and soil moisture
+   directly. Those are the same columns the model was trained on, they are shifted one day (no
+   leakage), and they exist even when the provider is down. The provider only supplies the _forward_
+   window. The response reports which source was used in `observedState.source`, plus the row date
+   and the row's `RainSource` / `QualityStatus`.
+5. `POST {ML_API_BASE_URL}/v1/forecast/daily` with that observed state and the seven days.
+6. The ML service chains them: predict day _d_, fold its rain into the antecedent sums and the soil
+   bucket, predict day _d+1_. Each day comes back with probability, water level, risk level, alarm
    crossing, and a one-sentence reason.
 7. The route calls the Convex mutation `forecasts:recordOutlook`, which writes one `forecastRuns` row,
    seven `forecasts`, seven `riskAssessments`, a `modelVersions` row if it is new, and an alert for
@@ -86,14 +90,15 @@ Convex subscription, so a reload does not spend another weather call.
 
 ## 5. Failure modes
 
-| Symptom | Cause | Behaviour |
-|---|---|---|
-| 503 `The local ML service did not produce a forecast` | uvicorn not running, or wrong `ML_API_BASE_URL` | Weather result is still returned in `weather`; nothing is stored |
-| 502 `Weather provider failed and fixture fallback is disabled` | Open-Meteo unreachable and `WEATHER_ALLOW_FIXTURE=false` | Explicit failure instead of invented numbers |
-| `weather.degraded: true` | Provider failed and the fixture was allowed | Runs end to end, dashboard labels it illustrative, Convex marks rows `unverified` |
-| 400 `Unknown locationCode` | Not one of the four cities | Lists the supported codes |
-| Outlook not saved | `NEXT_PUBLIC_CONVEX_URL` unset, or mutation error | Forecast still returned; `persistence.error` says why |
-| Alert never appears | No day reached `elevated` | Only elevated days raise alerts |
+| Symptom                                                                     | Cause                                                    | Behaviour                                                                                                                                                                                  |
+| --------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 503 `The local ML service did not produce a forecast`                       | uvicorn not running, or wrong `ML_API_BASE_URL`          | Weather result is still returned in `weather`; nothing is stored                                                                                                                           |
+| 502 `Weather provider failed and the offline forecast fallback is disabled` | Open-Meteo unreachable and `WEATHER_ALLOW_FIXTURE=false` | Explicit failure instead of invented numbers; the observed state is still returned                                                                                                         |
+| `weather.degraded: true`                                                    | Provider failed and the fixture was allowed              | Runs end to end on a real observed state; the outlook panel renders a warning banner and the run banner lists every warning, so the illustrative rainfall is never presented as a forecast |
+| `observedState.source: "weather"`                                           | The CSV had no row for that city                         | The model is seeded from the provider instead; a warning says so                                                                                                                           |
+| 400 `Unknown locationCode`                                                  | Not one of the four cities                               | Lists the supported codes                                                                                                                                                                  |
+| Outlook not saved                                                           | `NEXT_PUBLIC_CONVEX_URL` unset, or mutation error        | Forecast still returned; `persistence.error` says why                                                                                                                                      |
+| Alert never appears                                                         | No day reached `elevated`                                | Only elevated days raise alerts                                                                                                                                                            |
 
 ## 6. What is deliberately not automated
 
@@ -116,3 +121,20 @@ Options if unattended refresh is wanted later, cheapest first:
   documented; the UI must not present the others as official thresholds.
 - Contributed explanations are local sensitivity, not SHAP. `services/ml/app/services/explainability.py`
   says so in its module docstring; keep that language if you build on it.
+
+## 7. Where the numbers on screen come from
+
+Nothing in the UI holds its own sample values. One table:
+
+| Panel                             | Source                               | Endpoint                                                |
+| --------------------------------- | ------------------------------------ | ------------------------------------------------------- |
+| Observed history charts           | `data/daily_observations.csv`        | `GET /api/historical?location=&limit=`                  |
+| Dataset banner + provenance panel | the same CSV's identity and coverage | `GET /api/dataset`                                      |
+| Seven-day outlook                 | one completed model run              | `POST /api/forecast`                                    |
+| Model contribution bars           | one-at-a-time sensitivity sweep      | `GET /api/contributions` → `POST /v1/forecast/next-day` |
+| Model card, metrics, versions     | `ml/artifacts/{model,metrics}.json`  | `GET /api/model`                                        |
+| Run history                       | stored `forecastRuns`                | Convex `forecasts:recentRuns`                           |
+
+If a source is missing, the panel says which one and offers the action that fixes it. There is no
+static fallback for observations or outlook days — an illustrative week and a real forecast are
+indistinguishable once drawn, so the UI refuses to draw one.

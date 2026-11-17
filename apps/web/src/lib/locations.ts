@@ -84,3 +84,19 @@ export function isLocationCode(value: string): value is LocationCode {
 export function getLocation(value: string): LocationConfig | null {
   return isLocationCode(value) ? LOCATIONS[value] : null;
 }
+
+/**
+ * Accept a slug ("quezon-city"), a display name ("Quezon City"), or anything
+ * else and return a valid code, falling back to the default city.
+ *
+ * Wizard links carry a human-readable name, so this keeps the mapping in one
+ * place instead of duplicating a lookup in every screen.
+ */
+export function locationCodeForName(value: string): LocationCode {
+  const slug = value.trim().toLowerCase().replace(/\s+/g, "-");
+  if (isLocationCode(slug)) return slug;
+  const match = LOCATION_CODES.find(
+    (code) => LOCATIONS[code].name.toLowerCase() === value.trim().toLowerCase(),
+  );
+  return match ?? DEFAULT_LOCATION;
+}

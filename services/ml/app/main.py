@@ -12,7 +12,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import forecast, health, risk
+from app.api.routes import data, forecast, health, risk
 from app.core.config import settings
 
 DESCRIPTION = """
@@ -40,6 +40,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(data.router)
 app.include_router(forecast.router)
 app.include_router(risk.router)
 
@@ -53,6 +54,10 @@ def index() -> dict:
             "GET /health",
             "GET /health/ready",
             "GET /v1/cities",
+            "GET /v1/data/meta",
+            "GET /v1/data/latest",
+            "GET /v1/data/observations",
+            "GET /v1/data/monthly",
             "POST /v1/forecast/daily",
             "POST /v1/forecast/next-day",
             "POST /v1/risk/assess",
