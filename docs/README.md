@@ -11,6 +11,7 @@ See the project root [`README.md`](../README.md) for the overall project overvie
 - [`../data/README.md`](../data/README.md) — the delivered dataset: workbook, CSVs, generator, and the reliability table that separates observed from derived columns.
 - [`../ml/README.md`](../ml/README.md) — the test model trained on that dataset, its held-out metrics, and the interactive predictor page.
 - [`guides/forecast-pipeline.md`](guides/forecast-pipeline.md) — how weather, the local ML service and Convex connect, with the failure modes and the one thing a cron cannot do.
+- [`../SETUP.md`](../SETUP.md) — requirements and step-by-step instructions to run the website, the ML service and Convex locally.
 
 ## Product design
 
