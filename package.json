@@ -22,6 +22,7 @@
     "format:check": "prettier --check \"apps/web/**/*.{ts,tsx,css,mjs,json}\" \"convex/**/*.ts\" convex.json package.json .prettierrc.json"
   },
   "devDependencies": {
+    "convex": "^1.49.0",
     "prettier": "3.10.0"
   }
 }

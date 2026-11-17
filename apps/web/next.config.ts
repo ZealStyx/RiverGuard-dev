@@ -1,13 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // The dev server already trusts localhost and the hostname it was started
-  // with. Arena's sandbox previews the app at https://{port}-{sandbox}.e2b.app,
-  // and Next blocks cross-origin dev resources (/_next/static/*, HMR) unless
-  // that host is listed -- without this the preview loads unstyled HTML and no
-  // client JavaScript at all. Only dev asset loading is affected; production
-  // builds ignore this option.
-  allowedDevOrigins: ["127.0.0.1", "localhost", "*.e2b.app"],
+  allowedDevOrigins: ["127.0.0.1",'atlas-unadorned-pediatric.ngrok-free.dev',"localhost", "*.e2b.app"],
   reactStrictMode: true,
   async redirects() {
     return [
