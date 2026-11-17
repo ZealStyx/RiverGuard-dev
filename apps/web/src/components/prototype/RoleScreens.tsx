@@ -19,8 +19,12 @@ import { Button } from "@/components/ui";
 import { cx } from "@/lib/classnames";
 import { supportedLocations } from "@/data/prototype";
 import { convexConfigured } from "@/components/dashboard/OutlookBridge";
-import { convexFunctions, type RecentRun } from "@/lib/convex-functions";
-import { useQuery } from "convex/react";
+import {
+  convexErrorHint,
+  convexFunctions,
+  type RecentRun,
+} from "@/lib/convex-functions";
+import { useConvexQueryResult } from "@/lib/convex-query";
 import type { MapLayerId } from "@/types";
 
 import {
@@ -1352,10 +1356,22 @@ export function AdminScreen({ segments }: { segments: string[] }) {
  * LGU review queue, built from stored runs.
  *
  * A review row exists only because a run exists. This is a separate component so
- * `useQuery` is never called without a ConvexProvider.
+ * the Convex query is never called without a ConvexProvider.
  */
 function StoredRunReviewQueue() {
-  const runs = useQuery(convexFunctions.recentRuns, { limit: 10 });
+  const { data: runs, error } = useConvexQueryResult(
+    convexFunctions.recentRuns,
+    { limit: 10 },
+  );
+  if (error) {
+    // A deployment that has not been pushed yet must say so, not pretend the
+    // queue is empty.
+    return (
+      <p className="text-body text-muted">
+        Stored runs are unavailable: {convexErrorHint(error)}.
+      </p>
+    );
+  }
   if (runs === undefined) {
     return <p className="text-body text-muted">Loading stored runs…</p>;
   }

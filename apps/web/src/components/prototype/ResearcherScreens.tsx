@@ -8,7 +8,6 @@ import {
   Play,
   Plus,
 } from "@phosphor-icons/react";
-import { useQuery } from "convex/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -29,6 +28,8 @@ import {
   LOCATIONS,
   locationCodeForName,
 } from "@/lib/locations";
+import { convexErrorHint } from "@/lib/convex-functions";
+import { useConvexQueryResult } from "@/lib/convex-query";
 import { useOutlookFeed } from "@/lib/outlook";
 import { RiverMap } from "@/components/map/RiverMap";
 import { StationDetails } from "@/components/stations/StationDetails";
@@ -831,21 +832,26 @@ function CompareRunsUnavailable() {
 }
 
 /**
- * Stored runs. Kept in a separate component so `useQuery` is never called when
- * no deployment is configured — `useQuery` needs a ConvexProvider.
+ * Stored runs. Kept in a separate component so the query is never called when
+ * no deployment is configured — it needs a ConvexProvider.
  */
 function StoredRunTable() {
-  const runs = useQuery(convexFunctions.recentRuns, { limit: 25 });
+  const { data: runs, error } = useConvexQueryResult(
+    convexFunctions.recentRuns,
+    { limit: 25 },
+  );
   const rows: Array<Record<string, string>> = runHistoryRows(runs ?? []);
   return (
     <Surface
       title="Run history"
       description={
-        runs === undefined
-          ? "Loading stored runs…"
-          : runs.length === 0
-            ? "No runs stored yet — run a forecast to create one"
-            : `${runs.length} stored run(s)`
+        error
+          ? `Unavailable — ${convexErrorHint(error)}`
+          : runs === undefined
+            ? "Loading stored runs…"
+            : runs.length === 0
+              ? "No runs stored yet — run a forecast to create one"
+              : `${runs.length} stored run(s)`
       }
     >
       <DataTable

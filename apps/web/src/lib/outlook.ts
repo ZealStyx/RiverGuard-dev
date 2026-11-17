@@ -15,10 +15,10 @@
  * a forecast once it is drawn on a chart.
  */
 
-import { useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { convexFunctions } from "@/lib/convex-functions";
+import { convexErrorHint, convexFunctions } from "@/lib/convex-functions";
+import { useConvexQueryResult } from "@/lib/convex-query";
 import type { OutlookDay } from "@/types";
 
 export type OutlookSource = "live" | "convex";
@@ -183,15 +183,31 @@ export function useOutlookFeed(locationCode: string) {
   };
 }
 
-/** Subscription to the stored outlook. Rendered only when Convex is configured. */
+/**
+ * Subscription to the stored outlook. Rendered only when Convex is configured.
+ *
+ * Subscribed through `useConvexQueryResult` rather than `useQuery`: a deployment
+ * that has not been pushed since `latestOutlook` was added used to throw out of
+ * render and blank the whole dashboard. Here the failure is just "no stored
+ * outlook", which is state the feed already knows how to report.
+ */
 export function useStoredOutlook(
   locationCode: string,
   onSnapshot: (snapshot: OutlookSnapshot) => void,
 ) {
-  const data = useQuery(convexFunctions.latestOutlook, { locationCode });
+  const { data, error } = useConvexQueryResult(convexFunctions.latestOutlook, {
+    locationCode,
+  });
+
+  useEffect(() => {
+    if (error)
+      console.warn(`[outlook] stored outlook: ${convexErrorHint(error)}`);
+  }, [error]);
 
   const snapshot = useMemo<OutlookSnapshot | null>(() => {
-    if (!data || data.days.length === 0) return null;
+    if (!data || !Array.isArray(data.days) || data.days.length === 0) {
+      return null;
+    }
     return {
       days: data.days.map(toOutlookDay),
       source: "convex",

@@ -312,6 +312,35 @@ deployment values to `apps/web/.env.local`, generates the typed API files under
 Keep the generated `.env.local` file out of Git. The approved dashboard falls
 back to its clearly labelled sample data when no Convex URL is configured.
 
+#### `Could not find public function for 'forecasts:…'`
+
+That error means the **deployment is behind the code**, not that the function is
+missing from the repository. `convex/forecasts.ts` defines
+`recordOutlook`, `latestOutlook`, `recentRuns`, and `failStaleRuns`, but a
+deployment only learns about them when something pushes the directory:
+
+```bash
+npm run convex:dev        # development deployment (watch mode)
+npx convex deploy         # production deployment
+```
+
+Two things bite here:
+
+- **Pulling new code does not update the deployment.** PRs #18–#20 added
+  `forecasts:latestOutlook`; a deployment last pushed before that keeps
+  answering `Could not find public function`.
+- **The web app and the push must point at the same deployment.**
+  `NEXT_PUBLIC_CONVEX_URL` (in `apps/web/.env.local`) is where the browser sends
+  queries; `convex dev` pushes to the deployment it is logged into. If the URL
+  names a production deployment but you only ever ran `convex dev`, the app is
+  reading an older backend.
+
+The dashboard no longer blanks when this happens: `useStoredOutlook` and the run
+history/review screens report the failure through `useConvexQueryResult`
+(`apps/web/src/lib/convex-query.ts`), so the outlook panel shows its normal
+"no run yet" state and the run screens say the deployment does not expose the
+query instead of unmounting the page.
+
 ### 6.2 Start the Python ML service
 
 The ML package is currently a placeholder. The following is the intended
