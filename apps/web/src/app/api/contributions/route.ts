@@ -1,17 +1,18 @@
 /**
  * GET /api/contributions?locationCode=marikina
  *
- * Real model attribution for a city. The observed state comes from the dataset;
- * the weather window is the live provider (or the labelled offline fixture when
- * the provider is down and fixtures are allowed). The local ML service then
- * scores the next day and returns its sensitivity sweep.
+ * Real model attribution for a city. The input state comes from the weather
+ * provider window (or the labelled offline fixture when the provider is down and
+ * fixtures are allowed) — the same input `POST /api/forecast` uses, so the bars
+ * explain the run the dashboard shows. The local ML service then scores the next
+ * day and returns its sensitivity sweep.
  */
 
 import { NextResponse } from "next/server";
 
 import { getLocation } from "@/lib/locations";
 import { MlServiceError, requestNextDayForecast } from "@/lib/ml-client";
-import { observedStateFromDataset } from "@/lib/observed-state";
+import { describeModelInput } from "@/lib/model-input";
 import { getWeatherBundle } from "@/lib/weather";
 
 export const runtime = "nodejs";
@@ -45,36 +46,23 @@ export async function GET(request: Request) {
     );
   }
 
-  const observed = await observedStateFromDataset(location);
-  const seeded = observed ? { ...bundle, observed: observed.observed } : bundle;
+  const inputState = describeModelInput(bundle);
 
   try {
-    const result = await requestNextDayForecast(seeded);
+    const result = await requestNextDayForecast(bundle);
     return NextResponse.json({
       locationCode: location.code,
       locationName: location.name,
       modelVersion: result.meta.modelVersion,
-      asOfDate: observed?.asOfDate ?? result.day.date,
+      asOfDate: inputState.asOfDate,
       baseProbability: result.day.probability,
       baseWaterLevelM: result.day.waterLevelM,
       contributions: result.contributions,
-      observedState: observed
-        ? {
-            source: "dataset",
-            asOfDate: observed.asOfDate,
-            rainSource: observed.rainSource,
-            qualityStatus: observed.qualityStatus,
-          }
-        : {
-            source: "weather",
-            asOfDate: null,
-            rainSource: null,
-            qualityStatus: null,
-          },
-      degraded: seeded.degraded,
+      observedState: inputState,
+      degraded: bundle.degraded,
       warnings: [
-        ...(seeded.degraded
-          ? [seeded.degradationReason ?? "Weather inputs are degraded."]
+        ...(bundle.degraded
+          ? [bundle.degradationReason ?? "Weather inputs are degraded."]
           : []),
         "Contributions are a one-at-a-time sensitivity sweep, not causal effects.",
       ],

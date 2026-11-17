@@ -532,8 +532,8 @@ function ForecastForm() {
           />
           <TextField
             id="weather-provider"
-            label="Observed state"
-            value="data/daily_observations.csv"
+            label="Model input"
+            value="Open-Meteo forecast API (30 past days + 7 forecast days)"
             readOnly
           />
           <TextField
@@ -545,7 +545,7 @@ function ForecastForm() {
           <TextField
             id="coverage"
             label="Data coverage"
-            value="City-level daily observations"
+            value="City-level daily grid points, Asia/Manila"
             readOnly
           />
         </div>
@@ -559,9 +559,9 @@ function ForecastForm() {
           />
         </div>
         <Notice title="Review before running" tone="info" className="mt-3">
-          Confirm the selected location and horizon. The observed state is read
-          from the dataset; the weather provider supplies only the forward
-          window.
+          Confirm the selected location and horizon. The model input is the
+          weather provider&apos;s own window: today&apos;s rain, the antecedent
+          3/7/30-day sums and soil moisture, followed by its seven-day forecast.
         </Notice>
         <div className="mt-4 flex justify-end gap-2">
           <ActionLink href="/admin/research" variant="quiet">
@@ -669,7 +669,6 @@ function ForecastProgress() {
   const { run } = feed;
 
   const stages = [
-    "Reading the observed state",
     "Fetching the weather window",
     "Scoring seven days",
     "Storing the run",
@@ -689,7 +688,7 @@ function ForecastProgress() {
       <PageHeading
         title="Forecast in progress"
         eyebrow="Step 3 of 3"
-        description="Running the dataset → weather → model pipeline."
+        description="Running the weather → model → storage pipeline."
         actions={
           <ActionLink href="/admin/research/runs" variant="quiet">
             Run history
@@ -736,7 +735,12 @@ function ForecastProgress() {
               {[
                 ["Model", snapshot.modelVersion ?? "unknown"],
                 ["Weather provider", snapshot.provider],
-                ["Observed state", snapshot.observed?.asOfDate ?? "unknown"],
+                [
+                  "Model input",
+                  snapshot.observed
+                    ? `${snapshot.provider} through ${snapshot.observed.asOfDate}`
+                    : "unknown",
+                ],
                 [
                   "Outcome",
                   snapshot.degraded ? "Degraded weather inputs" : "Completed",
@@ -765,8 +769,8 @@ function ForecastProgress() {
                 days={snapshot.days}
                 source={snapshot.source}
                 note={
-                  snapshot.observed?.asOfDate
-                    ? `Seeded from dataset row ${snapshot.observed.asOfDate}`
+                  snapshot.observed
+                    ? `Model input: ${snapshot.provider}, rain through ${snapshot.observed.asOfDate}`
                     : undefined
                 }
                 degraded={snapshot.degraded}
@@ -973,6 +977,7 @@ function DataSourceCatalogInner({
         columns={[
           { key: "name", label: "Source" },
           { key: "provider", label: "Provider" },
+          { key: "role", label: "Used for" },
           { key: "coverage", label: "Coverage" },
           { key: "status", label: "Provenance status" },
         ]}
@@ -1013,7 +1018,7 @@ function DataSourceDetail({
       <PageHeading
         title="NCR daily observations (dataset v2)"
         eyebrow="Data-source metadata"
-        description="Research dataset backing every observation in this workspace."
+        description="The research dataset the model is trained on and the historical charts read. It is not read when a forecast runs."
         actions={
           <>
             <ActionLink
@@ -1035,6 +1040,15 @@ function DataSourceDetail({
         <dl className="grid gap-3 sm:grid-cols-2">
           {[
             ["Provider", "RiverGuard research dataset"],
+            ["Role", "Model training data + historical charts"],
+            [
+              "Runtime input",
+              "No — each forecast is scored from the weather provider, never from these rows",
+            ],
+            [
+              "Consumed by",
+              "Model training · GET /api/historical · GET /api/dataset",
+            ],
             ["Type", "Daily observations (dataset v2)"],
             ["Geography", "Quezon City, Marikina, Manila, Pasig"],
             [

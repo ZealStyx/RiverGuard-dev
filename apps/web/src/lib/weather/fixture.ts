@@ -57,6 +57,7 @@ export function fixtureProvider(): WeatherProvider {
           latitude: location.latitude,
           longitude: location.longitude,
         },
+        asOf: isoDate(0),
         observed: {
           rainfallTodayMm: FIXTURE_HISTORY[today],
           antecedentRain3dMm: antecedent3,
