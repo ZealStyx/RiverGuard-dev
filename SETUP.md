@@ -308,6 +308,25 @@ The local file is a fallback, not a second source of truth: nothing is written t
 configured. Delete it to start a clean local history. The forecast response says which happened in
 `persistence.kind` (`"convex"`, `"local"`) and repeats it in `warnings`.
 
+## 2.9 Verified map overlays (optional)
+
+The map draws the basemap only until a local GIS file passes verification. Nothing is fetched from a
+GIS service at runtime, and no geometry ships with this checkout, so the layer panel says _"RiverGuard
+overlays are hidden until verified local GIS data is added."_
+
+To add one:
+
+1. Put a GeoJSON file (WGS84 / `EPSG:4326`) in `data/gis/`, e.g. `flood-susceptibility.geojson`. The
+   geometry stays out of git; `data/gis/manifest.json` is committed.
+2. Describe it there — copy the field list from `data/gis/manifest.example.json`, including publisher,
+   source URL, licence, retrieval date, and who verified it.
+3. Run `npm run gis:verify -- --write-hashes`, then `npm run gis:verify`. Every layer must print `✓`.
+4. Reload the map: the layer appears in **Map layers** with its feature count, publisher, licence and
+   class legend. A layer that fails is listed as rejected with the reason and is never drawn.
+
+The result is written to `apps/web/src/generated/gis-layers.json` (committed), which is what the app
+reads. Details, the full field table and what verification does not prove: [`docs/guides/gis-data.md`](docs/guides/gis-data.md).
+
 ## 3. What runs where
 
 | Process            | Command                            | Address                 | Required?                |
@@ -354,6 +373,7 @@ neither is needed to run the website locally.
 | `EBADENGINE` warnings from npm                                                                                             | Node is older than 20.9. Upgrade Node.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Python `ModuleNotFoundError: app`                                                                                          | Install the package (`pip install -e "services/ml[dev]"`) and start uvicorn from `services/ml`, or use the venv from step 4.                                                                                                                                                                                                                                                                                                                                                         |
 | A page still shows wording you already changed (e.g. a note about the seeded dataset)                                      | Check the **build stamp** at the bottom of the risk panel or under the dashboard provenance line — `build <commit> · <time>Z`, also printed as `[riverguard] build …` when the server starts. If the page's stamp is older than the server's, you are looking at a stale tab or a different checkout: hard-reload (Ctrl-Shift-R), confirm `git log -1 --oneline` matches the stamp, and make sure only one `next dev` is running. Nothing in the source produces that copy any more. |
+| Map says "RiverGuard overlays are hidden until verified local GIS data is added"                                           | Correct for a clean checkout: no GIS layer has been verified. Add a GeoJSON file to `data/gis/`, describe it in `data/gis/manifest.json`, then run `npm run gis:verify` (see [§2.9](#29-verified-map-overlays-optional)). If a layer is listed as rejected, the panel shows the verifier's reason.                                                                                                                                                                                   |
 | Environment variables seem ignored                                                                                         | They must be in `apps/web/.env.local`. Restart `npm run dev` after editing — Next reads the file at startup.                                                                                                                                                                                                                                                                                                                                                                         |
 
 ---

@@ -54,6 +54,7 @@ import {
 import { useLocalRun, useLocalRuns } from "@/lib/use-runs";
 import { useDatasetMeta } from "@/lib/use-dataset-meta";
 import { useModelArtifacts } from "@/lib/use-model-artifacts";
+import { useGisLayers } from "@/lib/use-gis-layers";
 import type { MapLayerId } from "@/types";
 
 import {
@@ -156,6 +157,7 @@ function DashboardOverview() {
 
 function MapWorkspace() {
   const [activeLayer, setActiveLayer] = useState<MapLayerId>("base");
+  const gis = useGisLayers();
   return (
     <>
       <PageHeading
@@ -209,9 +211,15 @@ function MapWorkspace() {
             </div>
           </Surface>
           <Notice title="Map limitation" className="xl:shrink-0">
-            This is a real OpenStreetMap basemap. RiverGuard boundaries,
-            monitoring stations, hazard layers, and predictions are not loaded
-            until verified local GIS and model data are supplied.
+            {gis.layers.length === 0
+              ? "This is a real OpenStreetMap basemap. RiverGuard boundaries, monitoring stations and hazard layers are not loaded: none has passed verification in data/gis yet. The forecast model itself is city-level, so it has no geometry of its own to draw."
+              : `This is a real OpenStreetMap basemap plus ${gis.layers.length} verified local layer${
+                  gis.layers.length === 1 ? "" : "s"
+                } (${gis.layers
+                  .map((entry) => entry.title)
+                  .join(
+                    ", ",
+                  )}). The forecast model is city-level, so its predictions appear as numbers per city, never as geometry.`}
           </Notice>
         </div>
       </div>
