@@ -135,6 +135,10 @@ Nothing in the UI holds its own sample values. One table:
 | Model card, metrics, versions     | `ml/artifacts/{model,metrics}.json`  | `GET /api/model`                                        |
 | Run history                       | stored `forecastRuns`                | Convex `forecasts:recentRuns`                           |
 
+The CSV row in that table is **training data and history**, not a run-time input: the model was fitted
+on those columns, and the charts read the rows back, but a forecast is always scored from the weather
+provider window. The data-source catalogue in the app carries the same split in its "Used for" column.
+
 If a source is missing, the panel says which one and offers the action that fixes it. There is no
 static fallback for observations or outlook days — an illustrative week and a real forecast are
 indistinguishable once drawn, so the UI refuses to draw one.

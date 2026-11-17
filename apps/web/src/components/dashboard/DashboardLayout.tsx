@@ -208,8 +208,9 @@ export function DashboardLayout() {
                 </p>
                 {dataset ? (
                   <p className="text-metadata mt-1 text-muted">
-                    Dataset: {dataset.label} · {dataset.rows.toLocaleString()}{" "}
-                    city-days · {dataset.dateMin} → {dataset.dateMax}
+                    Training dataset: {dataset.label} ·{" "}
+                    {dataset.rows.toLocaleString()} city-days ·{" "}
+                    {dataset.dateMin} → {dataset.dateMax}
                     {dataset.realRainFrom
                       ? ` · real ERA5 rain since ${dataset.realRainFrom}`
                       : ""}

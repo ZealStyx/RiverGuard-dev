@@ -191,11 +191,13 @@ plus `forecast_days=7`; the adapter derives today's rainfall, the antecedent 3/7
 moisture from that window (`lib/weather/open-meteo.ts`), and the model is scored from there. The
 chain therefore starts at the provider's _today_, not at the last row of the CSV.
 
-`data/daily_observations.csv` remains the project's observed history: it backs the rainfall charts,
-the dataset banner and the provenance panel (`GET /api/historical`, `GET /api/dataset`). It is no
-longer read to seed a forecast, so a stale dataset cannot make a run start days in the past. If the
-provider cannot be reached, the run fails loudly (or uses the labelled offline fixture when
-`WEATHER_ALLOW_FIXTURE=true`) rather than substituting CSV rows for live weather.
+`data/daily_observations.csv` is the model's **training** data. Those rows are the columns the model
+was fitted on, and they are also the rows behind the historical charts, the dataset banner and the
+provenance panel (`GET /api/historical`, `GET /api/dataset`). Training is the only place they reach
+the model — a forecast run is never seeded from the CSV, so a stale dataset cannot make a run start
+days in the past. If the provider cannot be reached, the run fails loudly (or uses the labelled
+offline fixture when `WEATHER_ALLOW_FIXTURE=true`) rather than substituting CSV rows for live
+weather.
 
 ```bash
 cd services/ml && uvicorn app.main:app --port 8000   # 1. inference

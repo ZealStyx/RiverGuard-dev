@@ -977,6 +977,7 @@ function DataSourceCatalogInner({
         columns={[
           { key: "name", label: "Source" },
           { key: "provider", label: "Provider" },
+          { key: "role", label: "Used for" },
           { key: "coverage", label: "Coverage" },
           { key: "status", label: "Provenance status" },
         ]}
@@ -1017,7 +1018,7 @@ function DataSourceDetail({
       <PageHeading
         title="NCR daily observations (dataset v2)"
         eyebrow="Data-source metadata"
-        description="Research dataset backing every observation in this workspace."
+        description="The research dataset the model is trained on and the historical charts read. It is not read when a forecast runs."
         actions={
           <>
             <ActionLink
@@ -1039,6 +1040,15 @@ function DataSourceDetail({
         <dl className="grid gap-3 sm:grid-cols-2">
           {[
             ["Provider", "RiverGuard research dataset"],
+            ["Role", "Model training data + historical charts"],
+            [
+              "Runtime input",
+              "No — each forecast is scored from the weather provider, never from these rows",
+            ],
+            [
+              "Consumed by",
+              "Model training · GET /api/historical · GET /api/dataset",
+            ],
             ["Type", "Daily observations (dataset v2)"],
             ["Geography", "Quezon City, Marikina, Manila, Pasig"],
             [
