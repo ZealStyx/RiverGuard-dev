@@ -27,6 +27,10 @@ Whole lines that match an attribution signature:
   documentation snippets and rule examples survive — including a line that *quotes* a pattern.
 - Ordinary prose that merely mentions a tool: *"Generated with `python data/generate_dataset.py`"*,
   *"Rainfall comes from Open-Meteo ERA5"*, *"Assisted by the Marikina MDRRMO"*.
+- The bare word **arena**. It is an ordinary word in this repository (the `arena/...` branches), so
+  the rule requires the product name or the account: `Arena.ai`, `Arena Agent (Mode)`,
+  `arena-agent`. Without that, a sentence like *"every commit was made with `--no-verify`, so none
+  carries an Arena trailer"* matched `made … with … arena` and was deleted from a real PR body.
 - `Signed-off-by:` trailers (DCO is legitimate authorship metadata).
 - Commit messages and commit author/committer identity — those cannot be changed without
   rewriting history. The team's convention is simply not to add attribution there; see
@@ -113,6 +117,9 @@ python3 .github/scripts/strip_attribution.py path/to/body.md
 
 # check-only mode (exit 1 if attribution is present) — useful in a pre-push hook
 python3 .github/scripts/strip_attribution.py --check path/to/body.md
+
+# the rules themselves (plain unittest, no dependencies)
+python3 .github/scripts/test_strip_attribution.py
 
 # clean a PR you already opened
 gh pr view 15 --json body --jq .body | python3 .github/scripts/strip_attribution.py - \

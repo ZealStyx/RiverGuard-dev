@@ -30,7 +30,12 @@ PATTERNS: list[re.Pattern[str]] = [
     re.compile(
         r"\b(generated|created|written|authored|produced|made|crafted|assisted|powered)\b"
         r".{0,60}\b(with|by|using|via)\b.{0,60}"
-        r"\b(claude|cursor|copilot|codex|chatgpt|openai|anthropic|gemini|arena\.ai|arena|"
+        # `arena` on its own is not a signature: "arena" is an ordinary word here
+        # (the `arena/...` branches) and matching it stripped sentences such as
+        # "every commit was made with --no-verify, so none carries an Arena
+        # trailer". Require the product name or the account.
+        r"\b(claude|cursor|copilot|codex|chatgpt|openai|anthropic|gemini|arena\.ai|"
+        r"arena\s+agent(?:\s+mode)?|arena[- ]agent|"
         r"windsurf|aider|devin|replit|bolt\.new|qwen|kimi|grok)\b",
         re.I,
     ),
