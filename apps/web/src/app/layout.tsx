@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 
+import { StaleBuildNotice } from "@/components/StaleBuildNotice";
+
 import { ConvexClientProvider } from "./ConvexClientProvider";
 import "./globals.css";
 
@@ -31,6 +33,7 @@ export default function RootLayout({
     <html lang="en" className={GeistSans.variable}>
       <body>
         <ConvexClientProvider>{children}</ConvexClientProvider>
+        <StaleBuildNotice />
       </body>
     </html>
   );
