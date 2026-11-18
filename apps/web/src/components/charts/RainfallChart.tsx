@@ -37,6 +37,9 @@ interface HistoricalResponse {
   location: string;
   dateMin: string;
   dateMax: string;
+  /** Days after the dataset's last row that came from stored Open-Meteo runs. */
+  liveDays?: number;
+  datasetDateMax?: string | null;
   readings: HistoricalReading[];
   error?: string;
   detail?: string;
@@ -61,6 +64,9 @@ export function RainfallChart({
 } = {}) {
   const [readings, setReadings] = useState<HistoricalReading[]>([]);
   const [range, setRange] = useState<{ min: string; max: string } | null>(null);
+  const [live, setLive] = useState<{ days: number; after: string } | null>(
+    null,
+  );
   const [dataset, setDataset] = useState<string>("");
   const [state, setState] = useState<LoadState>("loading");
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
@@ -102,6 +108,11 @@ export function RainfallChart({
         if (!active) return;
         setReadings(payload.readings ?? []);
         setRange({ min: payload.dateMin, max: payload.dateMax });
+        setLive(
+          payload.liveDays && payload.datasetDateMax
+            ? { days: payload.liveDays, after: payload.datasetDateMax }
+            : null,
+        );
         setDataset(payload.dataset);
         setErrorDetail(null);
         setState(payload.readings?.length ? "ready" : "empty");
@@ -164,6 +175,9 @@ export function RainfallChart({
           <p className="text-metadata mt-0.5 text-muted">
             Daily rainfall and derived water-level proxy · {location}
             {range ? ` · ${range.min} → ${range.max}` : ""}
+            {live
+              ? ` · ${live.days} live day${live.days === 1 ? "" : "s"} after ${live.after}`
+              : ""}
           </p>
         </div>
         <StatusLabel className="border-line bg-canvas text-muted">
@@ -386,6 +400,9 @@ export function RainfallChart({
           <p className="text-metadata text-muted">
             Source: {latest?.rainSource ?? "undocumented"}
             {latest?.stationId ? ` · station ${latest.stationId}` : ""}
+            {live
+              ? ` · ${live.days} day${live.days === 1 ? "" : "s"} after ${live.after} read from the observation store (written by forecast runs), not the dataset`
+              : ""}
             {!showAlarms && alarms
               ? ` · alarm lines hidden: the series peaks at ${peak.toFixed(2)} m, more than 2.5 m below the ${alarms[0]} m first alarm${alarmsVerified ? "" : " (indicative)"}`
               : ""}

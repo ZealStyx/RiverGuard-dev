@@ -30,6 +30,20 @@ export interface SystemStatus {
     rows: number;
     error: string | null;
   };
+  /**
+   * Observed days kept from real provider runs. `configured: false` means no run
+   * has stored any yet, so the history chart still ends where the dataset does.
+   * `backend` says where those rows live: the Convex deployment when one is
+   * configured, otherwise a file on this machine.
+   */
+  observations: {
+    configured: boolean;
+    backend: "convex" | "file";
+    /** Human label for the store, e.g. the deployment table or the file path. */
+    store: string;
+    days: number;
+    error: string | null;
+  };
 }
 
 export const WEATHER_PROVIDER_LABEL: Record<WeatherProviderName, string> = {

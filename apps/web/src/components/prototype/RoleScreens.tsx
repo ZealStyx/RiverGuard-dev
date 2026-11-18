@@ -1639,6 +1639,16 @@ function ProviderConfiguration() {
                 : "Not configured — the provider's 30-day history is the only rainfall source.",
         ],
         [
+          "Observed days",
+          !status
+            ? "Reading…"
+            : status.observations.error
+              ? status.observations.error
+              : status.observations.configured
+                ? `${status.observations.days.toLocaleString()} day(s) in the ${status.observations.store}. Every real run upserts its window here, and the history chart reads the days the dataset does not cover.`
+                : `Empty — no real-provider run has stored its window yet. Written to the ${status.observations.store} once one runs; fixture runs are refused.`,
+        ],
+        [
           "River context",
           "GloFAS daily river discharge from the Open-Meteo Flood API, shown beside the result. Not a model input and not stored.",
         ],
@@ -1978,6 +1988,22 @@ function AdminSettings() {
                       : status.riverGauge.configured
                         ? `${status.riverGauge.rows.toLocaleString()} reading(s)`
                         : "Not configured"
+                    : "Reading…",
+                ],
+                [
+                  "Stored observation days",
+                  status
+                    ? status.observations.error
+                      ? "Unreadable — see provider configuration"
+                      : status.observations.configured
+                        ? `${status.observations.days.toLocaleString()} day(s) from real runs, ${
+                            status.observations.backend === "convex"
+                              ? "in the deployment"
+                              : "on this machine"
+                          }`
+                        : status.observations.backend === "convex"
+                          ? "None yet in the deployment"
+                          : "None yet on this machine"
                     : "Reading…",
                 ],
                 [
