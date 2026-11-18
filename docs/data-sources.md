@@ -79,6 +79,15 @@ should not jitter because of a random number generator in another process. Again
   change instead of reporting several days as one.
 - A location never covered by a run simply ends where the CSV does; the chart says so and shows no live days.
 
+**Filling the gaps.** A day nobody opened the app for is missing from the store, and the live endpoint's
+`past_days` only reaches back 92 days (and returns today's view of those days anyway).
+`npm run data:backfill` (`scripts/backfill_observed_weather.mjs`) asks the historical forecast archive (S7)
+for a date range and writes the missing days through the same `observations:recordWindow` mutation, so the
+chart fills in with no other change. Those rows carry `provider = open-meteo-historical-forecast`: an
+archive day is never mistaken for one a run collected, or for a gauge. Days already stored are left alone
+unless `--overwrite` is passed, and the run reports per-column coverage — ET0 and soil moisture are not
+continuous in the archive, and the script writes `null` rather than a substitute.
+
 To start over, delete that city's `observedWeather` rows — or `.data/observations.json` when no deployment
 is configured — and the chart returns to the CSV's last row.
 
@@ -170,18 +179,37 @@ training labels because the daily/site attribution needed for that is missing.
 | Licence          | Generated in-repo; no third-party data redistributed                                                                                                                                                                                                                                                                                              |
 | Limitation       | **Not observations.** Water level is a formula over rainfall, so any model trained on it partly relearns that formula.                                                                                                                                                                                                                            |
 
+### S7 — Open-Meteo historical forecast archive
+
+| Field        | Value                                                                                                                                                                                                                                                                                                          |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Provider     | Open-Meteo (archived runs of ECMWF IFS, GFS, ICON and others)                                                                                                                                                                                                                                                  |
+| Endpoint     | `historical-forecast-api.open-meteo.com/v1/forecast`                                                                                                                                                                                                                                                           |
+| Variables    | `precipitation_sum`, `temperature_2m_max/min`, `et0_fao_evapotranspiration` (daily); `soil_moisture_0_to_7cm` (hourly, averaged per local day with a 6-sample minimum)                                                                                                                                         |
+| Coordinates  | The same four as S4 — Marikina 14.65/121.10 · Quezon City 14.6509/121.0486 · Manila 14.587/120.979 · Pasig 14.59/121.07                                                                                                                                                                                        |
+| Coverage     | 2021-01-01 → present. One backfill run is capped at 365 days, and nothing beyond today in Manila                                                                                                                                                                                                               |
+| Timezone     | Asia/Manila (`timezone=Asia/Manila`)                                                                                                                                                                                                                                                                           |
+| Requested by | `scripts/backfill_observed_weather.mjs` (`npm run data:backfill`) — on demand only; never called at run time                                                                                                                                                                                                   |
+| Written to   | The observation store (`observedWeather`, or `.data/observations.json` with no deployment), `provider = open-meteo-historical-forecast`                                                                                                                                                                        |
+| Licence      | Open-Meteo, CC-BY-4.0; the free tier is for non-commercial use                                                                                                                                                                                                                                                 |
+| Limitation   | **Model output, not a gauge** — and not the forecast as it was issued either: the archive keeps each update's initial hours, so a day's value is a near-analysis. For fixed-lead forecasts use Open-Meteo's Previous Runs API (from 2024); there is no issue-time archive for pre-2021 events such as Ulysses. |
+
+This is the source that closes, for recent days, the gap listed in §3. It never touches
+`data/daily_observations.csv`: the dataset stays a generated snapshot, and the archive only fills the live
+store that extends it.
+
 ---
 
 ## 3. What is still missing (Phase 1 remainder)
 
-| Gap                                                | Why it matters                              | Where to request                                   |
-| -------------------------------------------------- | ------------------------------------------- | -------------------------------------------------- |
-| PAGASA AWS / EFCOS rainfall series                 | Real rainfall at station resolution, hourly | PAGASA-HMD; DOST-ASTI PhilSensors                  |
-| PAGASA FFWS / EFCOS water-level telemetry          | Only real data can satisfy the Model A gate | PAGASA FFWS; Marikina MDRRMO                       |
-| LGU-verified flood events with dates and locations | Label quality for Model B                   | CDRRMO of QC, Marikina, Manila, Pasig; NDRRMC      |
-| NCR / barangay boundaries, rivers, catchments      | Map layers                                  | PSA; Project NOAH; OSM (with licence checks)       |
-| DEM/DTM, land cover, soils                         | Terrain features                            | DOST-ASTI; PhilGIS                                 |
-| Historical forecast snapshots                      | Reproduce what was known at issue time      | Provider archives (Open-Meteo/ECMWF), if available |
+| Gap                                                | Why it matters                              | Where to request                                                                                                                                               |
+| -------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PAGASA AWS / EFCOS rainfall series                 | Real rainfall at station resolution, hourly | PAGASA-HMD; DOST-ASTI PhilSensors                                                                                                                              |
+| PAGASA FFWS / EFCOS water-level telemetry          | Only real data can satisfy the Model A gate | PAGASA FFWS; Marikina MDRRMO                                                                                                                                   |
+| LGU-verified flood events with dates and locations | Label quality for Model B                   | CDRRMO of QC, Marikina, Manila, Pasig; NDRRMC                                                                                                                  |
+| NCR / barangay boundaries, rivers, catchments      | Map layers                                  | PSA; Project NOAH; OSM (with licence checks)                                                                                                                   |
+| DEM/DTM, land cover, soils                         | Terrain features                            | DOST-ASTI; PhilGIS                                                                                                                                             |
+| Issue-time forecast snapshots before 2021          | Reproduce what was known at issue time      | Partly closed for recent days by S7 (archive 2021→now, fixed 1–7 day leads via Previous Runs from 2024); still missing for earlier events such as Ulysses 2020 |
 
 ---
 
