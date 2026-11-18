@@ -94,7 +94,16 @@ export async function POST(request: Request) {
   }
 
   const issueDate = bundle.asOf;
-  const persistence = await persistOutlook(bundle, forecast, issueDate);
+  const accessToken = request.headers.get("authorization")?.replace(
+    /^Bearer\s+/i,
+    "",
+  );
+  const persistence = await persistOutlook(
+    bundle,
+    forecast,
+    issueDate,
+    accessToken,
+  );
 
   // Best effort: the run is already stored, so a failed audit write is reported
   // as a warning rather than replacing the forecast with an error.

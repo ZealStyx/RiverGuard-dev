@@ -25,5 +25,8 @@
   "devDependencies": {
     "convex": "^1.49.0",
     "prettier": "3.10.0"
+  },
+  "dependencies": {
+    "firebase": "^13.4.0"
   }
 }

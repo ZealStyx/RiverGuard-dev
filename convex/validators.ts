@@ -6,6 +6,13 @@ export const userRoleValidator = v.union(
   v.literal("admin"),
 );
 
+export const userStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("active"),
+  v.literal("suspended"),
+  v.literal("rejected"),
+);
+
 export const dataQualityValidator = v.union(
   v.literal("verified"),
   v.literal("provisional"),
