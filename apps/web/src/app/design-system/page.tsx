@@ -58,7 +58,7 @@ export default function DesignSystemPage() {
       <div className="mx-auto max-w-[1440px] rounded-structure bg-canvas p-6 shadow-[0_24px_80px_rgba(0,0,0,0.18)] md:p-8 lg:p-10">
         <header className="flex flex-col gap-6 border-b border-line pb-8 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-metadata uppercase tracking-[0.14em] text-brand-secondary">
+            <p className="text-metadata uppercase tracking-[0.14em] text-brand-secondary-ink">
               RiverGuard / Approved foundations
             </p>
             <h1 className="text-page-title mt-2">
@@ -119,7 +119,7 @@ export default function DesignSystemPage() {
                 aria-label="Palette navigation example"
                 className="flex flex-wrap items-center gap-2 border-b border-line pb-4"
               >
-                <span className="text-section mr-3 text-brand-primary">
+                <span className="text-section mr-3 text-brand-primary-ink">
                   RiverGuard
                 </span>
                 <a
@@ -307,11 +307,15 @@ export default function DesignSystemPage() {
                 <h3 className="text-section mt-2">Meaning before decoration</h3>
                 <div className="text-body mt-4 grid gap-3 text-muted">
                   <p>
-                    <strong className="text-brand-primary">Deep blue</strong>{" "}
+                    <strong className="text-brand-primary-ink">
+                      Deep blue
+                    </strong>{" "}
                     carries the primary data series and authoritative actions.
                   </p>
                   <p>
-                    <strong className="text-brand-secondary">River teal</strong>{" "}
+                    <strong className="text-brand-secondary-ink">
+                      River teal
+                    </strong>{" "}
                     marks active layers, selected dates, and supporting data.
                   </p>
                   <p>

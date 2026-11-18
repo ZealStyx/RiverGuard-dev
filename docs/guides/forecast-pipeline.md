@@ -93,6 +93,48 @@ Convex subscription, so a reload does not spend another weather call.
 8. The dashboard renders the response immediately and the Convex subscription delivers the same run
    on the next page load.
 
+### What else is written locally
+
+Two files live beside the runs. Both are gitignored, both are written atomically with a
+temp-file rename, and both are capped so they cannot grow without bound:
+
+- `.data/reviews.json` — LGU review decisions recorded through `POST /api/reviews`, newest first,
+  capped at 500. A review is only accepted when the run it refers to exists in the active store.
+- `.data/audit.json` — audit events for a stored run or a recorded review, read back through
+  `GET /api/audit` (filtered on the server), capped at 500. There is no sign-in, so every actor is
+  `Local operator (unauthenticated)`; the screen says so rather than implying a real trail.
+
+`REVIEW_STORE_PATH` and `AUDIT_STORE_PATH` override the locations, as `RUN_STORE_PATH` does for the
+run store.
+
+### Observed inputs: gauge, soil moisture, river context
+
+Three additions sit around step 1, and all three are reported rather than assumed:
+
+- **Soil moisture is now requested, not reconstructed.** The adapter asks for hourly
+  `soil_moisture_0_to_7cm` and averages it onto each day (Open-Meteo returns m³/m³; the
+  pipeline stores percent). When the model returns no soil variable the request is retried
+  without the hourly block and the water-balance bucket stands in — `observed.soilMoistureSource`
+  records which happened, and the provider screen shows the same fact.
+- **An optional local gauge file replaces reanalysis rainfall.** `data/gauge/daily_rainfall.csv`
+  (or `GAUGE_CSV_PATH`) holds `date,location,rainfall_mm` rows. Every date it covers replaces
+  that day's provider value; the antecedent sums and the soil bucket are then recomputed from
+  the blended window, so a gauge day is not averaged with the estimate it corrects.
+  `observed.rainfallSource`, `observed.gaugeDays` and the run's input summary state the coverage
+  ("12 of 31 observed days replaced by a local rain gauge"). No file ships with the repository:
+  an absent file means the provider's history is used, and an unreadable one is reported as a
+  warning on the run. Format and provenance notes: `data/gauge/README.md`.
+- **GloFAS river discharge is context only.** `lib/flood.ts` asks the Open-Meteo Flood API for
+  daily `river_discharge` at the city's point and returns it as `riverContext` in the
+  `POST /api/forecast` response; the outlook panel prints the value for the selected day next to
+  the model's water level. It is a different quantity (m³/s of modelled river flow at ~5 km
+  resolution) and is never a feature, never stored with the run, and never drawn as a RiverGuard
+  prediction. When GloFAS has no reach there, the response carries `riverContextError` and the
+  forecast is unaffected.
+
+All three are best-effort: a soil variable, a gauge file or a Flood API call failing cannot fail
+a forecast.
+
 ## 5. Failure modes
 
 | Symptom                                                                     | Cause                                                                                          | Behaviour                                                                                                                                                                                                                                                     |

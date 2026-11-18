@@ -35,7 +35,7 @@ export interface RiskSummaryProps {
 
 function toneForLabel(label: OutlookDay["label"]): string {
   if (label === "Elevated") return "text-warning";
-  if (label === "Moderate") return "text-brand-secondary";
+  if (label === "Moderate") return "text-brand-secondary-ink";
   return "text-muted";
 }
 
@@ -69,6 +69,10 @@ export function RiskSummary({
   const hasDays = days.length > 0;
   const activeIndex = hasDays ? Math.min(selectedDay, days.length - 1) : 0;
   const activeDay = hasDays ? days[activeIndex] : null;
+  // GloFAS context for the selected day, when this run fetched any.
+  const riverDay = snapshot?.riverContext?.days.find(
+    (entry) => entry.date === activeDay?.isoDate,
+  );
 
   const monthYear = activeDay
     ? new Date(`${activeDay.isoDate}T00:00:00+08:00`).toLocaleDateString(
@@ -196,6 +200,17 @@ export function RiskSummary({
               </>
             ) : null}
           </div>
+
+          {snapshot?.riverContext ? (
+            <p className="text-metadata mt-2 text-muted">
+              GloFAS river discharge at this point:{" "}
+              {riverDay
+                ? `${riverDay.dischargeM3s.toLocaleString("en-PH")} m³/s on ${riverDay.date}`
+                : "no value for this day"}
+              . A modelled river flow, not the water level above and not a
+              RiverGuard prediction.
+            </p>
+          ) : null}
 
           <div
             className="mt-3 grid grid-cols-7 gap-1"

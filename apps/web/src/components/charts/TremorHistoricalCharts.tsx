@@ -194,7 +194,7 @@ export function TremorHistoricalCharts({
               Accumulated daily rainfall · {location} · mm
             </p>
           </div>
-          <span className="text-metadata rounded-full border border-brand-secondary-muted bg-brand-secondary-soft px-2 py-1 text-brand-secondary">
+          <span className="text-metadata rounded-full border border-brand-secondary-muted bg-brand-secondary-soft px-2 py-1 text-brand-secondary-ink">
             Tremor trial
           </span>
         </div>

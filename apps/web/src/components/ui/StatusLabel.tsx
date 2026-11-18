@@ -5,7 +5,7 @@ import { cx } from "@/lib/classnames";
 const toneClasses = {
   neutral: "border-line bg-canvas-soft text-muted",
   experimental:
-    "border-brand-secondary/30 bg-brand-secondary-soft text-brand-primary",
+    "border-brand-secondary/30 bg-brand-secondary-soft text-brand-primary-ink",
   available: "border-success/25 bg-success/10 text-success",
   warning: "border-warning/25 bg-warning/10 text-warning",
   unavailable: "border-ink/20 bg-ink/5 text-muted",
