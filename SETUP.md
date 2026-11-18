@@ -71,9 +71,10 @@ node -v   # must be 20.9.0 or newer
 
 ### Step 3 — Create the environment file
 
-The website reads its configuration from **`apps/web/.env.local`** (not the
-repository root — `next dev` runs with `apps/web` as its working directory).
-That file is git-ignored.
+The website and local Convex development workflow read their configuration from
+**`apps/web/.env.local`**. Create the file at that exact path—not at the
+repository root. The root `.env.local` is not used and should not be created.
+The `apps/web/.env.local` file is git-ignored.
 
 The defaults are enough for a first run, so the smallest useful file is:
 
@@ -84,6 +85,10 @@ WEATHER_PROVIDER=open-meteo
 WEATHER_ALLOW_FIXTURE=false
 EOF
 ```
+
+On Windows PowerShell, create or edit
+`apps/web/.env.local` with the same values. Do not create a second `.env.local`
+in the repository root.
 
 [`.env.example`](.env.example) documents every variable, but its two Convex
 values are placeholders — copy the file only if you are about to run step 5,
@@ -153,9 +158,18 @@ npm run convex:dev
 - Choose **create a new deployment** / a **development** deployment when asked.
 - The command writes `CONVEX_DEPLOYMENT` and `NEXT_PUBLIC_CONVEX_URL` into
   `apps/web/.env.local`, generates `convex/_generated/`, and pushes `convex/`.
+- Make sure `NEXT_PUBLIC_FIREBASE_PROJECT_ID` in `apps/web/.env.local` matches
+  the Firebase project used by the web app. The `convex/auth.config.ts` file
+  configures Convex to accept that project's Firebase ID tokens.
 
 Leave it running while you work: it keeps the deployment in sync. If you stop it,
 your deployment keeps the functions you already pushed.
+
+If Firebase sign-in succeeds but Convex reports **“No auth provider found
+matching the given token”**, the selected Convex deployment has not received the
+current `convex/` configuration. Run `npm run convex:dev` while targeting your
+own development deployment, then restart the Next.js server. Do not deploy
+these changes to somebody else's production deployment without permission.
 
 > **`Could not find public function for 'forecasts:latestOutlook'`** means the
 > deployment is behind the code — pull doesn't push. Run `npm run convex:dev`

@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 
+import { FirebaseAuthProvider } from "@/components/auth/FirebaseAuthProvider";
+
 import { ConvexClientProvider } from "./ConvexClientProvider";
 import "./globals.css";
 
@@ -26,7 +28,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={GeistSans.variable}>
       <body>
-        <ConvexClientProvider>{children}</ConvexClientProvider>
+        <FirebaseAuthProvider>
+          <ConvexClientProvider>{children}</ConvexClientProvider>
+        </FirebaseAuthProvider>
       </body>
     </html>
   );

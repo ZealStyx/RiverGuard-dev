@@ -14,6 +14,8 @@ import {
 } from "convex/server";
 import { v } from "convex/values";
 
+import { requireRole } from "./auth";
+
 export const listForLocation = query({
   args: {
     locationCode: v.string(),
@@ -21,6 +23,7 @@ export const listForLocation = query({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    await requireRole(ctx, ["resident", "lgu", "admin"]);
     return await ctx.db
       .query("alerts")
       .withIndex("by_location_created_at", (index) =>
@@ -36,6 +39,7 @@ export const listOpenForLocation = query({
   args: { locationCode: v.string(), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, args) => {
+    await requireRole(ctx, ["resident", "lgu", "admin"]);
     const rows = await ctx.db
       .query("alerts")
       .withIndex("by_location_created_at", (index: any) =>
@@ -148,10 +152,11 @@ export const acknowledge = mutation({
   args: { alertId: v.id("alerts"), acknowledgedBy: v.optional(v.id("users")) },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["lgu", "admin"]);
     await ctx.db.patch(args.alertId, {
       status: "acknowledged",
       acknowledgedAt: Date.now(),
-      acknowledgedBy: args.acknowledgedBy,
+      acknowledgedBy: user._id,
     });
     return null;
   },
@@ -161,6 +166,7 @@ export const resolve = mutation({
   args: { alertId: v.id("alerts") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireRole(ctx, ["lgu", "admin"]);
     await ctx.db.patch(args.alertId, {
       status: "resolved",
       resolvedAt: Date.now(),

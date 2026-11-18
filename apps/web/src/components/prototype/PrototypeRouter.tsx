@@ -1,5 +1,6 @@
 import type { ProductRole } from "@/data/prototype";
 
+import { WorkspaceGate } from "../auth/WorkspaceGate";
 import { AppShell } from "./AppShell";
 import {
   AuthScreen,
@@ -40,33 +41,39 @@ export function PrototypeRouter({
   }
   if (section === "settings") {
     return (
-      <AppShell role="admin">
-        <main className="p-4 sm:p-5">
-          <SettingsScreen screen={segments[0] ?? "profile"} />
-        </main>
-      </AppShell>
+      <WorkspaceGate role="admin">
+        <AppShell role="admin">
+          <main className="p-4 sm:p-5">
+            <SettingsScreen screen={segments[0] ?? "profile"} />
+          </main>
+        </AppShell>
+      </WorkspaceGate>
     );
   }
   if (section === "researcher") {
     return (
-      <AppShell role="admin">
-        <main className="p-4 sm:p-5">
-          <ResearcherScreen segments={segments} />
-        </main>
-      </AppShell>
+      <WorkspaceGate role="admin">
+        <AppShell role="admin">
+          <main className="p-4 sm:p-5">
+            <ResearcherScreen segments={segments} />
+          </main>
+        </AppShell>
+      </WorkspaceGate>
     );
   }
   if (isProductRole(section)) {
     return (
-      <AppShell role={section}>
-        <main className="p-4 sm:p-5">
-          {section === "resident" ? (
-            <ResidentScreen segments={segments} />
-          ) : null}
-          {section === "lgu" ? <LguScreen segments={segments} /> : null}
-          {section === "admin" ? <AdminScreen segments={segments} /> : null}
-        </main>
-      </AppShell>
+      <WorkspaceGate role={section}>
+        <AppShell role={section}>
+          <main className="p-4 sm:p-5">
+            {section === "resident" ? (
+              <ResidentScreen segments={segments} />
+            ) : null}
+            {section === "lgu" ? <LguScreen segments={segments} /> : null}
+            {section === "admin" ? <AdminScreen segments={segments} /> : null}
+          </main>
+        </AppShell>
+      </WorkspaceGate>
     );
   }
   return <WelcomeScreen />;
