@@ -120,7 +120,7 @@ export function DashboardLayout() {
   // Tell the reader what the model was fed: the weather provider's window, as
   // of the day the run started. Never the CSV — it is history for the charts.
   const inputNote = snapshot?.observed
-    ? `Model input: ${snapshot.provider}, rain through ${snapshot.observed.asOfDate}`
+    ? `Model input: ${snapshot.observed.rainSource}, rain through ${snapshot.observed.asOfDate}`
     : undefined;
 
   return (
