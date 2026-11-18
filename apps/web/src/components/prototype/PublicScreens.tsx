@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle,
-  FloppyDisk,
   LockKey,
   ShieldCheck,
   SignOut,
@@ -25,6 +24,8 @@ import {
 
 import { Button } from "@/components/ui";
 import type { ProductRole } from "@/data/prototype";
+
+import { usePreference } from "@/lib/preferences";
 
 import {
   ActionLink,
@@ -1247,442 +1248,27 @@ export function PublicInfoScreen({
 }
 
 export function SettingsScreen({ screen }: { screen: string }) {
-  const [saved, setSaved] = useState(false);
   const activeScreen = screen || "profile";
   const settingsTitle =
     activeScreen === "notifications"
       ? "Notifications"
       : activeScreen === "accessibility"
         ? "Accessibility"
-        : activeScreen === "security"
+        : activeScreen === "security" ||
+            activeScreen === "password" ||
+            activeScreen === "account"
           ? "Security, password & access"
-          : activeScreen === "password"
-            ? "Security, password & access"
-            : activeScreen === "account"
-              ? "Security, password & access"
-              : "Profile";
+          : "Profile";
 
   let content: ReactNode;
   if (activeScreen === "profile") {
-    content = (
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
-          <div>
-            <h2 className="text-major-status">My profile</h2>
-            <p className="text-body mt-1 text-muted">
-              Personal details and workspace assignment.
-            </p>
-          </div>
-          <Button size="small" onClick={() => setSaved(true)}>
-            <FloppyDisk size={14} /> Save changes
-          </Button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 py-4">
-          <span className="inline-flex size-14 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-primary">
-            <UserCircle size={32} weight="duotone" />
-          </span>
-          <div>
-            <p className="text-button">Profile image</p>
-            <p className="text-metadata mt-0.5 text-muted">
-              PNG or JPEG under 2 MB
-            </p>
-          </div>
-          <div className="ml-auto flex gap-2">
-            <Button size="small" variant="secondary">
-              Change image
-            </Button>
-            <Button size="small" variant="quiet">
-              Remove
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid gap-3 border-t border-line py-4 sm:grid-cols-2">
-          <TextField
-            id="profile-first-name"
-            label="First name"
-            defaultValue="RiverGuard"
-          />
-          <TextField
-            id="profile-last-name"
-            label="Last name"
-            defaultValue="Administrator"
-          />
-          <TextField
-            id="profile-org"
-            label="Organization"
-            defaultValue="RiverGuard research"
-          />
-          <TextField
-            id="profile-role"
-            label="Role"
-            value="Administrator"
-            readOnly
-          />
-          <TextField
-            id="profile-email"
-            label="Contact email"
-            defaultValue="admin@riverguard.local"
-          />
-          <TextField
-            id="profile-locations"
-            label="Assigned locations"
-            value="All supported locations"
-            readOnly
-          />
-        </div>
-
-        <div className="border-t border-line pt-4">
-          <h2 className="text-section">Account security</h2>
-          <div className="mt-3 divide-y divide-line rounded-control border border-line">
-            <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-button">Email address</p>
-                <p className="text-body mt-0.5 text-muted">
-                  admin@riverguard.local
-                </p>
-              </div>
-              <Button size="small" variant="quiet">
-                Change email
-              </Button>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-button">Password</p>
-                <p className="text-body mt-0.5 tracking-[0.22em] text-muted">
-                  ••••••••••••
-                </p>
-              </div>
-              <ActionLink href="/settings/password" variant="quiet">
-                Change password
-              </ActionLink>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-button">Multi-factor authentication</p>
-                <p className="text-body mt-0.5 text-muted">
-                  Add an extra verification step when signing in.
-                </p>
-              </div>
-              <ActionLink href="/auth/mfa" variant="quiet">
-                Set up
-              </ActionLink>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    content = <ProfileSettings />;
   } else if (activeScreen === "notifications") {
-    content = (
-      <div>
-        <h2 className="text-major-status">Notification preferences</h2>
-        <p className="text-body mt-1 text-muted">
-          Choose which workspace updates need your attention.
-        </p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <CheckControl
-            id="notify-reviews"
-            label="Review assignments"
-            description="New items assigned to your account."
-          />
-          <CheckControl
-            id="notify-status"
-            label="System status"
-            description="Provider or model availability changes."
-          />
-          <CheckControl
-            id="notify-outlook"
-            label="Forecast updates"
-            description="New completed runs for followed locations."
-          />
-          <CheckControl
-            id="notify-notes"
-            label="Notes and mentions"
-            description="Replies and follow-up assignments."
-          />
-        </div>
-        <div className="mt-4 max-w-md">
-          <SelectControl id="notify-channel" label="Delivery channel">
-            <option>In application</option>
-            <option>Email</option>
-          </SelectControl>
-        </div>
-        <Button className="mt-4" size="small" onClick={() => setSaved(true)}>
-          Save preferences
-        </Button>
-      </div>
-    );
+    content = <NotificationSettings />;
   } else if (activeScreen === "accessibility") {
-    content = (
-      <div>
-        <h2 className="text-major-status">Accessibility preferences</h2>
-        <p className="text-body mt-1 text-muted">
-          Adjust how charts, maps, and motion are presented.
-        </p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <CheckControl
-            id="high-contrast"
-            label="Increase contrast"
-            description="Strengthen borders and secondary text."
-          />
-          <CheckControl
-            id="reduce-motion-setting"
-            label="Reduce motion"
-            description="Limit non-essential interface animation."
-          />
-          <CheckControl
-            id="table-alternative"
-            label="Prefer chart tables"
-            description="Show accessible data tables with charts."
-          />
-          <CheckControl
-            id="larger-targets"
-            label="Larger control targets"
-            description="Increase interactive control size."
-          />
-        </div>
-        <div className="mt-4 max-w-md">
-          <SelectControl id="spatial-view" label="Default spatial view">
-            <option>Interactive map</option>
-            <option>Location list</option>
-          </SelectControl>
-        </div>
-        <Button className="mt-4" size="small" onClick={() => setSaved(true)}>
-          Save preferences
-        </Button>
-      </div>
-    );
-  } else if (
-    activeScreen === "security" ||
-    activeScreen === "password" ||
-    activeScreen === "account"
-  ) {
-    content = (
-      <div className="mx-auto grid w-full max-w-none gap-5">
-        <div>
-          <h2 className="text-major-status">Security, password & access</h2>
-          <p className="text-body mt-1 text-muted">
-            Manage sign-in protection, password changes, active sessions, and
-            workspace access in one place.
-          </p>
-        </div>
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] lg:items-start">
-          <section
-            className="grid gap-3"
-            aria-labelledby="security-section-title"
-          >
-            <div>
-              <h3 id="security-section-title" className="text-section">
-                Security and sessions
-              </h3>
-              <p className="text-body mt-1 text-muted">
-                Review sign-in protection and active devices.
-              </p>
-            </div>
-            <div className="divide-y divide-line rounded-control border border-line">
-              <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-button">Multi-factor authentication</p>
-                  <p className="text-body mt-0.5 text-muted">Not configured</p>
-                </div>
-                <ActionLink href="/auth/mfa" variant="quiet">
-                  Set up MFA
-                </ActionLink>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-button">Current session</p>
-                  <p className="text-body mt-0.5 text-muted">
-                    This browser · Manila timezone
-                  </p>
-                </div>
-                <StatusBadge tone="success">Active</StatusBadge>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-button">Other sessions</p>
-                  <p className="text-body mt-0.5 text-muted">
-                    End access on other signed-in devices.
-                  </p>
-                </div>
-                <Button size="small" variant="quiet">
-                  Log out other sessions
-                </Button>
-              </div>
-            </div>
-          </section>
-          <section
-            className="grid gap-3"
-            aria-labelledby="password-section-title"
-          >
-            <div>
-              <h3 id="password-section-title" className="text-section">
-                Change password
-              </h3>
-              <p className="text-body mt-1 text-muted">
-                Choose a strong password that is not reused elsewhere.
-              </p>
-            </div>
-            <div className="grid gap-3">
-              <PasswordField
-                id="combined-current-password"
-                label="Current password"
-                autoComplete="current-password"
-              />
-              <PasswordField
-                id="combined-new-password"
-                label="New password"
-                autoComplete="new-password"
-              />
-              <PasswordField
-                id="combined-confirm-password"
-                label="Confirm new password"
-                autoComplete="new-password"
-              />
-              <Button
-                size="small"
-                className="w-full sm:w-fit"
-                onClick={() => setSaved(true)}
-              >
-                Change password
-              </Button>
-            </div>
-          </section>
-        </div>
-        <section
-          className="grid gap-3 border-t border-line pt-5"
-          aria-labelledby="access-section-title"
-        >
-          <div>
-            <h3 id="access-section-title" className="text-section">
-              Account access
-            </h3>
-            <p className="text-body mt-1 text-muted">
-              Manage role and workspace access requests.
-            </p>
-          </div>
-          <div className="divide-y divide-line rounded-control border border-line">
-            <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-button">Request an access change</p>
-                <p className="text-body mt-0.5 text-muted">
-                  Ask an administrator to review your role or assigned
-                  locations.
-                </p>
-              </div>
-              <Button size="small" variant="quiet">
-                Request review
-              </Button>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-button text-danger">
-                  Deactivate account access
-                </p>
-                <p className="text-body mt-0.5 text-muted">
-                  Staff access is deactivated by an authorized administrator to
-                  preserve audit history.
-                </p>
-              </div>
-              <Button size="small" variant="danger">
-                Request deactivation
-              </Button>
-            </div>
-          </div>
-        </section>
-      </div>
-    );
-  } else if (activeScreen === "password") {
-    content = (
-      <div className="mx-auto grid w-full max-w-4xl gap-6 lg:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)] lg:gap-8">
-        <div className="self-stretch rounded-control border border-line bg-canvas-soft p-4">
-          <p className="text-metadata font-semibold uppercase tracking-[0.12em] text-muted">
-            Security
-          </p>
-          <h2 className="text-section mt-2">Password security</h2>
-          <p className="text-body mt-1 text-muted">
-            Keep your RiverGuard account protected with a password that is
-            unique to this workspace.
-          </p>
-          <ul className="text-body mt-4 grid gap-2 text-muted">
-            <li>Use at least 12 characters.</li>
-            <li>Do not reuse a password from another service.</li>
-            <li>Never share your password or verification codes.</li>
-          </ul>
-        </div>
-        <div className="min-w-0 max-w-2xl">
-          <h2 className="text-major-status">Change password</h2>
-          <p className="text-body mt-1 text-muted">
-            Choose a strong password that is not reused elsewhere.
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <PasswordField
-                id="current-password"
-                label="Current password"
-                autoComplete="current-password"
-              />
-            </div>
-            <PasswordField
-              id="settings-new-password"
-              label="New password"
-              autoComplete="new-password"
-            />
-            <PasswordField
-              id="settings-confirm-password"
-              label="Confirm new password"
-              autoComplete="new-password"
-            />
-            <div className="sm:col-span-2">
-              <Button
-                size="small"
-                className="w-full"
-                onClick={() => setSaved(true)}
-              >
-                Change password
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    content = <AccessibilitySettings />;
   } else {
-    content = (
-      <div>
-        <h2 className="text-major-status">Account access</h2>
-        <p className="text-body mt-1 text-muted">
-          Manage session access and role-assignment requests.
-        </p>
-        <div className="mt-4 divide-y divide-line rounded-control border border-line">
-          <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-            <div className="flex-1">
-              <p className="text-button">Request an access change</p>
-              <p className="text-body mt-0.5 text-muted">
-                Ask an administrator to review your role or assigned locations.
-              </p>
-            </div>
-            <Button size="small" variant="quiet">
-              Request review
-            </Button>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 px-3 py-3">
-            <div className="flex-1">
-              <p className="text-button text-danger">
-                Deactivate account access
-              </p>
-              <p className="text-body mt-0.5 text-muted">
-                Staff access is deactivated by an authorized administrator to
-                preserve audit history.
-              </p>
-            </div>
-            <Button size="small" variant="danger">
-              Request deactivation
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
+    content = <SecuritySettings />;
   }
 
   return (
@@ -1699,12 +1285,331 @@ export function SettingsScreen({ screen }: { screen: string }) {
           {settingsTitle}
         </h2>
         {content}
-        {saved ? (
-          <p className="text-metadata mt-3 text-success" role="status">
-            Changes saved.
-          </p>
-        ) : null}
       </section>
     </>
+  );
+}
+
+/**
+ * Profile details are stored in this browser.
+ *
+ * There is no account record to write to, so the fields persist as typed and the
+ * screen says where they went. Anything that only the identity service can do
+ * (a photo, the e-mail address of record, the password) is described rather than
+ * offered as a button that does nothing.
+ */
+function ProfileSettings() {
+  const [firstName, setFirstName] = usePreference(
+    "profile-first-name",
+    "RiverGuard",
+  );
+  const [lastName, setLastName] = usePreference(
+    "profile-last-name",
+    "Administrator",
+  );
+  const [organisation, setOrganisation] = usePreference(
+    "profile-organisation",
+    "RiverGuard research",
+  );
+  const [email, setEmail] = usePreference(
+    "profile-email",
+    "admin@riverguard.local",
+  );
+
+  return (
+    <div>
+      <div className="border-b border-line pb-4">
+        <h2 className="text-major-status">My profile</h2>
+        <p className="text-body mt-1 text-muted">
+          How this workspace labels you. No account exists in this build, so the
+          details are kept in this browser.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 py-4">
+        <span className="inline-flex size-14 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-primary">
+          <UserCircle size={32} weight="duotone" />
+        </span>
+        <div>
+          <p className="text-button">Profile image</p>
+          <p className="text-metadata mt-0.5 text-muted">
+            Initials stand in for a photo. Uploading one needs the identity
+            service, which this prototype does not include.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 border-t border-line py-4 sm:grid-cols-2">
+        <TextField
+          id="profile-first-name"
+          label="First name"
+          value={firstName}
+          onChange={(event) => setFirstName(event.target.value)}
+        />
+        <TextField
+          id="profile-last-name"
+          label="Last name"
+          value={lastName}
+          onChange={(event) => setLastName(event.target.value)}
+        />
+        <TextField
+          id="profile-org"
+          label="Organization"
+          value={organisation}
+          onChange={(event) => setOrganisation(event.target.value)}
+        />
+        <TextField
+          id="profile-role"
+          label="Role"
+          value="Administrator"
+          readOnly
+          hint="Assigned by the identity service."
+        />
+        <TextField
+          id="profile-email"
+          label="Contact email"
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+        <TextField
+          id="profile-locations"
+          label="Assigned locations"
+          value="All supported locations"
+          readOnly
+          hint="Assigned by the identity service."
+        />
+      </div>
+
+      <p className="text-metadata text-muted" role="status">
+        Saved in this browser as you type. Another browser or device starts from
+        the defaults.
+      </p>
+
+      <div className="mt-4 border-t border-line pt-4">
+        <h2 className="text-section">Account security</h2>
+        <div className="mt-3 divide-y divide-line rounded-control border border-line">
+          <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-button">Email address of record</p>
+              <p className="text-body mt-0.5 text-muted">
+                Held by the identity service. The contact email above is only a
+                local label.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-button">Password</p>
+              <p className="text-body mt-0.5 text-muted">
+                Set and changed in the identity service; this build stores no
+                credentials.
+              </p>
+            </div>
+            <ActionLink href="/settings/password" variant="quiet">
+              Details
+            </ActionLink>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-button">Multi-factor authentication</p>
+              <p className="text-body mt-0.5 text-muted">
+                Add an extra verification step when signing in.
+              </p>
+            </div>
+            <ActionLink href="/auth/mfa" variant="quiet">
+              Set up
+            </ActionLink>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Notification choices are remembered, and nothing is sent.
+ *
+ * The build has no delivery service, so the screen states that plainly instead
+ * of implying an e-mail will arrive.
+ */
+function NotificationSettings() {
+  const [reviews, setReviews] = usePreference("notify-reviews", "false");
+  const [status, setStatus] = usePreference("notify-status", "false");
+  const [outlook, setOutlook] = usePreference("notify-outlook", "false");
+  const [notes, setNotes] = usePreference("notify-notes", "false");
+
+  return (
+    <div>
+      <h2 className="text-major-status">Notification preferences</h2>
+      <p className="text-body mt-1 text-muted">
+        Choose which workspace updates would need your attention.
+      </p>
+      <Notice className="mt-4" title="No delivery in this build" tone="warning">
+        RiverGuard has no notification service, so nothing is sent by e-mail or
+        in the application. These choices are stored in this browser for when
+        delivery exists.
+      </Notice>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <CheckControl
+          id="notify-reviews"
+          label="Review assignments"
+          description="New items assigned to your account."
+          checked={reviews === "true"}
+          onChange={(event) =>
+            setReviews(event.target.checked ? "true" : "false")
+          }
+        />
+        <CheckControl
+          id="notify-status"
+          label="System status"
+          description="Provider or model availability changes."
+          checked={status === "true"}
+          onChange={(event) =>
+            setStatus(event.target.checked ? "true" : "false")
+          }
+        />
+        <CheckControl
+          id="notify-outlook"
+          label="Forecast updates"
+          description="New completed runs for followed locations."
+          checked={outlook === "true"}
+          onChange={(event) =>
+            setOutlook(event.target.checked ? "true" : "false")
+          }
+        />
+        <CheckControl
+          id="notify-notes"
+          label="Notes and mentions"
+          description="Replies and follow-up assignments."
+          checked={notes === "true"}
+          onChange={(event) =>
+            setNotes(event.target.checked ? "true" : "false")
+          }
+        />
+      </div>
+      <p className="text-metadata mt-4 text-muted" role="status">
+        Saved in this browser as you change each control.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Only adjustments this build actually honours are offered: "reduce motion" sets
+ * `data-reduce-motion` on the document, which `globals.css` uses to shorten
+ * transitions. Contrast and text size follow the operating system instead.
+ */
+function AccessibilitySettings() {
+  const [reduceMotion, setReduceMotion] = usePreference(
+    "reduce-motion",
+    "false",
+  );
+
+  return (
+    <div>
+      <h2 className="text-major-status">Accessibility preferences</h2>
+      <p className="text-body mt-1 text-muted">
+        Adjust how charts, maps, and motion are presented.
+      </p>
+      <div className="mt-4 grid gap-2">
+        <CheckControl
+          id="reduce-motion-setting"
+          label="Reduce motion"
+          description="Shortens transitions and animations across the workspace."
+          checked={reduceMotion === "true"}
+          onChange={(event) =>
+            setReduceMotion(event.target.checked ? "true" : "false")
+          }
+        />
+      </div>
+      <Notice className="mt-4" title="Other adjustments">
+        Contrast, text size, and control size follow your operating system and
+        browser settings. This build does not override them.
+      </Notice>
+      <p className="text-metadata mt-4 text-muted" role="status">
+        Saved in this browser as you change the control.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Security actions belong to the identity service.
+ *
+ * Every control here used to look like it worked: the password form accepted
+ * three values, and the buttons for other sessions, access review and
+ * deactivation set a line of green text. None of it reached anything. The screen
+ * now describes who owns each action, and links only where a screen exists.
+ */
+function SecuritySettings() {
+  return (
+    <div className="grid gap-5">
+      <div>
+        <h2 className="text-major-status">Security, password & access</h2>
+        <p className="text-body mt-1 text-muted">
+          Sign-in protection, password changes, sessions, and account access are
+          held by the identity service. This local prototype has no credential
+          store, so none of these actions can be completed here.
+        </p>
+      </div>
+      <Notice title="No credentials in this build" tone="warning">
+        RiverGuard runs locally without authentication. Anyone with access to
+        this machine can read and write the same run, review, and audit files.
+      </Notice>
+      <div className="divide-y divide-line rounded-control border border-line">
+        <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-button">Multi-factor authentication</p>
+            <p className="text-body mt-0.5 text-muted">
+              Configured in the identity service. The setup flow is part of the
+              sign-in prototype.
+            </p>
+          </div>
+          <ActionLink href="/auth/mfa" variant="quiet">
+            Open MFA setup
+          </ActionLink>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-button">Password</p>
+            <p className="text-body mt-0.5 text-muted">
+              Changed in the identity service. This build cannot verify a
+              current password, so it does not offer a form that would discard
+              one.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-button">Sessions</p>
+            <p className="text-body mt-0.5 text-muted">
+              One local session exists. Ending sessions on other devices needs
+              the identity service.
+            </p>
+          </div>
+          <StatusBadge tone="neutral">Local only</StatusBadge>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-button">Access change</p>
+            <p className="text-body mt-0.5 text-muted">
+              Ask an administrator to review your role or assigned locations
+              through the process your organisation defines. No request channel
+              exists here.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 px-3 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-button text-danger">Deactivate account access</p>
+            <p className="text-body mt-0.5 text-muted">
+              Staff access is deactivated by an authorized administrator in the
+              identity service, which preserves the audit history.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -41,6 +41,16 @@ function fixtureAllowed(): boolean {
   return process.env.WEATHER_ALLOW_FIXTURE?.trim().toLowerCase() === "true";
 }
 
+/** What the environment selected, for the status screens to report. */
+export interface ProviderConfig {
+  provider: WeatherProviderName;
+  allowFixture: boolean;
+}
+
+export function providerConfig(): ProviderConfig {
+  return { provider: configuredProvider(), allowFixture: fixtureAllowed() };
+}
+
 export function resolveProvider(options?: WeatherOptions): WeatherProvider {
   const name = options?.provider ?? configuredProvider();
   return name === "fixture" ? fixtureProvider() : openMeteoProvider();

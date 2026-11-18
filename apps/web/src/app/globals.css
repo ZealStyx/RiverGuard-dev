@@ -141,6 +141,23 @@ select {
 }
 
 /*
+ * The in-app "reduce motion" preference.
+ *
+ * `useAppliedPreferences` sets `data-reduce-motion` on <html> when the stored
+ * preference is on, so the setting has an effect the reader can see rather than
+ * being a checkbox that only writes to storage. The media query above stays for
+ * readers who set it at the operating-system level.
+ */
+html[data-reduce-motion="true"] *,
+html[data-reduce-motion="true"] *::before,
+html[data-reduce-motion="true"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/*
  * MapLibre attribution.
  *
  * OpenStreetMap's tile usage policy requires the licence attribution to stay

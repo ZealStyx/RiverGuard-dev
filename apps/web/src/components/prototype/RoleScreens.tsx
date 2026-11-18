@@ -1,32 +1,57 @@
 "use client";
 
-import {
-  FloppyDisk,
-  Plus,
-  ShieldCheck,
-  UserPlus,
-  X,
-} from "@phosphor-icons/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-
-import { useGisLayers } from "@/lib/use-gis-layers";
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 
 import { RainfallChart } from "@/components/charts/RainfallChart";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { convexConfigured } from "@/components/dashboard/OutlookBridge";
 import { RiskSummary } from "@/components/dashboard/RiskSummary";
 import { RiverMap } from "@/components/map/RiverMap";
 import { Button } from "@/components/ui";
-import { cx } from "@/lib/classnames";
-import { supportedLocations } from "@/data/prototype";
-import { convexConfigured } from "@/components/dashboard/OutlookBridge";
 import {
-  convexErrorHint,
-  convexFunctions,
-  type RecentRun,
-} from "@/lib/convex-functions";
+  roleCapabilities,
+  roleDefinitions,
+  supportedLocations,
+  type ProductRole,
+} from "@/data/prototype";
+import {
+  AUDIT_ACTION_LABEL,
+  formatAuditTime,
+  type AuditAction,
+  type AuditOutcome,
+} from "@/lib/audit";
+import { cx } from "@/lib/classnames";
+import { convexErrorHint, convexFunctions } from "@/lib/convex-functions";
 import { useConvexQueryResult } from "@/lib/convex-query";
+import { LOCATION_CODES, LOCATIONS } from "@/lib/locations";
+import { usePreference } from "@/lib/preferences";
+import {
+  latestReviewByRun,
+  REVIEW_DECISION_LABEL,
+  type ReviewDecision,
+  type RunReview,
+} from "@/lib/reviews";
+import {
+  detailFromConvexRun,
+  formatRunTime,
+  RUN_SOURCE_LABEL,
+  summaryFromConvexRun,
+  type StoredRun,
+  type StoredRunSummary,
+} from "@/lib/runs";
+import { WEATHER_PROVIDER_LABEL } from "@/lib/system";
+import { useDatasetMeta } from "@/lib/use-dataset-meta";
+import { useGisLayers } from "@/lib/use-gis-layers";
+import { useModelArtifacts } from "@/lib/use-model-artifacts";
+import { useLocalRun, useLocalRuns } from "@/lib/use-runs";
+import {
+  useAuditEvents,
+  useReviews,
+  useReviewsForRun,
+  useSystemStatus,
+} from "@/lib/use-server-data";
 import type { MapLayerId } from "@/types";
 
 import {
@@ -52,11 +77,12 @@ import {
 
 function ResidentHome() {
   const [selectedDay, setSelectedDay] = useState(0);
+  const [primaryCity] = usePreference("primary-city", "Marikina");
   return (
     <>
       <PageHeading
         title="My outlook"
-        eyebrow="Marikina"
+        eyebrow={primaryCity}
         description="A simplified seven-day experimental outlook with clear links to official information."
       />
       <Notice title="Official guidance" tone="warning">
@@ -66,15 +92,11 @@ function ResidentHome() {
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           label="Saved city"
-          value="Marikina"
-          detail="Supported location"
+          value={primaryCity}
+          detail="Chosen in preferences"
           tone="secondary"
         />
-        <Metric
-          label="Updated"
-          value="Not yet run"
-          detail="Press Run forecast to fetch"
-        />
+        <ResidentRunMetric />
         <Metric
           label="Data quality"
           value="Research"
@@ -107,6 +129,90 @@ function ResidentHome() {
         </Surface>
       </div>
     </>
+  );
+}
+
+/**
+ * "When was this last run" belongs to the stores, not to a literal.
+ *
+ * The resident overview used to say "Not yet run" whatever the store held. It
+ * now reads the newest stored run, through the same two-store split as the LGU
+ * screens (a Convex query needs a provider, so it gets its own component).
+ */
+function ResidentRunMetric() {
+  return convexConfigured ? (
+    <ConvexResidentRunMetric />
+  ) : (
+    <LocalResidentRunMetric />
+  );
+}
+
+function ConvexResidentRunMetric() {
+  const { data, error } = useConvexQueryResult(convexFunctions.recentRuns, {
+    limit: 1,
+  });
+  return (
+    <RunTimeMetric
+      newestAt={data === undefined ? undefined : (data[0]?.requestedAt ?? null)}
+      error={error ? convexErrorHint(error) : null}
+    />
+  );
+}
+
+function LocalResidentRunMetric() {
+  const { data, error } = useLocalRuns(1);
+  return (
+    <RunTimeMetric
+      newestAt={data === undefined ? undefined : (data[0]?.requestedAt ?? null)}
+      error={error ? error.message : null}
+    />
+  );
+}
+
+function RunTimeMetric({
+  newestAt,
+  error,
+}: {
+  /** `undefined` while reading, `null` when the store is empty. */
+  newestAt: number | null | undefined;
+  error: string | null;
+}) {
+  if (error) {
+    return (
+      <Metric
+        label="Updated"
+        value="Unavailable"
+        detail="The run store could not be read"
+        tone="warning"
+      />
+    );
+  }
+  if (newestAt === undefined) {
+    return (
+      <Metric
+        label="Updated"
+        value="Reading…"
+        detail="Checking the run store"
+      />
+    );
+  }
+  if (newestAt === null) {
+    return (
+      <Metric
+        label="Updated"
+        value="No run yet"
+        detail="Run a forecast to fetch one"
+        tone="neutral"
+      />
+    );
+  }
+  return (
+    <Metric
+      label="Updated"
+      value={formatRunTime(newestAt)}
+      detail="Newest stored run"
+      tone="primary"
+    />
   );
 }
 
@@ -154,7 +260,10 @@ function ResidentLocationsWorkspace({
 }: {
   initialView?: "hazard" | "locations";
 }) {
-  const [saved, setSaved] = useState("Marikina");
+  const [primaryCity, setPrimaryCity] = usePreference(
+    "primary-city",
+    "Marikina",
+  );
   const [layer, setLayer] = useState<MapLayerId>("base");
   const gis = useGisLayers();
   const searchParams = useSearchParams();
@@ -216,17 +325,23 @@ function ResidentLocationsWorkspace({
                 description={location.support}
               >
                 <StatusBadge
-                  tone={location.name === saved ? "success" : "neutral"}
+                  tone={location.name === primaryCity ? "success" : "neutral"}
                 >
-                  {location.name === saved ? "Primary location" : "Available"}
+                  {location.name === primaryCity
+                    ? "Primary location"
+                    : "Available"}
                 </StatusBadge>
                 <Button
                   size="small"
-                  variant={location.name === saved ? "quiet" : "secondary"}
+                  variant={
+                    location.name === primaryCity ? "quiet" : "secondary"
+                  }
                   className="mt-4 w-full"
-                  onClick={() => setSaved(location.name)}
+                  onClick={() => setPrimaryCity(location.name)}
                 >
-                  {location.name === saved ? "Selected" : "Set as primary"}
+                  {location.name === primaryCity
+                    ? "Selected"
+                    : "Set as primary"}
                 </Button>
               </Surface>
             ))}
@@ -273,45 +388,66 @@ function HazardContext() {
 }
 
 function ResidentPreferences() {
-  const [saved, setSaved] = useState(false);
+  const [primaryCity, setPrimaryCity] = usePreference(
+    "primary-city",
+    "Marikina",
+  );
+  const [outlookUpdates, setOutlookUpdates] = usePreference(
+    "outlook-updates",
+    "false",
+  );
+  const [reduceMotion, setReduceMotion] = usePreference(
+    "reduce-motion",
+    "false",
+  );
+
   return (
     <>
       <PageHeading
         title="Preferences"
         eyebrow="Outlook and accessibility"
-        description="Choose location, notification, and accessibility preferences."
+        description="Choose the city this workspace follows and how the interface behaves."
       />
       <Surface className="mx-auto max-w-4xl" title="Resident preferences">
         <div className="grid gap-3 sm:grid-cols-2">
-          <SelectControl id="resident-city" label="Primary city">
-            <option>Marikina</option>
-            <option>Quezon City</option>
-            <option>Manila</option>
-            <option>Pasig</option>
+          <SelectControl
+            id="resident-city"
+            label="Primary city"
+            value={primaryCity}
+            onChange={(event) => setPrimaryCity(event.target.value)}
+          >
+            {LOCATION_CODES.map((code) => (
+              <option key={code} value={LOCATIONS[code].name}>
+                {LOCATIONS[code].name}
+              </option>
+            ))}
           </SelectControl>
-          <SelectControl id="default-view" label="Default spatial view">
-            <option>Map</option>
-            <option>Accessible list</option>
-          </SelectControl>
-          <CheckControl
-            id="outlook-notify"
-            label="Experimental outlook updates"
-            description="Choose how RiverGuard should notify you when services are connected."
-          />
-          <CheckControl
-            id="reduced-motion"
-            label="Reduce motion"
-            description="Respect reduced-motion interactions where supported."
-          />
+          <div className="grid gap-2 sm:col-span-2">
+            <CheckControl
+              id="outlook-notify"
+              label="Experimental outlook updates"
+              description="RiverGuard has no notification delivery yet, so nothing is sent; the choice is remembered for when it exists."
+              checked={outlookUpdates === "true"}
+              onChange={(event) =>
+                setOutlookUpdates(event.target.checked ? "true" : "false")
+              }
+            />
+            <CheckControl
+              id="reduce-motion"
+              label="Reduce motion"
+              description="Shortens interface animation in this browser."
+              checked={reduceMotion === "true"}
+              onChange={(event) =>
+                setReduceMotion(event.target.checked ? "true" : "false")
+              }
+            />
+          </div>
         </div>
-        <Button className="mt-4" size="small" onClick={() => setSaved(true)}>
-          <FloppyDisk size={14} /> Save preferences
-        </Button>
-        {saved ? (
-          <p className="text-metadata mt-2 text-success" role="status">
-            Preferences saved for this preview.
-          </p>
-        ) : null}
+        <p className="text-metadata mt-4 text-muted" role="status">
+          Saved in this browser as you change each control. There is no account
+          to store preferences against, so another browser starts from the
+          defaults.
+        </p>
       </Surface>
     </>
   );
@@ -340,57 +476,187 @@ function LguHome() {
         RiverGuard supports an internal review. It does not issue an official
         warning or evacuation instruction.
       </Notice>
+      {convexConfigured ? <ConvexLguOverview /> : <LocalLguOverview />}
+    </>
+  );
+}
+
+/**
+ * The overview counts what the store holds, so it reads the same two stores the
+ * queue does. The Convex branch is a separate component because calling a Convex
+ * query without a provider throws; the local branch is a plain fetch.
+ */
+function ConvexLguOverview() {
+  const { data, error } = useConvexQueryResult(convexFunctions.recentRuns, {
+    limit: 25,
+  });
+  if (error) {
+    return (
+      <StoreUnavailable what="Stored runs" reason={convexErrorHint(error)} />
+    );
+  }
+  return (
+    <LguOverview runs={data ? data.map(summaryFromConvexRun) : undefined} />
+  );
+}
+
+function LocalLguOverview() {
+  const { data, error } = useLocalRuns(25);
+  if (error) {
+    return (
+      <StoreUnavailable what="The local run store" reason={error.message} />
+    );
+  }
+  return <LguOverview runs={data} />;
+}
+
+function StoreUnavailable({ what, reason }: { what: string; reason: string }) {
+  return (
+    <Notice className="mt-3" title="Stored data unavailable" tone="warning">
+      {what} could not be read: {reason}
+    </Notice>
+  );
+}
+
+function LguOverview({ runs }: { runs: StoredRunSummary[] | undefined }) {
+  const { data, error } = useReviews(200);
+  const reviews = data?.reviews ?? [];
+  const latest = latestReviewByRun(reviews);
+
+  if (error) {
+    return <StoreUnavailable what="Recorded reviews" reason={error.message} />;
+  }
+  if (runs === undefined) {
+    return <p className="text-body mt-3 text-muted">Reading stored runs…</p>;
+  }
+
+  const awaiting = runs.filter((run) => !latest.has(run.runId));
+  const degraded = runs.filter(
+    (run) => run.providerDegraded || run.status !== "completed",
+  );
+  const escalated = [...latest.values()].filter(
+    (review) => review.decision === "escalated",
+  );
+  const newest = runs[0];
+  const newestReview = newest ? latest.get(newest.runId) : undefined;
+
+  return (
+    <>
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           label="Needs review"
-          value="1"
-          detail="Assigned-area run"
-          tone="warning"
+          value={String(awaiting.length)}
+          detail={
+            awaiting.length
+              ? "Stored runs without a decision"
+              : "Every stored run has a decision"
+          }
+          tone={awaiting.length ? "warning" : "neutral"}
         />
         <Metric
           label="Latest run"
-          value="None"
-          detail="No stored run for this area"
+          value={newest ? formatRunTime(newest.requestedAt) : "None"}
+          detail={
+            newest
+              ? `${newest.locations.join(", ") || "No location"} · ${newest.days} day(s)`
+              : "Run a forecast to create one"
+          }
           tone="primary"
         />
         <Metric
           label="Quality warnings"
-          value="1"
-          detail="Provenance warning"
-          tone="warning"
+          value={String(degraded.length)}
+          detail="Degraded input or incomplete run"
+          tone={degraded.length ? "warning" : "neutral"}
         />
         <Metric
           label="Escalated"
-          value="1"
+          value={String(escalated.length)}
           detail="Awaiting assessment"
-          tone="danger"
+          tone={escalated.length ? "danger" : "neutral"}
         />
       </div>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <Surface title="Latest assigned outlook">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-major-status text-warning">
-                Elevated experimental index
-              </p>
-              <p className="text-body mt-1 text-muted">
-                Marikina · Nov 11 · Experimental result
-              </p>
-            </div>
-            <StatusBadge tone="warning">Needs review</StatusBadge>
-          </div>
-          <div className="mt-4 flex gap-2">
-            <ActionLink href="/lgu/outlook">Review forecast</ActionLink>
-            <ActionLink href="/lgu/outlook?view=map" variant="quiet">
-              Open map
-            </ActionLink>
-          </div>
+        <Surface title="Latest stored outlook">
+          {newest ? (
+            <>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-major-status">
+                    {newest.alerts > 0
+                      ? `${newest.alerts} elevated day${newest.alerts === 1 ? "" : "s"}`
+                      : "Nothing elevated"}
+                  </p>
+                  <p className="text-body mt-1 text-muted">
+                    {newest.locations.join(", ") || "No location"} ·{" "}
+                    {newest.days} day(s) · run{" "}
+                    {formatRunTime(newest.requestedAt)}
+                  </p>
+                </div>
+                <StatusBadge tone={newest.alerts > 0 ? "warning" : "neutral"}>
+                  {newestReview
+                    ? REVIEW_DECISION_LABEL[newestReview.decision]
+                    : "Awaiting review"}
+                </StatusBadge>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <ActionLink
+                  href={`/lgu/reviews/${encodeURIComponent(newest.runId)}`}
+                >
+                  Review this run
+                </ActionLink>
+                <ActionLink
+                  href={`/admin/research/runs/${encodeURIComponent(newest.runId)}`}
+                  variant="quiet"
+                >
+                  Open run record
+                </ActionLink>
+              </div>
+            </>
+          ) : (
+            <EmptyPanel
+              title="No stored run yet"
+              description="This card shows the newest run in the store. Nothing is stored, so there is no outlook to display."
+              actionHref="/admin/research/forecast/new"
+              actionLabel="Run a forecast"
+            />
+          )}
         </Surface>
         <Surface title="Review activity">
-          <p className="text-body text-muted">
-            No reviews are recorded. Review decisions are not persisted by this
-            prototype, so there is nothing to list here yet.
-          </p>
+          {reviews.length ? (
+            <ul className="grid gap-2">
+              {reviews.slice(0, 4).map((review) => (
+                <li
+                  key={review.reviewId}
+                  className="flex items-start justify-between gap-3 border-b border-line pb-2 last:border-b-0 last:pb-0"
+                >
+                  <div className="min-w-0">
+                    <p className="text-button">
+                      {REVIEW_DECISION_LABEL[review.decision]}
+                    </p>
+                    <p className="text-metadata mt-0.5 text-muted">
+                      {review.reviewer} · {formatRunTime(review.createdAt)} ·{" "}
+                      {review.runId}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/lgu/reviews/${encodeURIComponent(review.runId)}`}
+                    className="text-metadata shrink-0 text-brand-primary hover:underline"
+                  >
+                    Open
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-body text-muted">
+              No decisions recorded. A review is written to{" "}
+              <code className="rounded bg-canvas px-1 py-0.5">
+                .data/reviews.json
+              </code>{" "}
+              when an operator submits one, so this list is empty until then.
+            </p>
+          )}
         </Surface>
       </div>
     </>
@@ -410,12 +676,15 @@ function LguLocations() {
           columns={[
             { key: "name", label: "Location" },
             { key: "support", label: "Coverage" },
-            { key: "status", label: "Latest forecast" },
-            { key: "updated", label: "Updated" },
+            { key: "stored", label: "Stored runs" },
           ]}
           rows={supportedLocations
             .filter((location) => location.name === "Marikina")
-            .map((location) => ({ ...location }))}
+            .map((location) => ({
+              name: location.name,
+              support: location.support,
+              stored: "Listed in the review queue",
+            }))}
           actions={() => (
             <ActionLink href="/lgu/outlook" variant="quiet">
               Open
@@ -505,12 +774,12 @@ function LguOutlook({
                   City-level research coverage
                 </p>
               </div>
-              <StatusBadge tone="warning">No run stored</StatusBadge>
+              <StatusBadge tone="neutral">City-level run</StatusBadge>
             </div>
             <dl className="text-body mt-4 grid gap-2 border-t border-line pt-3 sm:grid-cols-2 xl:grid-cols-1">
               <div>
-                <dt className="text-metadata text-muted">Latest run</dt>
-                <dd>None stored for this area</dd>
+                <dt className="text-metadata text-muted">Stored runs</dt>
+                <dd>Listed in the review queue</dd>
               </div>
               <div>
                 <dt className="text-metadata text-muted">Map coverage</dt>
@@ -536,40 +805,208 @@ function LguOutlook({
 }
 
 function ReviewQueue({ detail }: { detail?: string }) {
-  if (detail) return <ReviewForm />;
+  if (detail) return <ReviewForm runId={detail} />;
   return (
     <>
       <PageHeading
         title="Review queue"
         eyebrow="Assigned assessments"
-        description="Track new, drafted, reviewed, and escalated experimental runs."
+        description="Stored runs, with the decision each one carries."
+        actions={
+          <ActionLink href="/admin/research/forecast/new">
+            Run a forecast
+          </ActionLink>
+        }
       />
       <Surface title="Queue" description="Stored runs awaiting LGU review">
-        {convexConfigured ? (
-          <StoredRunReviewQueue />
-        ) : (
-          <p className="text-body text-muted">
-            Review items come from stored forecast runs. Set{" "}
-            <code className="rounded bg-canvas px-1 py-0.5">
-              NEXT_PUBLIC_CONVEX_URL
-            </code>{" "}
-            to read them.
-          </p>
-        )}
+        {convexConfigured ? <ConvexReviewQueue /> : <LocalReviewQueue />}
       </Surface>
+      <Notice className="mt-3" title="What a review is">
+        A review records an internal assessment against a stored run. It does
+        not publish a warning or reach an official channel, and the decision is
+        stored on this machine in{" "}
+        <code className="rounded bg-canvas px-1 py-0.5">
+          .data/reviews.json
+        </code>{" "}
+        because this prototype has no shared database.
+      </Notice>
     </>
   );
 }
 
-function ReviewForm() {
-  // Reviews attach to a stored run. The form used to render a fixed "Liza
-  // Torres · Marikina" record under any run id in the path.
+function ConvexReviewQueue() {
+  const { data, error } = useConvexQueryResult(convexFunctions.recentRuns, {
+    limit: 25,
+  });
+  if (error) {
+    return (
+      <StoreUnavailable what="Stored runs" reason={convexErrorHint(error)} />
+    );
+  }
+  return (
+    <ReviewQueueTable
+      runs={data ? data.map(summaryFromConvexRun) : undefined}
+    />
+  );
+}
+
+function LocalReviewQueue() {
+  const { data, error } = useLocalRuns(25);
+  if (error) {
+    return (
+      <StoreUnavailable what="The local run store" reason={error.message} />
+    );
+  }
+  return <ReviewQueueTable runs={data} />;
+}
+
+function ReviewQueueTable({ runs }: { runs: StoredRunSummary[] | undefined }) {
+  const { data, error } = useReviews(200);
+  const latest = latestReviewByRun(data?.reviews ?? []);
+
+  if (error) {
+    return <StoreUnavailable what="Recorded reviews" reason={error.message} />;
+  }
+  if (runs === undefined) {
+    return <p className="text-body text-muted">Loading stored runs…</p>;
+  }
+  if (runs.length === 0) {
+    return (
+      <p className="text-body text-muted">
+        No stored runs yet. Run a forecast and it appears here, ready for
+        review.
+      </p>
+    );
+  }
+
+  const rows: Array<Record<string, string>> = runs.map((run) => {
+    const review = latest.get(run.runId);
+    return {
+      run: run.runId,
+      location: run.locations.join(", ") || "—",
+      period: `${run.days} day(s) · issued ${formatRunTime(run.requestedAt)}`,
+      quality: run.providerDegraded
+        ? "Degraded weather input"
+        : run.status === "completed"
+          ? "Complete"
+          : run.status,
+      review: review
+        ? REVIEW_DECISION_LABEL[review.decision]
+        : "Awaiting review",
+      reviewer: review ? review.reviewer : "Unassigned",
+      updated: formatRunTime(review ? review.createdAt : run.requestedAt),
+    };
+  });
+
+  return (
+    <DataTable
+      columns={[
+        { key: "run", label: "Run" },
+        { key: "location", label: "Location" },
+        { key: "period", label: "Valid period" },
+        { key: "quality", label: "Quality" },
+        { key: "review", label: "Review status" },
+        { key: "reviewer", label: "Reviewer" },
+        { key: "updated", label: "Updated" },
+      ]}
+      rows={rows}
+      actions={(row) => (
+        <ActionLink href={`/lgu/reviews/${row.run}`} variant="quiet">
+          Open
+        </ActionLink>
+      )}
+    />
+  );
+}
+
+function ReviewForm({ runId }: { runId?: string }) {
+  if (!runId) {
+    return (
+      <>
+        <PageHeading
+          title="Forecast review"
+          eyebrow="Review queue"
+          description="Record an internal assessment against a stored forecast run."
+          actions={
+            <ActionLink href="/lgu/reviews" variant="quiet">
+              Back to queue
+            </ActionLink>
+          }
+        />
+        <EmptyPanel
+          title="No run selected"
+          description="A review attaches to one stored run. Pick a row in the queue to open its record."
+          actionHref="/lgu/reviews"
+          actionLabel="Back to queue"
+        />
+      </>
+    );
+  }
+
+  return convexConfigured ? (
+    <ConvexReviewRun runId={runId} />
+  ) : (
+    <LocalReviewRun runId={runId} />
+  );
+}
+
+function ConvexReviewRun({ runId }: { runId: string }) {
+  const { data, error } = useConvexQueryResult(convexFunctions.getRun, {
+    runId,
+  });
+  if (error) {
+    return <ReviewUnreadable runId={runId} reason={convexErrorHint(error)} />;
+  }
+  if (data === undefined) {
+    return <p className="text-body text-muted">Reading the stored run…</p>;
+  }
+  if (data === null) return <ReviewMissing runId={runId} />;
+  return <ReviewPanel run={detailFromConvexRun(data)} />;
+}
+
+function LocalReviewRun({ runId }: { runId: string }) {
+  const { data, error } = useLocalRun(runId);
+  if (error) return <ReviewUnreadable runId={runId} reason={error.message} />;
+  if (data === undefined) {
+    return <p className="text-body text-muted">Reading the stored run…</p>;
+  }
+  if (data === null) return <ReviewMissing runId={runId} />;
+  return <ReviewPanel run={data} />;
+}
+
+function ReviewUnreadable({
+  runId,
+  reason,
+}: {
+  runId: string;
+  reason: string;
+}) {
   return (
     <>
       <PageHeading
-        title="Forecast review"
+        title="Run could not be read"
         eyebrow="Review queue"
-        description="Record an internal assessment against a stored forecast run."
+        description={`Run ${runId}`}
+        actions={
+          <ActionLink href="/lgu/reviews" variant="quiet">
+            Back to queue
+          </ActionLink>
+        }
+      />
+      <Notice title="Storage problem" tone="danger">
+        {reason}
+      </Notice>
+    </>
+  );
+}
+
+function ReviewMissing({ runId }: { runId: string }) {
+  return (
+    <>
+      <PageHeading
+        title="No such run"
+        eyebrow="Review queue"
+        description={`Run ${runId}`}
         actions={
           <ActionLink href="/lgu/reviews" variant="quiet">
             Back to queue
@@ -577,8 +1014,8 @@ function ReviewForm() {
         }
       />
       <EmptyPanel
-        title="No run selected"
-        description="A review needs a stored run to attach to. Pick one from the queue once a Convex deployment is configured and a forecast has been run."
+        title="No stored run with that identifier"
+        description="The store has no run with this id, so there is nothing to assess. Run a forecast, then open it from the queue."
         actionHref="/lgu/reviews"
         actionLabel="Back to queue"
       />
@@ -586,151 +1023,244 @@ function ReviewForm() {
   );
 }
 
-function LguAlerts({ detail }: { detail?: string }) {
-  if (detail === "new") return <AlertDraft />;
-  if (detail === "approval") return <AlertApproval />;
+function ReviewPanel({ run }: { run: StoredRun }) {
+  const [reviewer, setReviewer] = useState("");
+  const [decision, setDecision] = useState<ReviewDecision>("approved");
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState<RunReview | null>(null);
+  const history = useReviewsForRun(run.runId);
+
+  const recorded = [
+    ...(saved ? [saved] : []),
+    ...(history.data?.reviews ?? []).filter(
+      (review) => review.reviewId !== saved?.reviewId,
+    ),
+  ];
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ runId: run.runId, decision, note, reviewer }),
+      });
+      const payload = (await response.json()) as {
+        review?: RunReview;
+        error?: string;
+        detail?: string;
+      };
+      if (!response.ok || !payload.review) {
+        throw new Error(
+          [payload.error, payload.detail].filter(Boolean).join(" — ") ||
+            `Request failed (${response.status})`,
+        );
+      }
+      setSaved(payload.review);
+      setNote("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "unknown error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <PageHeading
+        title="Forecast review"
+        eyebrow={`${run.locations.join(", ") || "No location"} · ${run.status}`}
+        description="Record an internal assessment against this stored run. Nothing here publishes a warning."
+        actions={
+          <ActionLink href="/lgu/reviews" variant="quiet">
+            Back to queue
+          </ActionLink>
+        }
+      />
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <Surface title="Decision">
+          <form className="grid gap-3" onSubmit={submit}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextField
+                id="review-reviewer"
+                label="Reviewer"
+                placeholder="Name recorded with the decision"
+                value={reviewer}
+                onChange={(event) => setReviewer(event.target.value)}
+                maxLength={80}
+                required
+              />
+              <SelectControl
+                id="review-decision"
+                label="Decision"
+                value={decision}
+                onChange={(event) =>
+                  setDecision(event.target.value as ReviewDecision)
+                }
+              >
+                <option value="approved">Approve for internal use</option>
+                <option value="changes-requested">Request changes</option>
+                <option value="escalated">Escalate</option>
+              </SelectControl>
+            </div>
+            <TextAreaField
+              id="review-note"
+              label={
+                decision === "approved" ? "Note (optional)" : "Note (required)"
+              }
+              placeholder="What the assessment rests on, and what the reader should weigh…"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              rows={5}
+              maxLength={2000}
+            />
+            {error ? (
+              <p className="text-metadata text-danger" role="alert">
+                {error}
+              </p>
+            ) : null}
+            {saved ? (
+              <p className="text-metadata text-success" role="status">
+                Recorded: {REVIEW_DECISION_LABEL[saved.decision]}.
+              </p>
+            ) : null}
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                size="small"
+                loading={submitting}
+                loadingLabel="Recording"
+              >
+                Record decision
+              </Button>
+            </div>
+          </form>
+        </Surface>
+        <Surface
+          title="The run this assesses"
+          description={RUN_SOURCE_LABEL[run.source]}
+        >
+          <dl className="text-body grid grid-cols-[130px_1fr] gap-2">
+            <dt className="text-muted">Run</dt>
+            <dd className="break-all">{run.runId}</dd>
+            <dt className="text-muted">Location</dt>
+            <dd>{run.locations.join(", ") || "—"}</dd>
+            <dt className="text-muted">Issued</dt>
+            <dd>{run.issueDate}</dd>
+            <dt className="text-muted">Days</dt>
+            <dd>{run.days}</dd>
+            <dt className="text-muted">Elevated days</dt>
+            <dd>{run.alerts}</dd>
+            <dt className="text-muted">Provider</dt>
+            <dd>
+              {run.provider}
+              {run.providerDegraded ? " (degraded input)" : ""}
+            </dd>
+            <dt className="text-muted">Model</dt>
+            <dd>{run.modelVersion ?? "—"}</dd>
+            <dt className="text-muted">Threshold</dt>
+            <dd>{run.operatingThreshold.toFixed(2)}</dd>
+          </dl>
+          <ActionLink
+            href={`/admin/research/runs/${encodeURIComponent(run.runId)}`}
+            variant="quiet"
+            className="mt-4 w-full"
+          >
+            Open full run record
+          </ActionLink>
+        </Surface>
+      </div>
+      <Surface className="mt-3" title="Recorded decisions">
+        {history.error ? (
+          <p className="text-body text-muted">
+            The recorded decisions could not be read: {history.error.message}
+          </p>
+        ) : recorded.length ? (
+          <ul className="grid gap-3">
+            {recorded.map((review) => (
+              <li
+                key={review.reviewId}
+                className="border-b border-line pb-3 last:border-b-0 last:pb-0"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-button">
+                    {REVIEW_DECISION_LABEL[review.decision]}
+                  </p>
+                  <p className="text-metadata text-muted">
+                    {review.reviewer} · {formatRunTime(review.createdAt)}
+                  </p>
+                </div>
+                {review.note ? (
+                  <p className="text-body mt-1 whitespace-pre-line text-muted">
+                    {review.note}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-body text-muted">
+            No decision has been recorded for this run yet.
+          </p>
+        )}
+      </Surface>
+    </>
+  );
+}
+
+/**
+ * Alerts are deliberately absent, not unfinished.
+ *
+ * RiverGuard has no publication authority, and this prototype has no approved
+ * channel to publish through, so a draft form that ended at "approval requested"
+ * was a workflow that could never finish. The screen now says what the system
+ * does instead of offering a composer that cannot send anything.
+ */
+function LguAlerts() {
   return (
     <>
       <PageHeading
         title="Alerts and notes"
-        eyebrow="Future controlled workflow"
-        description="Drafts remain internal until stakeholder-approved governance and backend authorization exist."
-        actions={
-          <ActionLink href="/lgu/alerts/new">
-            <Plus size={14} /> New draft
-          </ActionLink>
-        }
+        eyebrow="Not part of this prototype"
+        description="RiverGuard does not draft, approve, or publish warnings."
       />
-      <Notice title="Publication disabled" tone="warning">
-        Publishing requires an approved channel and authorized workflow.
+      <Notice title="No publication authority" tone="warning">
+        Official rainfall warnings and evacuation instructions come from PAGASA
+        and the affected local government unit. A model result is never an
+        official advisory, and this application cannot send one.
       </Notice>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <EmptyPanel
-          title="No active alert drafts"
-          description="Create a draft to review the required fields and approval states."
-          actionHref="/lgu/alerts/new"
-          actionLabel="Create draft"
-        />
-        <Surface title="Approval workflow" description="Not yet exercised">
-          <p className="text-body text-muted">
-            No draft has been created, so there is no approval state to show.
-            The workflow below explains what a draft would require before it
-            could be published.
-          </p>
+        <Surface title="Where official guidance comes from">
+          <ul className="text-body grid gap-2 text-muted">
+            <li>PAGASA — rainfall and river-level warnings.</li>
+            <li>NCR local government units — evacuation and road guidance.</li>
+            <li>MMDA — metro-wide traffic and flood advisories.</li>
+          </ul>
           <ActionLink
-            href="/lgu/alerts/new"
+            href="/official-sources"
             variant="quiet"
             className="mt-4 w-full"
           >
-            Start a draft
+            Open official sources
           </ActionLink>
         </Surface>
-      </div>
-    </>
-  );
-}
-
-function AlertApproval() {
-  return (
-    <>
-      <PageHeading
-        title="Alert approval"
-        eyebrow="Future authorized workflow"
-        description="Review a controlled draft against its supporting run, official references, scope, wording, and expiration."
-        actions={
-          <ActionLink href="/lgu/alerts" variant="quiet">
-            Back to alerts
-          </ActionLink>
-        }
-      />
-      <EmptyPanel
-        title="No draft awaiting approval"
-        description="Approval acts on a submitted draft. Nothing has been submitted, so there is no draft here to approve, return, or reject."
-        actionHref="/lgu/alerts/new"
-        actionLabel="Start a draft"
-      />
-    </>
-  );
-}
-
-function AlertDraft() {
-  const [submitted, setSubmitted] = useState(false);
-  return (
-    <>
-      <PageHeading
-        title="Alert draft"
-        eyebrow="Future workflow · Marikina"
-        description="Prepare a controlled draft supported by reviewed evidence. Publication remains unavailable."
-      />
-      <Surface className="mx-auto max-w-5xl" title="Draft details">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <TextField
-            id="alert-area"
-            label="Affected area"
-            defaultValue="Marikina (city-level)"
-          />
-          <TextField
-            id="alert-period"
-            label="Valid period"
-            placeholder="From the run you are drafting against"
-          />
-          <SelectControl id="alert-severity" label="Draft severity">
-            <option>For assessment</option>
-            <option>Heightened attention</option>
-          </SelectControl>
-          <TextField
-            id="alert-run"
-            label="Supporting run"
-            placeholder="Paste a stored run id"
-          />
-          <TextAreaField
-            id="alert-summary"
-            label="Summary"
-            placeholder="State the reviewed evidence and limitations…"
-            className="sm:col-span-2"
-          />
-          <TextAreaField
-            id="alert-action"
-            label="Recommended-action text"
-            placeholder="Use only organization-approved wording…"
-            className="sm:col-span-2"
-          />
-          <TextField
-            id="alert-approver"
-            label="Required approver"
-            placeholder="Authorized reviewer"
-          />
-          <TextField
-            id="alert-expiry"
-            label="Expiration"
-            type="datetime-local"
-          />
-        </div>
-        <Notice title="High-consequence action" tone="danger">
-          Publishing is intentionally disabled. A model result must never
-          automatically become an official alert.
-        </Notice>
-        <div className="mt-4 flex justify-end gap-2">
-          <ActionLink href="/lgu/alerts" variant="quiet">
-            Cancel
-          </ActionLink>
-          <Button
-            size="small"
-            variant="secondary"
-            onClick={() => setSubmitted(true)}
-          >
-            <ShieldCheck size={14} /> Request approval
-          </Button>
-        </div>
-        {submitted ? (
-          <p
-            className="text-metadata mt-2 text-right text-success"
-            role="status"
-          >
-            Draft moved to “Approval requested”.
+        <Surface title="What this workspace does instead">
+          <p className="text-body text-muted">
+            A stored forecast run can be assessed in the review queue. The
+            decision is recorded internally and never leaves this machine.
           </p>
-        ) : null}
-      </Surface>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <ActionLink href="/lgu/reviews">Open review queue</ActionLink>
+            <ActionLink href="/lgu/outlook" variant="quiet">
+              Review forecast
+            </ActionLink>
+          </div>
+        </Surface>
+      </div>
     </>
   );
 }
@@ -742,336 +1272,94 @@ export function LguScreen({ segments }: { segments: string[] }) {
   if (screen === "locations") return <LguLocations />;
   if (screen === "outlook") return <LguOutlook />;
   if (screen === "reviews") return <ReviewQueue detail={detail} />;
-  if (screen === "alerts") return <LguAlerts detail={detail} />;
+  if (screen === "alerts") return <LguAlerts />;
   return <LguHome />;
 }
 
-function AdminHome() {
-  return (
-    <>
-      <PageHeading
-        title="System overview"
-        eyebrow="Administrator workspace"
-        description="Review users, configuration readiness, provider status, and audit activity."
-        actions={
-          <ActionLink href="/admin/requests">Review access requests</ActionLink>
-        }
-      />
-      <Notice title="Access controls">
-        Account roles and location assignments require authorized administrator
-        review.
-      </Notice>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric
-          label="Pending requests"
-          value="3"
-          detail="Two require review"
-          tone="warning"
-        />
-        <Metric
-          label="Active users"
-          value="3"
-          detail="Across resident, LGU, and admin"
-          tone="primary"
-        />
-        <Metric
-          label="Supported cities"
-          value="4"
-          detail="City-level coverage"
-          tone="secondary"
-        />
-        <Metric
-          label="System readiness"
-          value="Partial"
-          detail="Backend disconnected"
-          tone="warning"
-        />
-      </div>
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <Surface title="Configuration status">
-          <div className="grid gap-2">
-            {[
-              ["Weather provider", "Configuration pending", "warning"],
-              ["Model version", "Experimental selected", "info"],
-              ["Hazard layers", "Source verification pending", "warning"],
-              ["Convex deployment", "Not connected", "danger"],
-            ].map(([label, value, tone]) => (
-              <div
-                key={label}
-                className="flex items-center justify-between rounded-control border border-line px-3 py-2"
-              >
-                <span className="text-body">{label}</span>
-                <StatusBadge tone={tone as "warning" | "info" | "danger"}>
-                  {value}
-                </StatusBadge>
-              </div>
-            ))}
-          </div>
-        </Surface>
-        <Surface title="Recent audit activity">
-          <p className="text-body text-muted">
-            No audit events are recorded. Nothing in this prototype writes an
-            audit trail, so this panel is intentionally empty rather than
-            illustrative.
-          </p>
-        </Surface>
-      </div>
-    </>
-  );
-}
-
 function AccessRequests({ detail }: { detail?: string }) {
-  if (detail) return <RequestReview />;
+  if (detail) {
+    return (
+      <>
+        <PageHeading
+          title="Access request"
+          eyebrow="Administrator review"
+          description="Account provisioning is handled by the identity service, which this prototype does not include."
+          actions={
+            <ActionLink href="/admin/requests" variant="quiet">
+              Back to requests
+            </ActionLink>
+          }
+        />
+        <EmptyPanel
+          title="No request with that identifier"
+          description="Nothing here stores access requests, so no applicant record exists for this id. There is no identity to verify and no decision to record."
+          actionHref="/admin/requests"
+          actionLabel="Back to requests"
+        />
+      </>
+    );
+  }
   return (
     <>
       <PageHeading
         title="User access requests"
         eyebrow="Administrator review"
-        description="Review verified identity, organization, requested role, location scope, and reason before assigning access."
+        description="Account provisioning is handled by the identity service, which this prototype does not include."
       />
-      <Surface title="Pending requests">
+      <Notice title="Nothing to review here" tone="warning">
+        Requests are created by the identity service when someone asks for an
+        account. This application never receives them, so it cannot approve,
+        reject, or assign a role.
+      </Notice>
+      <Surface className="mt-3" title="Pending requests">
         <p className="text-body text-muted">
-          No access requests are recorded. Account provisioning is not wired to
-          a backend in this prototype.
+          No access requests are recorded, and none can be created from this
+          build.
         </p>
       </Surface>
-    </>
-  );
-}
-
-function RequestReview() {
-  const [result, setResult] = useState("");
-  return (
-    <>
-      <PageHeading
-        title="Review access request"
-        eyebrow="Marco Santos · Marikina DRRMO"
-        description="Assign the minimum approved role and location scope after verification."
-        actions={
-          <ActionLink href="/admin/requests" variant="quiet">
-            Back to requests
-          </ActionLink>
-        }
-      />
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <Surface title="Decision">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SelectControl id="approved-role" label="Approved role">
-              <option>LGU operator</option>
-            </SelectControl>
-            <SelectControl id="approved-location" label="Permitted locations">
-              <option>Marikina only</option>
-              <option>No assignment</option>
-            </SelectControl>
-            <TextField
-              id="review-date"
-              label="Review date"
-              type="date"
-              defaultValue="2026-11-11"
-            />
-            <TextField
-              id="access-expiry"
-              label="Optional review date"
-              type="date"
-            />
-            <div className="sm:col-span-2">
-              <TextAreaField
-                id="decision-note"
-                label="Decision note"
-                placeholder="Record verification and scope rationale…"
-              />
-            </div>
-          </div>
-          <div className="mt-5 flex flex-wrap justify-end gap-2">
-            <Button
-              size="small"
-              variant="quiet"
-              onClick={() => setResult("More information requested")}
-            >
-              Request information
-            </Button>
-            <Button
-              size="small"
-              variant="danger"
-              onClick={() => setResult("Request rejected")}
-            >
-              Reject
-            </Button>
-            <Button
-              size="small"
-              variant="secondary"
-              onClick={() => setResult("Request approved for Marikina")}
-            >
-              Approve
-            </Button>
-          </div>
-          {result ? (
-            <p
-              className="text-metadata mt-2 text-right text-success"
-              role="status"
-            >
-              {result}.
-            </p>
-          ) : null}
-        </Surface>
-        <Surface title="Request evidence">
-          <dl className="text-body grid grid-cols-[110px_1fr] gap-2">
-            <dt className="text-muted">Identity</dt>
-            <dd>Verified</dd>
-            <dt className="text-muted">Organization</dt>
-            <dd>Marikina DRRMO</dd>
-            <dt className="text-muted">Requested role</dt>
-            <dd>LGU operator</dd>
-            <dt className="text-muted">Location</dt>
-            <dd>Marikina</dd>
-            <dt className="text-muted">Submitted</dt>
-            <dd>Nov 10, 16:05</dd>
-          </dl>
-        </Surface>
-      </div>
     </>
   );
 }
 
 function UsersRoles() {
-  const [message, setMessage] = useState("");
-  const [modal, setModal] = useState<"invite" | null>(null);
+  const roles: ProductRole[] = ["admin", "lgu", "resident"];
+  const rows = roles.map((role) => ({
+    role: roleDefinitions[role].label,
+    description: roleDefinitions[role].description,
+    capabilities:
+      roleCapabilities[role].length > 0
+        ? roleCapabilities[role].join(", ")
+        : "No administrative capabilities",
+  }));
+
   return (
     <>
       <PageHeading
         title="Users and roles"
         eyebrow="Access administration"
-        description="Inspect role, account status, assigned locations, MFA state, and recent access."
-        actions={
-          <Button
-            size="small"
-            onClick={() => {
-              setMessage("");
-              setModal("invite");
-            }}
-          >
-            <UserPlus size={14} /> Invite user
-          </Button>
-        }
+        description="The roles this build defines, and what each one may do."
       />
-      <Surface title="Approved users">
+      <Notice title="No accounts are stored here" tone="warning">
+        Sign-in and account administration belong to the identity service, which
+        this local prototype does not include. Nothing on this screen creates,
+        invites, or edits an account.
+      </Notice>
+      <Surface className="mt-3" title="Roles defined by this build">
+        <DataTable
+          columns={[
+            { key: "role", label: "Role" },
+            { key: "description", label: "Scope" },
+            { key: "capabilities", label: "Administrative capabilities" },
+          ]}
+          rows={rows}
+        />
+      </Surface>
+      <Surface className="mt-3" title="Approved users">
         <p className="text-body text-muted">
-          No user records are available. Authentication and user administration
-          are outside this research prototype, so no names are shown.
+          No user records are available, so no names, e-mail addresses, or
+          locations are shown.
         </p>
       </Surface>
-      {message ? (
-        <p className="text-metadata mt-2 text-success" role="status">
-          {message}.
-        </p>
-      ) : null}
-      {modal ? (
-        <div
-          className="fixed inset-0 z-[70] flex items-start justify-center bg-ink/25 px-4 pt-[10vh] backdrop-blur-[2px]"
-          role="presentation"
-          onMouseDown={() => setModal(null)}
-        >
-          <section
-            className="w-full max-w-xl rounded-panel border border-line bg-canvas p-5 shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="user-modal-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-line pb-3">
-              <div>
-                <h2 id="user-modal-title" className="text-section">
-                  Invite user
-                </h2>
-                <p className="text-metadata mt-0.5 text-muted">
-                  Send an invitation for a RiverGuard workspace account.
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label="Close dialog"
-                className="inline-flex size-8 items-center justify-center rounded-control text-muted hover:bg-canvas-soft hover:text-ink"
-                onClick={() => setModal(null)}
-              >
-                <X size={17} />
-              </button>
-            </div>
-            <form
-              className="mt-4 grid gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setModal(null);
-                setMessage("Invitation queued (not delivered — no backend)");
-              }}
-            >
-              <div className="grid gap-3 sm:grid-cols-2">
-                <TextField
-                  id="user-modal-name"
-                  label="Full name"
-                  placeholder="Full name"
-                  required
-                />
-                <TextField
-                  id="user-modal-email"
-                  label="Email"
-                  type="email"
-                  placeholder="name@organisation.gov.ph"
-                  required
-                />
-                <TextField
-                  id="user-modal-organization"
-                  label="Organization"
-                  placeholder="Organisation"
-                  required
-                />
-                <SelectControl
-                  id="user-modal-role"
-                  label="Role"
-                  defaultValue="LGU operator"
-                >
-                  <option>Resident</option>
-                  <option>LGU operator</option>
-                  <option>Administrator</option>
-                </SelectControl>
-                <SelectControl
-                  id="user-modal-location"
-                  label="Assigned locations"
-                  defaultValue="Supported NCR cities"
-                >
-                  <option>Supported NCR cities</option>
-                  <option>Marikina</option>
-                  <option>Quezon City</option>
-                  <option>Manila</option>
-                  <option>Pasig</option>
-                  <option>All</option>
-                </SelectControl>
-                <SelectControl
-                  id="user-modal-mfa"
-                  label="MFA requirement"
-                  defaultValue="Optional"
-                >
-                  <option>Optional</option>
-                  <option>Enabled</option>
-                  <option>Required</option>
-                </SelectControl>
-              </div>
-              <div className="flex justify-end gap-2 border-t border-line pt-4">
-                <Button
-                  type="button"
-                  size="small"
-                  variant="quiet"
-                  onClick={() => setModal(null)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" size="small">
-                  Send invitation
-                </Button>
-              </div>
-            </form>
-          </section>
-        </div>
-      ) : null}
     </>
   );
 }
@@ -1121,6 +1409,43 @@ function ConfigurationTabs({
   );
 }
 
+const CONFIGURATION_COPY: Record<
+  string,
+  { title: string; description: string }
+> = {
+  locations: {
+    title: "Supported locations",
+    description:
+      "The cities this build can score, with the representative point and alarm levels the model reports against.",
+  },
+  "data-sources": {
+    title: "Data-source configuration",
+    description:
+      "What the bundled history covers, and what it is allowed to be used for.",
+  },
+  provider: {
+    title: "Weather provider",
+    description:
+      "The live adapter the server calls, and whether the offline fixture is permitted as a fallback.",
+  },
+  models: {
+    title: "Model versions",
+    description:
+      "The artifacts this build loaded, and the operating threshold they were tuned to.",
+  },
+  "hazard-layers": {
+    title: "Hazard layers",
+    description:
+      "Verified static hazard geometry available to the map, with its provenance.",
+  },
+};
+
+/**
+ * Configuration used to be a form of `defaultValue` fields with a Save button
+ * that set a session flag — the values were literals and nothing could be
+ * stored. Nothing in this prototype can be configured at runtime, so the screen
+ * reports what the running service is set to instead of pretending to edit it.
+ */
 function ConfigurationScreen({
   kind,
   detail,
@@ -1128,7 +1453,6 @@ function ConfigurationScreen({
   kind: string;
   detail?: string;
 }) {
-  const [saved, setSaved] = useState(false);
   const searchParams = useSearchParams();
   const researchView =
     searchParams.get("view") === "research" || Boolean(detail);
@@ -1157,188 +1481,495 @@ function ConfigurationScreen({
       </>
     );
   }
-  const config: Record<
-    string,
-    { title: string; description: string; fields: Array<[string, string]> }
-  > = {
-    locations: {
-      title: "Supported locations",
-      description:
-        "Configure geographic scope, representative coordinates, compatible models, and limitation text.",
-      fields: [
-        ["Location name", "Marikina"],
-        ["Representative coordinates", "14.6507, 121.1029"],
-        ["Support status", "Supported"],
-        ["Compatible model", "Current deployed model"],
-        ["Boundary asset", "Not supplied"],
-        ["Limitation", "City-level only"],
-      ],
-    },
-    "data-sources": {
-      title: "Data-source configuration",
-      description: "Review catalogue readiness and provenance status.",
-      fields: [
-        ["Source", "NCR daily rainfall research dataset"],
-        ["Provider", "RiverGuard research dataset"],
-        ["License", "Not established"],
-        ["Coverage", "Four supported cities"],
-        ["Interval", "Daily"],
-        ["Status", "Unverified"],
-      ],
-    },
-    provider: {
-      title: "Weather provider",
-      description:
-        "Configure the future server-side weather adapter without exposing credentials.",
-      fields: [
-        ["Provider", "Not selected"],
-        ["Product / endpoint", "Pending verification"],
-        ["Variables", "Daily rainfall forecast"],
-        ["Timezone", "Asia/Manila"],
-        ["Credential status", "Not configured"],
-        ["Enabled status", "Disabled"],
-      ],
-    },
-    models: {
-      title: "Model versions",
-      description: "Control model compatibility and readiness labels.",
-      fields: [
-        ["Version", "See Models and evaluation for the deployed version"],
-        ["Responsibility", "Experimental city-level outlook"],
-        ["Input schema", "Declared in ml/artifacts/model.json"],
-        ["Locations", "Four supported cities"],
-        ["Validation reference", "ml/artifacts/metrics.json"],
-        ["Status", "Experimental"],
-      ],
-    },
-    "hazard-layers": {
-      title: "Hazard layers",
-      description:
-        "Record source, attribution, geography, version, and visibility separately from forecast output.",
-      fields: [
-        ["Layer", "Static hazard context"],
-        ["Source", "Pending verification"],
-        ["License / attribution", "Required"],
-        ["Geography", "NCR subset"],
-        ["Local asset", "Not available"],
-        ["Visibility", "Disabled"],
-      ],
-    },
-  };
-  const current = config[kind] ?? config.locations;
+
+  const copy = CONFIGURATION_COPY[kind] ?? CONFIGURATION_COPY.locations;
   return (
     <>
       <PageHeading
-        title={current.title}
+        title={copy.title}
         eyebrow="System configuration"
-        description={current.description}
+        description={copy.description}
       />
       <ConfigurationTabs kind={kind} researchView={false} />
-      <Notice title="Configuration security" className="mb-3">
-        Secrets are never displayed or stored in this form.
+      <Notice className="mb-3" title="Read-only in this build">
+        Every value below is read from the running service, its artifacts, or
+        its environment variables. There is no configuration endpoint, so there
+        is nothing here to edit or save.
       </Notice>
-      <Surface title="Configuration record">
-        <div className="grid gap-5 sm:grid-cols-2">
-          {current.fields.map(([label, value], index) => (
-            <TextField
-              key={label}
-              id={`config-${index}`}
-              label={label}
-              defaultValue={value}
-            />
-          ))}
-        </div>
-        <Button className="mt-5" size="small" onClick={() => setSaved(true)}>
-          <FloppyDisk size={14} /> Save configuration
-        </Button>
-        {saved ? (
-          <p className="text-metadata mt-2 text-success" role="status">
-            Configuration saved for this session.
-          </p>
-        ) : null}
+      <Surface title="Current configuration">
+        <ConfigurationRecord kind={kind} />
       </Surface>
     </>
   );
 }
 
+function ConfigurationRecord({ kind }: { kind: string }) {
+  if (kind === "locations") return <LocationConfiguration />;
+  if (kind === "data-sources") return <DataSourceConfiguration />;
+  if (kind === "provider") return <ProviderConfiguration />;
+  if (kind === "models") return <ModelConfiguration />;
+  if (kind === "hazard-layers") return <HazardLayerConfiguration />;
+  return <LocationConfiguration />;
+}
+
+function DefinitionList({ rows }: { rows: Array<[string, string]> }) {
+  return (
+    <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+      {rows.map(([label, value]) => (
+        <div key={label} className="border-b border-line pb-2">
+          <dt className="text-metadata text-muted">{label}</dt>
+          <dd className="text-body mt-0.5 break-words">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function Reading({ what }: { what: string }) {
+  return <p className="text-body text-muted">Reading {what}…</p>;
+}
+
+function Unavailable({ title, reason }: { title: string; reason: string }) {
+  return (
+    <Notice title={title} tone="warning">
+      {reason}
+    </Notice>
+  );
+}
+
+function LocationConfiguration() {
+  return (
+    <DataTable
+      columns={[
+        { key: "city", label: "City" },
+        { key: "river", label: "River" },
+        { key: "point", label: "Representative point" },
+        { key: "elevation", label: "Elevation" },
+        { key: "alarms", label: "Alarm levels" },
+        { key: "source", label: "Alarm source" },
+      ]}
+      rows={LOCATION_CODES.map((code) => {
+        const location = LOCATIONS[code];
+        return {
+          city: location.name,
+          river: location.river,
+          point: `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`,
+          elevation: `${location.elevationM} m`,
+          alarms: location.alarmLevelsM
+            .map((level) => `${level} m`)
+            .join(" / "),
+          source: location.alarmsVerified
+            ? "Published (PAGASA / LGU)"
+            : "Indicative, not published",
+        };
+      })}
+    />
+  );
+}
+
+function DataSourceConfiguration() {
+  const { dataset, error, loading } = useDatasetMeta();
+  if (loading) return <Reading what="the dataset metadata" />;
+  if (error || !dataset) {
+    return (
+      <Unavailable
+        title="Dataset metadata unavailable"
+        reason={error ?? "The dataset returned no metadata."}
+      />
+    );
+  }
+  return (
+    <DefinitionList
+      rows={[
+        ["Coverage", `${dataset.rows.toLocaleString()} city-days`],
+        ["Date range", `${dataset.dateMin} → ${dataset.dateMax}`],
+        ["Rainfall sources", dataset.rainSources.join(", ") || "Not declared"],
+        ["Recorded rainfall from", dataset.realRainFrom ?? "Not recorded"],
+        [
+          "Role in the system",
+          "Training history and charts only. Never a forecast input — the model reads the weather provider.",
+        ],
+      ]}
+    />
+  );
+}
+
+function ProviderConfiguration() {
+  const { data, error } = useSystemStatus();
+  if (error) {
+    return (
+      <Unavailable title="Service status unavailable" reason={error.message} />
+    );
+  }
+  if (!data) return <Reading what="the running service" />;
+  return (
+    <DefinitionList
+      rows={[
+        ["Weather provider", WEATHER_PROVIDER_LABEL[data.weather.provider]],
+        [
+          "Offline fixture fallback",
+          data.weather.fixtureAllowed
+            ? "Permitted — runs that use it are labelled degraded"
+            : "Disabled",
+        ],
+        [
+          "Selected by",
+          "WEATHER_PROVIDER and WEATHER_ALLOW_FIXTURE in the server environment",
+        ],
+        ["Variables", "Daily rainfall, antecedent sums, soil moisture"],
+        [
+          "Run storage",
+          data.convex.configured
+            ? "Convex deployment"
+            : "This machine — .data/runs.json",
+        ],
+      ]}
+    />
+  );
+}
+
+function ModelConfiguration() {
+  const { model, error, loading } = useModelArtifacts();
+  if (loading) return <Reading what="the model artifacts" />;
+  if (error || !model) {
+    return (
+      <Unavailable
+        title="Model artifacts unavailable"
+        reason={error ?? "No model artifacts were loaded."}
+      />
+    );
+  }
+  const verified = model.cities
+    .filter((city) => city.alarmsVerified)
+    .map((city) => city.name);
+  return (
+    <DefinitionList
+      rows={[
+        ["Model", `${model.name} ${model.version}`],
+        ["Kind", model.kind],
+        ["Trained", model.trainedAt],
+        ["Operating threshold", model.operatingThreshold.toFixed(2)],
+        ["Target", model.target],
+        ["Cities", model.cities.map((city) => city.name).join(", ")],
+        [
+          "Alarm levels verified",
+          verified.length ? verified.join(", ") : "None — treat as indicative",
+        ],
+      ]}
+    />
+  );
+}
+
+function HazardLayerConfiguration() {
+  const gis = useGisLayers();
+  if (gis.loading) return <Reading what="the verified layer list" />;
+  if (gis.status !== "ok") {
+    return (
+      <Unavailable
+        title="Layer list unavailable"
+        reason={gis.error ?? "The verified layer list could not be read."}
+      />
+    );
+  }
+  if (!gis.layers.length) {
+    return (
+      <p className="text-body text-muted">
+        No verified hazard layer is loaded. Add a local GeoJSON file, describe
+        it in{" "}
+        <code className="rounded bg-canvas px-1 py-0.5">
+          data/gis/manifest.json
+        </code>{" "}
+        and run{" "}
+        <code className="rounded bg-canvas px-1 py-0.5">
+          npm run gis:verify
+        </code>
+        .
+      </p>
+    );
+  }
+  return (
+    <DataTable
+      columns={[
+        { key: "layer", label: "Layer" },
+        { key: "publisher", label: "Publisher" },
+        { key: "license", label: "Licence" },
+        { key: "retrieved", label: "Retrieved" },
+      ]}
+      rows={gis.layers.map((layer) => ({
+        layer: layer.title,
+        publisher: layer.source.publisher,
+        license: layer.source.license,
+        retrieved: layer.source.retrievedAt,
+      }))}
+    />
+  );
+}
+
+/**
+ * The audit log reads what the service actually recorded.
+ *
+ * Filters are applied by the reader (`GET /api/audit`), so an empty table always
+ * means "nothing matches", never "the filter is decorative".
+ */
 function AuditLog() {
+  const [actor, setActor] = useState("");
+  const [action, setAction] = useState<AuditAction | "all">("all");
+  const [outcome, setOutcome] = useState<AuditOutcome | "all">("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  const filtersActive =
+    Boolean(actor.trim() || from || to) ||
+    action !== "all" ||
+    outcome !== "all";
+
+  const { data, error } = useAuditEvents({
+    actor,
+    action,
+    outcome,
+    from: from || undefined,
+    to: to || undefined,
+    limit: 100,
+  });
+
+  const events = data?.events ?? [];
+  const rows = events.map((event) => ({
+    time: formatAuditTime(event.at),
+    actor: event.actor,
+    action: AUDIT_ACTION_LABEL[event.action],
+    target: event.target,
+    outcome: event.outcome === "success" ? "Success" : "Failed",
+    detail: event.detail,
+  }));
+
+  function resetFilters() {
+    setActor("");
+    setAction("all");
+    setOutcome("all");
+    setFrom("");
+    setTo("");
+  }
+
   return (
     <>
       <PageHeading
         title="Audit log"
         eyebrow="Administrator evidence"
-        description="Review who changed what, when, and with what result. Sensitive values remain redacted."
+        description="What this service recorded, when, and with what result."
       />
-      <Surface className="mb-3" title="Filters">
+      <Notice className="mb-3" title="What this log is" tone="warning">
+        Entries are written to{" "}
+        <code className="rounded bg-canvas px-1 py-0.5">.data/audit.json</code>{" "}
+        on this machine when a forecast run is stored or a review decision is
+        recorded. There is no sign-in, so the actor is the local operator; this
+        is an activity log, not a compliance-grade trail.
+      </Notice>
+      <Surface
+        className="mb-3"
+        title="Filters"
+        description="Dates are Manila days"
+      >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <TextField
             id="audit-actor"
             label="Actor"
             placeholder="Name or system"
+            value={actor}
+            onChange={(event) => setActor(event.target.value)}
           />
-          <SelectControl id="audit-action" label="Action type">
-            <option>All actions</option>
-            <option>Access</option>
-            <option>Configuration</option>
+          <SelectControl
+            id="audit-action"
+            label="Action type"
+            value={action}
+            onChange={(event) =>
+              setAction(event.target.value as AuditAction | "all")
+            }
+          >
+            <option value="all">All actions</option>
+            <option value="forecast.run">Forecast run</option>
+            <option value="review.recorded">Review recorded</option>
           </SelectControl>
-          <TextField id="audit-date" label="Date" type="date" />
-          <SelectControl id="audit-outcome" label="Outcome">
-            <option>All outcomes</option>
-            <option>Success</option>
-            <option>Pending information</option>
+          <TextField
+            id="audit-from"
+            label="From"
+            type="date"
+            value={from}
+            onChange={(event) => setFrom(event.target.value)}
+          />
+          <TextField
+            id="audit-to"
+            label="To"
+            type="date"
+            value={to}
+            onChange={(event) => setTo(event.target.value)}
+          />
+          <SelectControl
+            id="audit-outcome"
+            label="Outcome"
+            value={outcome}
+            onChange={(event) =>
+              setOutcome(event.target.value as AuditOutcome | "all")
+            }
+          >
+            <option value="all">All outcomes</option>
+            <option value="success">Success</option>
+            <option value="failure">Failure</option>
           </SelectControl>
+          <div className="flex items-end">
+            <Button
+              size="small"
+              variant="quiet"
+              onClick={resetFilters}
+              disabled={!filtersActive}
+            >
+              Reset filters
+            </Button>
+          </div>
         </div>
       </Surface>
       <Surface title="Recorded activity">
-        <p className="text-body text-muted">
-          No audit events are recorded. This prototype does not write an audit
-          trail, so the log is empty by design.
-        </p>
+        {error ? (
+          <Unavailable title="Audit store unavailable" reason={error.message} />
+        ) : data === undefined ? (
+          <Reading what="the audit store" />
+        ) : events.length === 0 ? (
+          <p className="text-body text-muted">
+            {filtersActive
+              ? "No recorded event matches these filters."
+              : "No events are recorded yet. Storing a forecast run or recording a review decision adds one."}
+          </p>
+        ) : (
+          <>
+            <DataTable
+              columns={[
+                { key: "time", label: "Time" },
+                { key: "actor", label: "Actor" },
+                { key: "action", label: "Action" },
+                { key: "target", label: "Target" },
+                { key: "outcome", label: "Outcome" },
+                { key: "detail", label: "Detail" },
+              ]}
+              rows={rows}
+            />
+            <p className="text-metadata mt-2 text-muted">
+              {events.length} event{events.length === 1 ? "" : "s"} shown
+              {filtersActive ? " (filtered)" : ""}.
+            </p>
+          </>
+        )}
       </Surface>
     </>
   );
 }
 
 function AdminSettings() {
+  const system = useSystemStatus();
+  const model = useModelArtifacts();
+  const gis = useGisLayers();
+  const status = system.data;
+
+  const counted = (value: number | null | undefined) => {
+    if (status === undefined) return "Reading…";
+    if (value === null) return "Store unreadable";
+    return value === undefined ? "—" : value.toLocaleString();
+  };
+
   return (
     <>
       <PageHeading
         title="System settings"
         eyebrow="System controls"
-        description="Review safety notices, account policy, and system behavior."
+        description="Safety notices, the live status of this service, and the capabilities this build does not have."
       />
       <div className="grid gap-3 lg:grid-cols-2">
         <Surface title="Safety and terminology">
           <CheckControl
             id="experimental-labels"
             label="Require experimental labels"
-            description="Always on for unverified results."
+            description="Always on for unverified results; not switchable here."
             checked
             readOnly
           />
           <CheckControl
             id="official-reminder"
             label="Show official-source reminder"
-            description="Always available from result pages."
+            description="Always shown on result screens; not switchable here."
             checked
             readOnly
           />
         </Surface>
-        <Surface title="Deferred capabilities">
-          <div className="grid gap-2">
-            <StatusBadge tone="neutral">Dark theme · deferred</StatusBadge>
-            <StatusBadge tone="warning">
-              Authentication · backend required
-            </StatusBadge>
-            <StatusBadge tone="warning">
-              Alert publishing · governance required
-            </StatusBadge>
-            <StatusBadge tone="warning">
-              Real GIS layers · verified data required
-            </StatusBadge>
-          </div>
+        <Surface
+          title="Live service status"
+          description="Read from this process on each request"
+        >
+          {system.error ? (
+            <Unavailable
+              title="Status unavailable"
+              reason={system.error.message}
+            />
+          ) : (
+            <DefinitionList
+              rows={[
+                [
+                  "Weather provider",
+                  status
+                    ? WEATHER_PROVIDER_LABEL[status.weather.provider]
+                    : "Reading…",
+                ],
+                [
+                  "Offline weather fixture",
+                  status
+                    ? status.weather.fixtureAllowed
+                      ? "Permitted — runs are labelled degraded"
+                      : "Disabled"
+                    : "Reading…",
+                ],
+                [
+                  "Convex deployment",
+                  status
+                    ? status.convex.configured
+                      ? "Configured"
+                      : "Not configured — runs stay on this machine"
+                    : "Reading…",
+                ],
+                ["Stored runs", counted(status?.storage.runs)],
+                ["Recorded reviews", counted(status?.storage.reviews)],
+                ["Audit events", counted(status?.storage.auditEvents)],
+                [
+                  "Model",
+                  model.loading
+                    ? "Reading…"
+                    : model.model
+                      ? `${model.model.version} (${model.model.kind})`
+                      : (model.error ?? "Unavailable"),
+                ],
+                [
+                  "Verified hazard layers",
+                  gis.loading
+                    ? "Reading…"
+                    : gis.status !== "ok"
+                      ? (gis.error ?? "Unavailable")
+                      : String(gis.layers.length),
+                ],
+              ]}
+            />
+          )}
         </Surface>
       </div>
+      <Surface className="mt-3" title="Deferred capabilities">
+        <div className="grid gap-2">
+          <StatusBadge tone="neutral">Dark theme · deferred</StatusBadge>
+          <StatusBadge tone="warning">
+            Authentication · identity service required
+          </StatusBadge>
+          <StatusBadge tone="warning">
+            Alert publishing · governance and channel required
+          </StatusBadge>
+          <StatusBadge tone="warning">
+            Real GIS layers · verified data required
+          </StatusBadge>
+        </div>
+      </Surface>
     </>
   );
 }
@@ -1362,73 +1993,5 @@ export function AdminScreen({ segments }: { segments: string[] }) {
     return <ConfigurationScreen kind={screen} detail={detail} />;
   if (screen === "audit") return <AuditLog />;
   if (screen === "settings") return <AdminSettings />;
-  return <AdminHome />;
-}
-
-/**
- * LGU review queue, built from stored runs.
- *
- * A review row exists only because a run exists. This is a separate component so
- * the Convex query is never called without a ConvexProvider.
- */
-function StoredRunReviewQueue() {
-  const { data: runs, error } = useConvexQueryResult(
-    convexFunctions.recentRuns,
-    { limit: 10 },
-  );
-  if (error) {
-    // A deployment that has not been pushed yet must say so, not pretend the
-    // queue is empty.
-    return (
-      <p className="text-body text-muted">
-        Stored runs are unavailable: {convexErrorHint(error)}.
-      </p>
-    );
-  }
-  if (runs === undefined) {
-    return <p className="text-body text-muted">Loading stored runs…</p>;
-  }
-  if (runs.length === 0) {
-    return (
-      <p className="text-body text-muted">
-        No stored runs yet. Run a forecast from the research workspace to create
-        one.
-      </p>
-    );
-  }
-  const rows: Array<Record<string, string>> = runs.map((run: RecentRun) => ({
-    run: run.runId,
-    location: run.locations.length ? run.locations.join(", ") : "—",
-    valid: `${run.days} day(s)`,
-    quality: run.status === "completed" ? "Complete" : run.status,
-    review:
-      run.alerts > 0 ? `${run.alerts} elevated day(s)` : "Nothing flagged",
-    reviewer: "Unassigned",
-    updated: new Date(run.requestedAt).toLocaleString("en-PH", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "Asia/Manila",
-    }),
-  }));
-  return (
-    <DataTable
-      columns={[
-        { key: "run", label: "Run" },
-        { key: "location", label: "Location" },
-        { key: "valid", label: "Valid period" },
-        { key: "quality", label: "Quality" },
-        { key: "review", label: "Review status" },
-        { key: "reviewer", label: "Reviewer" },
-        { key: "updated", label: "Updated" },
-      ]}
-      rows={rows}
-      actions={(row) => (
-        <ActionLink href={`/lgu/reviews/${row.run}`} variant="quiet">
-          Review
-        </ActionLink>
-      )}
-    />
-  );
+  return <DashboardLayout />;
 }

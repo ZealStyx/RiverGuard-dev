@@ -183,11 +183,14 @@ export function RiverMap({
         cooperativeGestures,
       });
 
+      // Bottom-left, not top-right: the layer panel is pinned to the top-right
+      // corner, and MapLibre's zoom, compass and fullscreen controls were drawn
+      // underneath it — visible on narrow screens only, unclickable on desktop.
       map.addControl(
         new maplibregl.NavigationControl({ showCompass: true }),
-        "top-right",
+        "bottom-left",
       );
-      map.addControl(new maplibregl.FullscreenControl(), "top-right");
+      map.addControl(new maplibregl.FullscreenControl(), "bottom-left");
       // Never collapsed: the OSM tile policy forbids hiding attribution behind
       // a toggle, and this control is the canonical place for it.
       map.addControl(

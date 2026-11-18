@@ -18,6 +18,8 @@
 
 import { NextResponse } from "next/server";
 
+import { LOCAL_ACTOR } from "@/lib/audit";
+import { recordAuditEvent } from "@/lib/audit-store";
 import { persistOutlook } from "@/lib/forecast-persistence";
 import { getLocation } from "@/lib/locations";
 import { MlServiceError, requestDailyForecast } from "@/lib/ml-client";
@@ -94,7 +96,24 @@ export async function POST(request: Request) {
   const issueDate = bundle.asOf;
   const persistence = await persistOutlook(bundle, forecast, issueDate);
 
+  // Best effort: the run is already stored, so a failed audit write is reported
+  // as a warning rather than replacing the forecast with an error.
+  const audited = await recordAuditEvent({
+    actor: LOCAL_ACTOR,
+    action: "forecast.run",
+    target: persistence.runId ?? location.code,
+    outcome: persistence.stored ? "success" : "failure",
+    detail: persistence.stored
+      ? `${location.name}: ${forecast.days.length} day(s), stored in ${persistence.kind}.`
+      : `${location.name}: run produced but not stored (${persistence.error ?? "unknown reason"}).`,
+  });
+
   const warnings: string[] = [];
+  if (persistence.stored && !audited) {
+    warnings.push(
+      "The run was stored, but the audit entry could not be written.",
+    );
+  }
   if (bundle.degraded) {
     warnings.push(bundle.degradationReason ?? "Weather data is degraded.");
   }
