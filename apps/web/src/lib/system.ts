@@ -33,10 +33,14 @@ export interface SystemStatus {
   /**
    * Observed days kept from real provider runs. `configured: false` means no run
    * has stored any yet, so the history chart still ends where the dataset does.
+   * `backend` says where those rows live: the Convex deployment when one is
+   * configured, otherwise a file on this machine.
    */
   observations: {
     configured: boolean;
-    file: string;
+    backend: "convex" | "file";
+    /** Human label for the store, e.g. the deployment table or the file path. */
+    store: string;
     days: number;
     error: string | null;
   };

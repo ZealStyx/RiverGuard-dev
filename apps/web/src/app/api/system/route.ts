@@ -40,7 +40,8 @@ export async function GET() {
       })),
       observationStoreStatus().catch(() => ({
         configured: false,
-        file: "",
+        backend: "file" as const,
+        store: "",
         days: 0,
         error: "The observation store status could not be read.",
       })),

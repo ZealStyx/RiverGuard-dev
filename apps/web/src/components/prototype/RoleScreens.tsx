@@ -1639,14 +1639,14 @@ function ProviderConfiguration() {
                 : "Not configured — the provider's 30-day history is the only rainfall source.",
         ],
         [
-          "Observation store",
+          "Observed days",
           !status
             ? "Reading…"
             : status.observations.error
               ? status.observations.error
               : status.observations.configured
-                ? `${status.observations.days.toLocaleString()} observed day(s) in ${status.observations.file}. These extend the history chart past the dataset's last row.`
-                : "Empty — no real-provider run has stored its observed window yet. Fixture runs are refused.",
+                ? `${status.observations.days.toLocaleString()} day(s) in the ${status.observations.store}. Every real run upserts its window here, and the history chart reads the days the dataset does not cover.`
+                : `Empty — no real-provider run has stored its window yet. Written to the ${status.observations.store} once one runs; fixture runs are refused.`,
         ],
         [
           "River context",
@@ -1996,8 +1996,14 @@ function AdminSettings() {
                     ? status.observations.error
                       ? "Unreadable — see provider configuration"
                       : status.observations.configured
-                        ? `${status.observations.days.toLocaleString()} day(s) from real runs`
-                        : "None yet"
+                        ? `${status.observations.days.toLocaleString()} day(s) from real runs, ${
+                            status.observations.backend === "convex"
+                              ? "in the deployment"
+                              : "on this machine"
+                          }`
+                        : status.observations.backend === "convex"
+                          ? "None yet in the deployment"
+                          : "None yet on this machine"
                     : "Reading…",
                 ],
                 [

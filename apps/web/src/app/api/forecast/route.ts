@@ -159,8 +159,12 @@ export async function POST(request: Request) {
       "Offline fixture run: no observation days were stored. Illustrative numbers must not become observed history.",
     );
   } else if (observations.written > 0) {
+    const where =
+      observations.backend === "convex"
+        ? "the Convex deployment"
+        : "the local observation store";
     warnings.push(
-      `${observations.written} observed day${observations.written === 1 ? "" : "s"} added to the observation store, so the history chart continues past the dataset's last row.`,
+      `${observations.written} observed day${observations.written === 1 ? "" : "s"} added to ${where}, so the history chart continues past the dataset's last row.`,
     );
   }
   if (!persistence.stored) {
@@ -196,6 +200,7 @@ export async function POST(request: Request) {
       written: observations.written,
       skipped: observations.skipped,
       error: observations.error,
+      backend: observations.backend,
     },
     riverContext: river.context,
     riverContextError: river.error,
