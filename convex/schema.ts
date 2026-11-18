@@ -98,6 +98,36 @@ export default defineSchema({
     .index("by_source_record", ["source", "sourceRecordId"])
     .index("by_ingested_at", ["ingestedAt"]),
 
+  /**
+   * The observed weather a real forecast run retrieved, one row per location and
+   * day. Written by `POST /api/forecast` through `observations:recordWindow` and
+   * read by the history chart, so days past the committed CSV's last row survive
+   * the run that fetched them. `date` is the key (Asia/Manila calendar day);
+   * `observedAt` mirrors `sensorReadings` for time-range queries.
+   */
+  observedWeather: defineTable({
+    locationCode: v.string(),
+    locationName: v.string(),
+    date: v.string(),
+    observedAt: v.number(),
+    rainfallMm: v.number(),
+    tmaxC: v.optional(v.number()),
+    tminC: v.optional(v.number()),
+    et0Mm: v.optional(v.number()),
+    soilMoisturePercent: v.optional(v.number()),
+    soilMoistureSource: v.optional(v.string()),
+    /** `gauge` when a local gauge file supplied that day's rainfall. */
+    rainfallSource: v.optional(v.string()),
+    /** Which provider the numbers came from, e.g. `open-meteo`. */
+    provider: v.string(),
+    /** When the provider was queried, epoch milliseconds. */
+    retrievedAt: v.number(),
+    /** When this row was written, epoch milliseconds. */
+    recordedAt: v.number(),
+  })
+    .index("by_location_date", ["locationCode", "date"])
+    .index("by_date", ["date"]),
+
   modelVersions: defineTable({
     name: v.string(),
     version: v.string(),
