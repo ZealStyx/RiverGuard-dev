@@ -71,10 +71,11 @@ jobs:
 
       # A workflow can rewrite the PR description, never the commits. Any
       # "Co-authored-by: arena-agent <...>" trailer stays visible on the PR
-      # (GitHub lists the co-author) and in the merged history, so surface it
-      # in the run summary instead of letting the job look like it did nothing.
-      - name: Report attribution trailers it cannot remove
-        continue-on-error: true
+      # (GitHub lists the co-author) and lands in the merged history, so this
+      # step fails the check instead of only reporting: a clean body must not
+      # hide a dirty commit log. Fix by amending the commits, not by editing the
+      # PR again.
+      - name: Fail on commit attribution trailers
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -96,13 +97,24 @@ jobs:
             if [ "${count:-0}" -eq 0 ]; then
               echo "**Commits:** no attribution trailers."
             else
-              echo "**Commits:** $count commit(s) carry an attribution trailer that this workflow cannot remove —"
+              echo "**Commits:** ❌ $count commit(s) carry a bot/agent attribution trailer —"
               echo "GitHub shows the co-author on the PR and in the merged history."
               echo
               cat "$RUNNER_TEMP/trailers.md"
               echo
-              echo "Prevent it on future commits with \`git commit --no-verify\` (skips the sandbox's"
-              echo "\`commit-msg\` hook) or \`.git/hooks/commit-msg\` removed. Cleaning existing commits"
-              echo "needs a rewrite + force-push."
+              echo "Amend the commits so the branch is clean:"
+              echo
+              echo '```bash'
+              echo "git rebase -i --root   # or: git commit --amend --no-verify per commit"
+              echo "git push --force-with-lease"
+              echo '```'
+              echo
+              echo "Prevent it on new commits with \`git commit --no-verify\` (skips the sandbox's"
+              echo "\`commit-msg\` hook) or by removing \`.git/hooks/commit-msg\`."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${count:-0}" -gt 0 ]; then
+            echo "::error::${count} commit(s) on this PR carry a bot/agent attribution trailer. Amend them (git commit --amend --no-verify) so the co-author does not land in main."
+            exit 1
+          fi
