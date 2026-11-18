@@ -5,8 +5,10 @@ import {
   ArrowRight,
   CheckCircle,
   LockKey,
+  Moon,
   ShieldCheck,
   SignOut,
+  Sun,
   UserCircle,
   WaveSine,
 } from "@phosphor-icons/react";
@@ -29,6 +31,7 @@ import { api } from "../../../../../convex/_generated/api";
 import { useMutation } from "convex/react";
 
 import { usePreference } from "@/lib/preferences";
+import { useTheme } from "@/lib/theme";
 
 import {
   ActionLink,
@@ -103,7 +106,7 @@ export function WelcomeScreen() {
     <PublicShell showPublicLinks>
       <main className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-7xl items-center gap-8 px-5 py-10 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
-          <p className="text-metadata font-semibold uppercase tracking-[0.14em] text-brand-secondary">
+          <p className="text-metadata font-semibold uppercase tracking-[0.14em] text-brand-secondary-ink">
             NCR flood-risk research workspace
           </p>
           <h1 className="mt-3 max-w-3xl text-[clamp(2.25rem,6vw,5rem)] leading-[0.98] font-semibold tracking-[-0.055em]">
@@ -138,7 +141,7 @@ function AuthLayout({
     <PublicShell>
       <main className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-8 px-5 py-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(380px,0.55fr)]">
         <div className="hidden lg:block">
-          <p className="text-metadata font-semibold uppercase tracking-[0.14em] text-brand-secondary">
+          <p className="text-metadata font-semibold uppercase tracking-[0.14em] text-brand-secondary-ink">
             RiverGuard account
           </p>
           <h1 className="text-[2.75rem] mt-3 leading-none font-semibold tracking-[-0.05em]">
@@ -290,7 +293,7 @@ function LoginForm() {
               />
               <Link
                 href="/auth/forgot-password"
-                className="text-metadata text-brand-primary"
+                className="text-metadata text-brand-primary-ink"
               >
                 Forgot password?
               </Link>
@@ -367,7 +370,7 @@ function LoginForm() {
       <div id="recaptcha-container" />
       <Link
         href="/auth/signup"
-        className="text-metadata text-center text-brand-primary"
+        className="text-metadata text-center text-brand-primary-ink"
       >
         New to RiverGuard? Create Account
       </Link>
@@ -563,7 +566,7 @@ function ResidentSignup() {
       </Button>
       <Link
         href="/auth/login"
-        className="text-metadata text-center text-brand-primary"
+        className="text-metadata text-center text-brand-primary-ink"
       >
         Already have an account? Log in
       </Link>
@@ -637,7 +640,7 @@ function AccessRequest() {
       </Button>
       <Link
         href="/auth/login"
-        className="text-metadata text-center text-brand-primary underline"
+        className="text-metadata text-center text-brand-primary-ink underline"
       >
         Cancel and return to login
       </Link>
@@ -781,7 +784,7 @@ function Verification() {
             className={
               secondsRemaining > 0
                 ? "cursor-not-allowed text-muted"
-                : "text-brand-primary"
+                : "text-brand-primary-ink"
             }
           >
             {isEmailVerification
@@ -836,7 +839,7 @@ function Verification() {
         {isEmailVerification ? "I verified my email" : "Verify"}
       </Button>
       <div className="text-center text-metadata">
-        <Link href="/auth/login" className="text-brand-primary">
+        <Link href="/auth/login" className="text-brand-primary-ink">
           Back to login
         </Link>
       </div>
@@ -861,7 +864,7 @@ function PendingApproval() {
   return (
     <div className="grid gap-3">
       <div className="flex justify-center">
-        <span className="inline-flex size-12 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary">
+        <span className="inline-flex size-12 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary-ink">
           <ShieldCheck size={26} />
         </span>
       </div>
@@ -941,7 +944,7 @@ function PasswordRecovery({ reset }: { reset?: boolean }) {
       </Button>
       <Link
         href="/auth/login"
-        className="text-metadata text-center text-brand-primary underline"
+        className="text-metadata text-center text-brand-primary-ink underline"
       >
         Back to login
       </Link>
@@ -1021,7 +1024,7 @@ function Invitation() {
       </Button>
       <Link
         href="/auth/request-access"
-        className="text-metadata text-center text-brand-primary underline"
+        className="text-metadata text-center text-brand-primary-ink underline"
       >
         Report an incorrect invitation
       </Link>
@@ -1091,16 +1094,58 @@ function AccountProblem({ screen }: { screen: string }) {
   );
 }
 
+/**
+ * Ends the Firebase session, then says so.
+ *
+ * The screen used to announce "You have been logged out" without signing
+ * anything out, so the browser kept a live session while telling the operator it
+ * had ended. The sign-out now runs on mount and the wording follows its result.
+ */
 function LogoutScreen() {
+  const { user, loading, signOut } = useFirebaseAuth();
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    signOut()
+      .then(() => {
+        if (active) setDone(true);
+      })
+      .catch((cause: unknown) => {
+        if (active)
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Sign-out did not complete.",
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [signOut]);
+
+  const settled = done || (!loading && user === null);
+
   return (
     <div className="grid gap-3 text-center">
-      <span className="mx-auto inline-flex size-12 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary">
+      <span className="mx-auto inline-flex size-12 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary-ink">
         <SignOut size={24} />
       </span>
       <div>
-        <p className="text-section">You have been logged out</p>
+        <p className="text-section">
+          {error
+            ? "Sign-out did not complete"
+            : settled
+              ? "You have been logged out"
+              : "Signing out…"}
+        </p>
         <p className="text-body mt-1 text-muted">
-          Your RiverGuard session has ended.
+          {error
+            ? error
+            : settled
+              ? "Your RiverGuard session has ended."
+              : "Ending the session held by this browser."}
         </p>
       </div>
       <ActionLink href="/auth/login">Return to login</ActionLink>
@@ -1580,7 +1625,7 @@ export function PublicInfoScreen({
             <Surface title="Source links">
               <div className="grid gap-2">
                 <a
-                  className="text-body flex items-center justify-between rounded-control border border-line px-3 py-2 text-brand-primary"
+                  className="text-body flex items-center justify-between rounded-control border border-line px-3 py-2 text-brand-primary-ink"
                   href="https://www.pagasa.dost.gov.ph/"
                   target="_blank"
                   rel="noreferrer"
@@ -1679,7 +1724,7 @@ function ProfileSettings() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3 py-4">
-        <span className="inline-flex size-14 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-primary">
+        <span className="inline-flex size-14 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-primary-ink">
           <UserCircle size={32} weight="duotone" />
         </span>
         <div>
@@ -1857,6 +1902,7 @@ function AccessibilitySettings() {
     "reduce-motion",
     "false",
   );
+  const { theme, setTheme } = useTheme();
 
   return (
     <div>
@@ -1864,7 +1910,55 @@ function AccessibilitySettings() {
       <p className="text-body mt-1 text-muted">
         Adjust how charts, maps, and motion are presented.
       </p>
-      <div className="mt-4 grid gap-2">
+
+      <div className="mt-4 border-t border-line pt-4">
+        <p className="text-button" id="theme-setting-label">
+          Colour theme
+        </p>
+        <p className="text-metadata mt-0.5 text-muted">
+          The same choice as the sun and moon buttons in the workspace header.
+          The basemap keeps its own light tiles: they are OpenStreetMap images,
+          not app surfaces.
+        </p>
+        <div
+          role="radiogroup"
+          aria-labelledby="theme-setting-label"
+          className="mt-2 inline-flex rounded-full bg-canvas-soft p-1"
+        >
+          {(
+            [
+              [
+                "light",
+                "Light",
+                <Sun aria-hidden="true" size={15} key="sun" />,
+              ],
+              [
+                "dark",
+                "Dark",
+                <Moon aria-hidden="true" size={15} key="moon" />,
+              ],
+            ] as const
+          ).map(([value, label, icon]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={theme === value}
+              onClick={() => setTheme(value)}
+              className={`text-navigation flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors motion-reduce:transition-none ${
+                theme === value
+                  ? "bg-canvas text-ink shadow-sm"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              {icon}
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 border-t border-line pt-4">
         <CheckControl
           id="reduce-motion-setting"
           label="Reduce motion"
@@ -1880,7 +1974,7 @@ function AccessibilitySettings() {
         browser settings. This build does not override them.
       </Notice>
       <p className="text-metadata mt-4 text-muted" role="status">
-        Saved in this browser as you change the control.
+        Saved in this browser as you change the controls.
       </p>
     </div>
   );

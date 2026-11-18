@@ -118,16 +118,22 @@ export function readPreference(key: string): string | null {
 /**
  * Applies the preferences that have a visible effect.
  *
- * Only "reduce motion" is applied today: it sets `data-reduce-motion` on the
- * document element, and `globals.css` uses it to shorten transitions. Nothing
- * else is stored that the interface does not honour, so a toggle can always be
- * traced to something on screen.
+ * Two today: "reduce motion" sets `data-reduce-motion` on the document element
+ * and `globals.css` uses it to shorten transitions; "theme" sets `data-theme`
+ * and `globals.css` swaps in the dark palette. Both are read here as well as by
+ * the screens that own the controls, so a workspace screen reached by a normal
+ * link keeps the choice instead of resetting to light. Nothing else is stored
+ * that the interface does not honour, so a toggle can always be traced to
+ * something on screen.
  */
 export function useAppliedPreferences() {
   const [reduceMotion] = useBooleanPreference("reduce-motion");
+  const [theme] = usePreference("theme", "light");
   useEffect(() => {
     const root = document.documentElement;
     if (reduceMotion) root.dataset.reduceMotion = "true";
     else delete root.dataset.reduceMotion;
-  }, [reduceMotion]);
+    if (theme === "dark") root.dataset.theme = "dark";
+    else delete root.dataset.theme;
+  }, [reduceMotion, theme]);
 }

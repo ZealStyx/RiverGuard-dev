@@ -29,7 +29,7 @@ export function IconButton({
         "disabled:cursor-not-allowed disabled:opacity-45",
         tone === "dark"
           ? "border-white/15 bg-brand-primary text-white hover:bg-brand-secondary"
-          : "border-line bg-canvas-soft text-ink hover:bg-white",
+          : "border-line bg-canvas-soft text-ink hover:bg-canvas",
         className,
       )}
     >

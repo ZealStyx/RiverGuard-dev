@@ -641,7 +641,7 @@ function LguOverview({ runs }: { runs: StoredRunSummary[] | undefined }) {
                   </div>
                   <Link
                     href={`/lgu/reviews/${encodeURIComponent(review.runId)}`}
-                    className="text-metadata shrink-0 text-brand-primary hover:underline"
+                    className="text-metadata shrink-0 text-brand-primary-ink hover:underline"
                   >
                     Open
                   </Link>
@@ -1388,7 +1388,7 @@ function ConfigurationTabs({
         className={cx(
           "text-button border-b-2 px-3 py-2",
           !researchView
-            ? "border-brand-primary text-brand-primary"
+            ? "border-brand-primary text-brand-primary-ink"
             : "border-transparent text-muted hover:text-ink",
         )}
       >
@@ -1399,7 +1399,7 @@ function ConfigurationTabs({
         className={cx(
           "text-button border-b-2 px-3 py-2",
           researchView
-            ? "border-brand-primary text-brand-primary"
+            ? "border-brand-primary text-brand-primary-ink"
             : "border-transparent text-muted hover:text-ink",
         )}
       >
@@ -1995,7 +1995,6 @@ function AdminSettings() {
       </div>
       <Surface className="mt-3" title="Deferred capabilities">
         <div className="grid gap-2">
-          <StatusBadge tone="neutral">Dark theme · deferred</StatusBadge>
           <StatusBadge tone="warning">
             Authentication · identity service required
           </StatusBadge>

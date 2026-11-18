@@ -108,10 +108,9 @@ export async function POST(request: Request) {
   }
 
   const issueDate = bundle.asOf;
-  const accessToken = request.headers.get("authorization")?.replace(
-    /^Bearer\s+/i,
-    "",
-  );
+  const accessToken = request.headers
+    .get("authorization")
+    ?.replace(/^Bearer\s+/i, "");
   const persistence = await persistOutlook(
     bundle,
     forecast,

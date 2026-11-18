@@ -1,4 +1,7 @@
-import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
+import {
+  mutationGeneric as mutation,
+  queryGeneric as query,
+} from "convex/server";
 import { v } from "convex/values";
 
 export const getCurrent = query({
@@ -38,7 +41,9 @@ export const ensureCurrent = mutation({
     const now = Date.now();
     const existing = await ctx.db
       .query("users")
-      .withIndex("by_external_id", (index) => index.eq("externalId", externalId))
+      .withIndex("by_external_id", (index) =>
+        index.eq("externalId", externalId),
+      )
       .unique();
 
     if (existing) {
