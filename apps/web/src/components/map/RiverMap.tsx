@@ -27,6 +27,13 @@ export interface RiverMapProps {
    * scrolling page, so a wheel gesture over the map does not trap the page.
    */
   cooperativeGestures?: boolean;
+  /**
+   * Whether the layer panel is on screen. The workspace rail toggles it, so the
+   * state lives with the caller rather than inside the map.
+   */
+  layersOpen?: boolean;
+  /** Present when the panel can be dismissed from the map itself. */
+  onLayersClose?: () => void;
 }
 
 type MapStatus = "loading" | "ready" | "error";
@@ -150,6 +157,8 @@ export function RiverMap({
   onLayerChange,
   className = "",
   cooperativeGestures = false,
+  layersOpen = true,
+  onLayersClose,
 }: RiverMapProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -404,15 +413,18 @@ export function RiverMap({
           </button>
         </div>
 
-        <div className="absolute top-4 right-4 hidden lg:block">
-          <HazardLayerControl
-            activeLayer={activeLayer}
-            loading={gis.loading}
-            onLayerChange={onLayerChange}
-            rejected={gis.rejected}
-            verified={gis.layers}
-          />
-        </div>
+        {layersOpen ? (
+          <div className="absolute top-4 right-4 z-10 max-w-[calc(100%-2rem)]">
+            <HazardLayerControl
+              activeLayer={activeLayer}
+              loading={gis.loading}
+              onClose={onLayersClose}
+              onLayerChange={onLayerChange}
+              rejected={gis.rejected}
+              verified={gis.layers}
+            />
+          </div>
+        ) : null}
 
         {mapStatus === "loading" ? (
           <div className="absolute inset-x-4 top-24 flex justify-center">

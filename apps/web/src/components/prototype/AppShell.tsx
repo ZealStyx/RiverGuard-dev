@@ -25,8 +25,9 @@ import {
 import Link from "next/link";
 
 import { BuildStamp } from "@/components/BuildStamp";
+import { SearchDialog } from "@/components/ui/SearchDialog";
 import { usePathname } from "next/navigation";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
 import { convexConfigured } from "@/components/dashboard/OutlookBridge";
 import {
@@ -192,8 +193,7 @@ export function AppShell({ children, role }: AppShellProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [settingsMenuPinned, setSettingsMenuPinned] = useState(false);
-  const [query, setQuery] = useState("");
-  // Applies stored display preferences (currently reduced motion) for every
+  // Applies stored display preferences (theme, reduced motion) for every
   // screen inside the shell, including the settings pages themselves.
   useAppliedPreferences();
   const { data: storedRuns } = useLocalRuns(20);
@@ -261,22 +261,16 @@ export function AppShell({ children, role }: AppShellProps) {
     return [...pages, ...cities, ...runs];
   }, [searchItems, role, storedRuns]);
 
-  const filteredItems = searchResults.filter((item) =>
-    `${item.label} ${item.meta}`
-      .toLowerCase()
-      .includes(query.trim().toLowerCase()),
+  const searchDialogItems = useMemo(
+    () =>
+      searchResults.map((item) => ({
+        ...item,
+        icon: navigationIcon(item.label),
+      })),
+    [searchResults],
   );
 
-  useEffect(() => {
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setSearchOpen(false);
-    }
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, []);
-
   function openSearch() {
-    setQuery("");
     setSearchOpen(true);
     setMobileOpen(false);
   }
@@ -372,7 +366,7 @@ export function AppShell({ children, role }: AppShellProps) {
               className={cx(
                 "text-navigation flex min-h-10 w-full items-center gap-3 rounded-control px-3 hover:bg-canvas-soft",
                 pathname.startsWith("/settings")
-                  ? "bg-brand-secondary-soft text-brand-primary"
+                  ? "bg-brand-secondary-soft text-brand-primary-ink"
                   : "text-muted hover:text-ink",
               )}
             >
@@ -505,72 +499,15 @@ export function AppShell({ children, role }: AppShellProps) {
       </div>
 
       {searchOpen ? (
-        <div
-          className="fixed inset-0 z-[70] flex items-start justify-center bg-ink/25 px-4 pt-[12vh] backdrop-blur-[2px]"
-          onMouseDown={() => setSearchOpen(false)}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="search-title"
-            onMouseDown={(event) => event.stopPropagation()}
-            className="w-full max-w-xl overflow-hidden rounded-panel border border-line bg-canvas shadow-2xl"
-          >
-            <div className="flex items-center gap-3 border-b border-line px-4 py-3">
-              <MagnifyingGlass size={19} className="text-muted" />
-              <div className="min-w-0 flex-1">
-                <h2 id="search-title" className="sr-only">
-                  Search RiverGuard
-                </h2>
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search pages, cities, and stored runs…"
-                  className="text-body w-full border-0 bg-transparent py-1 outline-none placeholder:text-muted"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setSearchOpen(false)}
-                aria-label="Close search"
-                className="inline-flex size-7 items-center justify-center rounded-control hover:bg-canvas-soft"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="max-h-80 overflow-y-auto p-2">
-              {filteredItems.length ? (
-                filteredItems.map((item) => (
-                  <Link
-                    key={`${item.href}-${item.label}`}
-                    href={item.href}
-                    onClick={() => setSearchOpen(false)}
-                    className="flex items-center gap-3 rounded-control px-3 py-2.5 hover:bg-canvas-soft"
-                  >
-                    <span className="text-brand-secondary">
-                      {navigationIcon(item.label)}
-                    </span>
-                    <span>
-                      <span className="text-button block">{item.label}</span>
-                      <span className="text-metadata block text-muted">
-                        {item.meta}
-                      </span>
-                    </span>
-                  </Link>
-                ))
-              ) : (
-                <p className="text-body px-3 py-8 text-center text-muted">
-                  No page, city, or stored run matches that search.
-                </p>
-              )}
-            </div>
-            <p className="text-metadata border-t border-line bg-canvas-soft px-4 py-2 text-muted">
-              Search covers pages, supported cities, and stored runs. Press Esc
-              to close.
-            </p>
-          </section>
-        </div>
+        <SearchDialog
+          items={searchDialogItems}
+          onClose={() => setSearchOpen(false)}
+          footnote={
+            role === "resident"
+              ? "Search covers pages, settings, and the four supported cities."
+              : "Search covers pages, settings, supported cities, and stored runs."
+          }
+        />
       ) : null}
     </div>
   );

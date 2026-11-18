@@ -35,7 +35,7 @@ export interface RiskSummaryProps {
 
 function toneForLabel(label: OutlookDay["label"]): string {
   if (label === "Elevated") return "text-warning";
-  if (label === "Moderate") return "text-brand-secondary";
+  if (label === "Moderate") return "text-brand-secondary-ink";
   return "text-muted";
 }
 
