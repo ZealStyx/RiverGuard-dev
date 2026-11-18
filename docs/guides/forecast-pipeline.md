@@ -78,11 +78,17 @@ Convex subscription, so a reload does not spend another weather call.
    charts and the dataset banner — so the chain cannot start days in the past. The response reports
    the input in `observedState` (`asOfDate` = last day of that window, `rainSource`, `qualityStatus`)
    and names the source rows in `weather.notes`.
-5. `POST {ML_API_BASE_URL}/v1/forecast/daily` with that input state and the seven days.
-6. The ML service chains them: predict day _d_, fold its rain into the antecedent sums and the soil
+5. **The observed window is kept before the model is asked anything.** `lib/observation-store.ts`
+   writes those days to the Convex deployment (`observedWeather`) or, without a deployment, to
+   `.data/observations.json`. It runs here, not after step 7, so a stopped ML service cannot throw
+   away weather that was retrieved successfully — which is exactly what used to happen. The days are
+   what the history chart draws after `data/daily_observations.csv` ends; the derivation and its
+   rules are in `docs/data-sources.md` §1.2. Refused for the fixture and for degraded runs.
+6. `POST {ML_API_BASE_URL}/v1/forecast/daily` with that input state and the seven days.
+7. The ML service chains them: predict day _d_, fold its rain into the antecedent sums and the soil
    bucket, predict day _d+1_. Each day comes back with probability, water level, risk level, alarm
    crossing, and a one-sentence reason.
-7. The route stores the run, in one of two places:
+8. The route stores the run, in one of two places:
    - **Convex** (`NEXT_PUBLIC_CONVEX_URL` set) — `forecasts:recordOutlook` writes one `forecastRuns`
      row, seven `forecasts`, seven `riskAssessments`, a `modelVersions` row if it is new, and an alert
      for every `elevated` day, then resolves alerts superseded by this run.
@@ -90,8 +96,10 @@ Convex subscription, so a reload does not spend another weather call.
      `.data/runs.json` (gitignored, newest first, capped at 200 runs, written atomically). Without
      this, a run existed only in the response that produced it and run history, run detail and the
      comparison screen had nothing to read.
-8. The dashboard renders the response immediately and the Convex subscription delivers the same run
-   on the next page load.
+9. The dashboard renders the response immediately and the Convex subscription delivers the same run
+   on the next page load. A finished run also announces itself on the client
+   (`lib/observation-refresh.ts`), so the observed-history panel refetches instead of keeping the
+   snapshot it took when it mounted.
 
 ### What else is written locally
 
@@ -139,7 +147,7 @@ a forecast.
 
 | Symptom                                                                     | Cause                                                                                          | Behaviour                                                                                                                                                                                                                                                     |
 | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 503 `The local ML service did not produce a forecast`                       | uvicorn not running, or wrong `ML_API_BASE_URL`                                                | Weather result is still returned in `weather`; nothing is stored                                                                                                                                                                                              |
+| 503 `The local ML service did not produce a forecast`                       | uvicorn not running, or wrong `ML_API_BASE_URL`                                                | Weather result is still returned in `weather`, and the observed window is still kept for the history chart (step 5); the _run_ is not stored, and `observations` says what was written                                                                        |
 | 502 `Weather provider failed and the offline forecast fallback is disabled` | Open-Meteo unreachable and `WEATHER_ALLOW_FIXTURE=false`                                       | Explicit failure instead of invented numbers; no input state exists, so nothing is scored or stored                                                                                                                                                           |
 | `weather.degraded: true`                                                    | Provider failed and the fixture was allowed                                                    | Runs end to end on the labelled fixture — which is now also its input — and the outlook panel renders a warning banner plus every warning, so illustrative rainfall is never presented as a forecast                                                          |
 | `observedState.qualityStatus: "degraded"`                                   | The input came from the offline fixture                                                        | Same as `weather.degraded`; the run is shown with a warning, never as a live forecast                                                                                                                                                                         |
