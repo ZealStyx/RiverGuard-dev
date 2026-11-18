@@ -60,12 +60,15 @@ the local prototype keeps working offline. The table needs the schema pushed onc
 per-day rainfall source. No water level is written, because the proxy below is derived at read time — the
 table stays a faithful copy of the provider window instead of a second, drifting version of the dataset.
 
-**Water level on those days** is the dataset generator's own formula
-(`0.006·Ant7 + 0.018·Rain + 0.004·Ant3 + ((Alarm3 − Alarm1)/40000)·Rain²`, `data/generate_dataset.py`),
-placed on the dataset's scale with a per-city datum `Alarm1 − p98(det)` calibrated from that city's CSV
-rows. The generator's `N(0, 0.10)` m noise term is **not** reproduced: a derived proxy should not jitter
-because of a random number generator in another process. Against the CSV's own `WaterLevel_m` column the
-derivation agrees within that noise (~0.27 m worst case over the four cities).
+**Water level on those days** is the dataset generator's own derivation
+(`data/generate_dataset.py`): rainfall routed through a fast store (`0.80/day`) and a slow baseflow store
+(`0.97/day`), with the resulting index mapped onto that river's alarm band — `p98(index)` at Alarm 1, the
+dry-season floor at `Alarm1 − 2.0 m`, and Alarm 3 as the cap. The chart replays the CSV's rainfall from
+its first row to recover the reservoir state at the dataset's end, then continues with the stored days,
+so the seam is continuous. The generator's `N(0, 0.05)` m noise is **not** reproduced: a derived proxy
+should not jitter because of a random number generator in another process. Against the CSV's own
+`WaterLevel_m` column the derivation agrees to within that noise (0.13 m worst case over four cities and
+40 days).
 
 **Rules that keep the chart honest**
 
@@ -156,16 +159,16 @@ training labels because the daily/site attribution needed for that is missing.
 
 ### S6 — RiverGuard synthetic generator
 
-| Field            | Value                                                                                                                                                 |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| File             | `data/generate_dataset.py` (seed 42, deterministic)                                                                                                   |
-| Rainfall         | Markov wet/dry state + Gamma intensity; monthly totals rescaled to S1 normals × U(0.85, 1.15); 60 % shared NCR synoptic factor                        |
-| Water level      | `WL = base + 0.006·Ant7 + 0.018·Rain + 0.004·Ant3 + ((Alarm3−Alarm1)/40000)·Rain² + N(0, 0.10)`; datum calibrated so Alarm 1 is exceeded ~2 % of days |
-| Soil moisture    | Bucket: `SM += Rain − ET0 − 0.08·SM`, clamped 5–95                                                                                                    |
-| Flood label      | `WL ≥ Alarm1 OR (Rain ≥ 100 & Ant7 ≥ 150) OR Ant3 ≥ 250`                                                                                              |
-| Units / timezone | mm/day, m, %, °C · Asia/Manila local days                                                                                                             |
-| Licence          | Generated in-repo; no third-party data redistributed                                                                                                  |
-| Limitation       | **Not observations.** Water level is a formula over rainfall, so any model trained on it partly relearns that formula.                                |
+| Field            | Value                                                                                                                                                                                                                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File             | `data/generate_dataset.py` (seed 42, deterministic)                                                                                                                                                                                                                                                                                               |
+| Rainfall         | Markov wet/dry state + Gamma intensity; monthly totals rescaled to S1 normals × U(0.85, 1.15); 60 % shared NCR synoptic factor                                                                                                                                                                                                                    |
+| Water level      | Rainfall routed through two stores — `quick_t = 0.80·quick + Rain`, `slow_t = 0.97·slow + 0.06·Rain`, `index = 0.012·quick + 0.030·slow` — then mapped onto the river's alarms: `p98(index)` → Alarm 1, dry-season floor `Alarm 1 − 2.0 m`, cap `Alarm 3`, noise `N(0, 0.05)`. Rises after a storm and recedes over days; Alarm 1 on ~2 % of days |
+| Soil moisture    | Bucket: `SM += Rain − ET0 − 0.08·SM`, clamped 5–95                                                                                                                                                                                                                                                                                                |
+| Flood label      | `WL ≥ Alarm1 OR (Rain ≥ 100 & Ant7 ≥ 150) OR Ant3 ≥ 250`                                                                                                                                                                                                                                                                                          |
+| Units / timezone | mm/day, m, %, °C · Asia/Manila local days                                                                                                                                                                                                                                                                                                         |
+| Licence          | Generated in-repo; no third-party data redistributed                                                                                                                                                                                                                                                                                              |
+| Limitation       | **Not observations.** Water level is a formula over rainfall, so any model trained on it partly relearns that formula.                                                                                                                                                                                                                            |
 
 ---
 
