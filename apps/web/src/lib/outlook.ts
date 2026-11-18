@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useFirebaseAuth } from "@/components/auth/FirebaseAuthProvider";
+import { announceObservationsUpdated } from "@/lib/observation-refresh";
 import { convexErrorHint, convexFunctions } from "@/lib/convex-functions";
 import type { PersistenceKind, RunPersistence } from "@/lib/persistence";
 import { useConvexQueryResult } from "@/lib/convex-query";
@@ -228,6 +229,10 @@ export function useOutlookFeed(locationCode: string) {
       );
     } finally {
       setIsRunning(false);
+      // A run that failed after the weather call still kept its observed window,
+      // so every finished attempt refreshes the history chart — not only the
+      // successful ones.
+      announceObservationsUpdated();
     }
   }, [getIdToken, locationCode]);
 
