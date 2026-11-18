@@ -20,6 +20,16 @@ export interface SystemStatus {
     reviews: number | null;
     auditEvents: number | null;
   };
+  /**
+   * The optional local rain-gauge file. `configured: false` with no error means
+   * there is no file, which is a supported state: the provider's history stands.
+   */
+  riverGauge: {
+    configured: boolean;
+    file: string;
+    rows: number;
+    error: string | null;
+  };
 }
 
 export const WEATHER_PROVIDER_LABEL: Record<WeatherProviderName, string> = {

@@ -1601,16 +1601,23 @@ function ProviderConfiguration() {
       <Unavailable title="Service status unavailable" reason={error.message} />
     );
   }
-  if (!data) return <Reading what="the running service" />;
+  // Rows render immediately with a reading placeholder, so the labels exist
+  // before the status request lands (and in the server-rendered HTML).
+  const status = data;
   return (
     <DefinitionList
       rows={[
-        ["Weather provider", WEATHER_PROVIDER_LABEL[data.weather.provider]],
+        [
+          "Weather provider",
+          status ? WEATHER_PROVIDER_LABEL[status.weather.provider] : "Reading…",
+        ],
         [
           "Offline fixture fallback",
-          data.weather.fixtureAllowed
-            ? "Permitted — runs that use it are labelled degraded"
-            : "Disabled",
+          status
+            ? status.weather.fixtureAllowed
+              ? "Permitted — runs that use it are labelled degraded"
+              : "Disabled"
+            : "Reading…",
         ],
         [
           "Selected by",
@@ -1618,10 +1625,30 @@ function ProviderConfiguration() {
         ],
         ["Variables", "Daily rainfall, antecedent sums, soil moisture"],
         [
+          "Soil moisture",
+          "Open-Meteo hourly soil_moisture_0_to_7cm (0–7 cm, volumetric). The water-balance bucket is used when the model returns none.",
+        ],
+        [
+          "Rain gauge file",
+          !status
+            ? "Reading…"
+            : status.riverGauge.error
+              ? status.riverGauge.error
+              : status.riverGauge.configured
+                ? `${status.riverGauge.rows.toLocaleString()} reading(s) from ${status.riverGauge.file}. Gauge days replace the provider's rainfall.`
+                : "Not configured — the provider's 30-day history is the only rainfall source.",
+        ],
+        [
+          "River context",
+          "GloFAS daily river discharge from the Open-Meteo Flood API, shown beside the result. Not a model input and not stored.",
+        ],
+        [
           "Run storage",
-          data.convex.configured
-            ? "Convex deployment"
-            : "This machine — .data/runs.json",
+          status
+            ? status.convex.configured
+              ? "Convex deployment"
+              : "This machine — .data/runs.json"
+            : "Reading…",
         ],
       ]}
     />
@@ -1942,6 +1969,16 @@ function AdminSettings() {
                     : model.model
                       ? `${model.model.version} (${model.model.kind})`
                       : (model.error ?? "Unavailable"),
+                ],
+                [
+                  "Rain gauge file",
+                  status
+                    ? status.riverGauge.error
+                      ? "Unusable — see provider configuration"
+                      : status.riverGauge.configured
+                        ? `${status.riverGauge.rows.toLocaleString()} reading(s)`
+                        : "Not configured"
+                    : "Reading…",
                 ],
                 [
                   "Verified hazard layers",
