@@ -5,7 +5,7 @@ output. It exists to prove the whole path works: CSV → features → model → 
 server and no network in the loop.
 
 > **It is a test model, not a forecasting product.** Water level and flood labels in dataset v2 are
-> *derived from rainfall by formulas*. A model can therefore recover the generator, and the scores
+> _derived from rainfall by formulas_. A model can therefore recover the generator, and the scores
 > below measure that recovery — not hydrological skill. See
 > [`docs/ml-methodology.md`](../docs/ml-methodology.md) §2.
 
@@ -21,10 +21,10 @@ and nothing is fetched at runtime.
 
 ## What it predicts
 
-| Head | Target | Features |
-|---|---|---|
+| Head       | Target                       | Features                                                                                                         |
+| ---------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | Classifier | `FloodOccurrence` at **t+1** | tomorrow's rain and temperature, today's rain, antecedent 3/7/30-day rain, soil moisture, month, elevation, city |
-| Regressor | `WaterLevel_m` at **t+1** | same vector |
+| Regressor  | `WaterLevel_m` at **t+1**    | same vector                                                                                                      |
 
 Both are gradient-boosted trees: 200 estimators, `max_depth=3`, learning rate 0.06 (classifier) and
 0.08 (regressor), seed 42. Trained on 2016–2023, threshold tuned on 2024, evaluated on
@@ -33,29 +33,29 @@ operating threshold.
 
 ## Results on the held-out test window
 
-2,728 samples, 53 flood days (1.94 %).
+2,728 samples, 46 flood days (1.69 %).
 
-| Classifier | Value | Regressor | Value |
-|---|---:|---|---:|
-| Average precision | 0.786 | MAE | 0.094 m |
-| ROC-AUC | 0.994 | RMSE | 0.119 m |
-| Brier score | 0.0087 | R² | 0.991 |
-| Precision @ 0.344 | 0.78 | Persistence MAE (must beat) | 0.172 m |
-| Recall @ 0.344 | 0.58 | Marikina MAE | 0.096 m |
+| Classifier        |  Value | Regressor                   |   Value |
+| ----------------- | -----: | --------------------------- | ------: |
+| Average precision |  0.713 | MAE                         | 0.057 m |
+| ROC-AUC           |  0.994 | RMSE                        | 0.075 m |
+| Brier score       | 0.0082 | R²                          |   0.997 |
+| Precision @ 0.400 |   0.63 | Persistence MAE (must beat) | 0.091 m |
+| Recall @ 0.400    |   0.65 | Marikina MAE                | 0.061 m |
 
 Plain-rule baselines on the same window:
 
-| Rule | Precision | Recall |
-|---|---:|---:|
-| antecedent 7-day rain ≥ 150 mm | 0.24 | 0.59 |
-| forecast rain ≥ 50 mm | 0.55 | 0.21 |
-| dataset's own flood rule (rain ≥ 100 and ant7 ≥ 150) | 0.00 | 0.00 |
+| Rule                                                 | Precision | Recall |
+| ---------------------------------------------------- | --------: | -----: |
+| antecedent 7-day rain ≥ 150 mm                       |      0.25 |   0.70 |
+| forecast rain ≥ 50 mm                                |      0.25 |   0.11 |
+| dataset's own flood rule (rain ≥ 100 and ant7 ≥ 150) |      0.00 |   0.00 |
 
 The model matches the best rule's recall at about three times its precision. The dataset rule scoring
-zero is not a bug: it fires on none of the 53 test positives, which is a fair warning that a
+zero is not a bug: it fires on none of the 46 test positives, which is a fair warning that a
 hand-written threshold tuned on the training era does not transfer.
 
-**Size of the win:** the regressor beats persistence by 0.078 m of MAE, and the classifier's edge over
+**Size of the win:** the regressor beats persistence by 0.034 m of MAE, and the classifier's edge over
 `ant7 ≥ 150` is precision. Both are worth reporting; neither is evidence that the system would work
 on a real gauge.
 
@@ -69,14 +69,14 @@ dataset cannot support a calibrated operational probability.
 
 ## Files
 
-| File | Purpose |
-|---|---|
-| `train_test_model.py` | Builds samples, trains both heads, evaluates, exports. Also verifies its own export: the flat-array trees must reproduce scikit-learn to 1e-9. |
-| `build_predictor.py` | Inlines `artifacts/model.json` into `predictor_template.html` → `predictor.html`. |
-| `predictor_template.html` | The page, with a `__MODEL_JSON__` placeholder. |
-| `predictor.html` | **Generated.** The file you open. Do not hand-edit. |
-| `artifacts/model.json` | Trees, feature spec, alarm levels, metrics, replay examples. |
-| `artifacts/metrics.json` | Evaluation detail (what the script prints). |
+| File                      | Purpose                                                                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `train_test_model.py`     | Builds samples, trains both heads, evaluates, exports. Also verifies its own export: the flat-array trees must reproduce scikit-learn to 1e-9. |
+| `build_predictor.py`      | Inlines `artifacts/model.json` into `predictor_template.html` → `predictor.html`.                                                              |
+| `predictor_template.html` | The page, with a `__MODEL_JSON__` placeholder.                                                                                                 |
+| `predictor.html`          | **Generated.** The file you open. Do not hand-edit.                                                                                            |
+| `artifacts/model.json`    | Trees, feature spec, alarm levels, metrics, replay examples.                                                                                   |
+| `artifacts/metrics.json`  | Evaluation detail (what the script prints).                                                                                                    |
 
 Regenerate everything:
 
@@ -104,17 +104,17 @@ requires nothing.
 
 The page's inputs map 1:1 onto a daily forecast response, which is why the seven-day panel exists:
 
-| Input | Where it comes from |
-|---|---|
-| `rain_next` | forecast precipitation total for day *d* |
-| `rain_today` | observed/analysed precipitation for day *d−1* |
-| `ant3`, `ant7`, `ant30` | running sums over the previous 3/7/30 days of the observed series |
-| `soil` | water-balance bucket state, carried forward (`SM + rain − ET0 − 0.08·SM`) |
-| `tmax`, `tmin` | forecast daily min/max temperature |
-| `month` | the forecast date |
+| Input                   | Where it comes from                                                       |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `rain_next`             | forecast precipitation total for day _d_                                  |
+| `rain_today`            | observed/analysed precipitation for day _d−1_                             |
+| `ant3`, `ant7`, `ant30` | running sums over the previous 3/7/30 days of the observed series         |
+| `soil`                  | water-balance bucket state, carried forward (`SM + rain − ET0 − 0.08·SM`) |
+| `tmax`, `tmin`          | forecast daily min/max temperature                                        |
+| `month`                 | the forecast date                                                         |
 
-For a seven-day run, the chain in `chainFrom()` is already the right shape: predict day *d*, then feed
-day *d*'s rain into the antecedent sums and the soil bucket before predicting day *d+1*. Swapping the
+For a seven-day run, the chain in `chainFrom()` is already the right shape: predict day _d_, then feed
+day _d_'s rain into the antecedent sums and the soil bucket before predicting day _d+1_. Swapping the
 manual sliders for fetched values is a data-plumbing change, not a modelling one.
 
 ## Known limits

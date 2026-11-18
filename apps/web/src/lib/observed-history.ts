@@ -4,17 +4,24 @@
  * The history chart plots two things per day:
  *
  *   - rainfall, which a provider reports directly;
- *   - a *derived* water-level proxy, because no gauge series exists for these
- *     rivers. `data/generate_dataset.py` defines that proxy as
+ *   - a *derived* stage proxy, because no gauge series exists for these rivers.
  *
- *         det = 0.006·Ant7 + 0.018·Rain + 0.004·Ant3 + ((Alarm3 − Alarm1)/40000)·Rain²
- *         base = Alarm1 − p98(det over the city's history)
- *         WL   = base + det  (+ N(0, 0.10) m noise in the generator)
+ * `data/generate_dataset.py` defines that proxy as rainfall routed through two
+ * linear reservoirs — a fast one for direct runoff and a slow one for baseflow —
+ * with the result mapped onto the river's own alarm band:
  *
- * so live days can be placed on the same scale as the dataset's rows: the
- * formula is the published one, the datum is calibrated from the dataset's own
- * rows, and only the noise term is dropped (a derived proxy should not jitter
- * because of a random number generator running in a different process).
+ *     quick_t = 0.80·quick_{t-1} + Rain_t
+ *     slow_t  = 0.97·slow_{t-1}  + 0.06·Rain_t
+ *     index_t = 0.012·quick_t + 0.030·slow_t                     (metres)
+ *
+ *     index <= p98(index)  ->  (Alarm1 − 2.0) .. Alarm1
+ *     index >  p98(index)  ->  Alarm1 .. Alarm3, saturating at Alarm3
+ *
+ * Live days are placed on that same scale by replaying the reservoir over the
+ * dataset's own rainfall to recover its state at the dataset's end, then
+ * calibrating the band from the dataset's own index distribution. Only the
+ * generator's ±0.05 m noise is dropped: a derived proxy should not jitter
+ * because of a random number generator in a different process.
  *
  * Everything here is pure: no filesystem, no clock. The route supplies the CSV
  * rows and the stored days.
@@ -42,32 +49,30 @@ export interface DerivedObservationDay extends StoredObservationDay {
 
 export interface DerivationResult {
   days: DerivedObservationDay[];
-  /** The calibrated datum, or `null` when the dataset was too thin to set one. */
+  /**
+   * The floor of the proxy scale — `Alarm1 − 2.0 m`, the level a drained river
+   * sits at in the dry season. `null` when the history was too thin to calibrate.
+   */
   waterLevelDatumM: number | null;
-  /** How many dataset rows the datum was calibrated on. */
+  /** How many dataset rows the calibration was taken from. */
   calibrationRows: number;
 }
 
-/** The generator's storm term, reproduced exactly. */
-function det(
-  rainfallMm: number,
-  antecedent3dMm: number,
-  antecedent7dMm: number,
-  alarms: readonly [number, number, number],
-): number {
-  const stormGain = (alarms[2] - alarms[0]) / 40000;
-  return (
-    0.006 * antecedent7dMm +
-    0.018 * rainfallMm +
-    0.004 * antecedent3dMm +
-    stormGain * rainfallMm * rainfallMm
-  );
-}
+/** Reservoir constants, identical to `data/generate_dataset.py`. */
+const QUICK_RECESSION = 0.8;
+const SLOW_RECESSION = 0.97;
+const SLOW_INTAKE = 0.06;
+const QUICK_GAIN_M_PER_MM = 0.012;
+const SLOW_GAIN_M_PER_MM = 0.03;
 
-/**
- * Linear-interpolated percentile, the same definition numpy uses by default, so
- * a datum computed here matches one computed in `data/generate_dataset.py`.
- */
+/** The dry-season floor sits this far below Alarm 1, as in the generator. */
+export const DRY_SEASON_DROP_M = 2;
+/** The generator maps the top of the band from this percentile of the index. */
+const STAGE_TOP_PERCENTILE = 99.9;
+/** Minimum rows before the band is trusted; a season is 90. */
+const MIN_CALIBRATION_ROWS = 90;
+
+/** Linear-interpolated percentile, the definition numpy uses by default. */
 export function percentile(values: number[], p: number): number {
   if (values.length === 0) return Number.NaN;
   const sorted = [...values].sort((a, b) => a - b);
@@ -88,46 +93,121 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-/** Minimum rows before the datum is trusted; a season is 90. */
-const MIN_CALIBRATION_ROWS = 90;
+/** The two reservoirs, advanced one day at a time. */
+interface ReservoirState {
+  quick: number;
+  slow: number;
+}
+
+/** Meters of stage for one day's rainfall, given the state after the rain. */
+function stageIndex(rain: number, state: ReservoirState): number {
+  return QUICK_GAIN_M_PER_MM * state.quick + SLOW_GAIN_M_PER_MM * state.slow;
+}
+
+/** Advance both stores by a day of rain. */
+function advance(state: ReservoirState, rain: number): ReservoirState {
+  return {
+    quick: QUICK_RECESSION * state.quick + rain,
+    slow: SLOW_RECESSION * state.slow + SLOW_INTAKE * rain,
+  };
+}
+
+/** Where the index sits on the alarm band, for this river. */
+export interface StageCalibration {
+  /** `Alarm1 − 2.0 m`: the level a drained river sits at. */
+  dryFloorM: number;
+  /** Index at the 98th percentile, mapped to Alarm 1. */
+  p98Index: number;
+  /** Index at the 99.9th percentile, mapped to Alarm 3. */
+  pTopIndex: number;
+  /** The reservoir state at the end of the supplied history. */
+  state: ReservoirState;
+  rowsUsed: number;
+}
 
 /**
- * Datum per city: shift the dataset's proxy so that Alarm 1 sits at its 98th
- * percentile, which is what makes "Alarm 1 is exceeded on ~2% of days" true.
+ * Replay the dataset's rainfall through the reservoirs and calibrate the band.
+ *
+ * Returns `null` when fewer than `MIN_CALIBRATION_ROWS` days carry rainfall —
+ * the same 90-day bar the file store applies before trusting a calibration.
  */
-export function calibrateWaterLevelDatum(
-  rows: HistoryRow[],
+export function calibrateStage(
+  history: HistoryRow[],
   alarms: readonly [number, number, number],
-): number | null {
-  const dets = rows
-    .filter(
-      (row) =>
-        typeof row.rainfallMm === "number" &&
-        typeof row.antecedentRain3dMm === "number" &&
-        typeof row.antecedentRain7dMm === "number",
-    )
-    .map((row) =>
-      det(
-        row.rainfallMm as number,
-        row.antecedentRain3dMm as number,
-        row.antecedentRain7dMm as number,
-        alarms,
-      ),
-    );
+): StageCalibration | null {
+  let state: ReservoirState = { quick: 0, slow: 0 };
+  const index: number[] = [];
 
-  if (dets.length < MIN_CALIBRATION_ROWS) return null;
-  const p98 = percentile(dets, 98);
-  if (!Number.isFinite(p98)) return null;
-  return alarms[0] - p98;
+  for (const row of history) {
+    if (typeof row.rainfallMm !== "number") continue;
+    state = advance(state, row.rainfallMm);
+    index.push(stageIndex(row.rainfallMm, state));
+  }
+
+  if (index.length < MIN_CALIBRATION_ROWS) return null;
+  const p98 = percentile(index, 98);
+  const pTop = percentile(index, STAGE_TOP_PERCENTILE);
+  if (!Number.isFinite(p98) || !Number.isFinite(pTop) || p98 <= 0) {
+    return null;
+  }
+
+  return {
+    dryFloorM: alarms[0] - DRY_SEASON_DROP_M,
+    p98Index: p98,
+    pTopIndex: Math.max(pTop, p98),
+    state,
+    rowsUsed: index.length,
+  };
+}
+
+/** Map an index onto the river's alarm band, as the generator does. */
+export function levelForIndex(
+  index: number,
+  calibration: StageCalibration,
+  alarms: readonly [number, number, number],
+): number {
+  const { dryFloorM, p98Index, pTopIndex } = calibration;
+  const level =
+    index <= p98Index
+      ? dryFloorM +
+        ((alarms[0] - dryFloorM) * Math.min(index, p98Index)) / p98Index
+      : alarms[0] +
+        ((alarms[2] - alarms[0]) * (index - p98Index)) /
+          Math.max(pTopIndex - p98Index, 1e-9);
+  return Math.min(level, alarms[2]);
+}
+
+function dayBefore(date: string): string | null {
+  const stamp = Date.parse(`${date}T00:00:00Z`);
+  if (!Number.isFinite(stamp)) return null;
+  return new globalThis.Date(stamp - 86_400_000).toISOString().slice(0, 10);
+}
+
+interface LevelAnchor {
+  date: string;
+  value: number;
+}
+
+/**
+ * The dataset's last water level and the day it belongs to, for the 24-hour
+ * change on the first stored day.
+ */
+function historyLevel(history: HistoryRow[]): LevelAnchor | null {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const level = history[index].waterLevelM;
+    if (typeof level === "number") {
+      return { date: history[index].date, value: level };
+    }
+  }
+  return null;
 }
 
 /**
  * Derive the chart fields for stored days.
  *
- * `history` is the dataset series for the same city (any length; only its last
- * 30 rain values are used for the windows, and all of it for the datum).
- * `previousWaterLevelM` is the dataset's last derived value, so the 24-hour
- * change on the first live day is continuous with the CSV.
+ * `history` is the dataset series for the same city, oldest row first. It is
+ * replayed in full so the reservoir state at the dataset's end is exact rather
+ * than approximated from the last few weeks.
  */
 export function deriveObservationDays(
   history: HistoryRow[],
@@ -138,10 +218,7 @@ export function deriveObservationDays(
     return { days: [], waterLevelDatumM: null, calibrationRows: 0 };
   }
 
-  const datum = calibrateWaterLevelDatum(history, alarms);
-  const calibrationRows = history.filter(
-    (row) => typeof row.rainfallMm === "number",
-  ).length;
+  const calibration = calibrateStage(history, alarms);
 
   const rainByDate = new Map<string, number>();
   for (const row of history) {
@@ -150,11 +227,6 @@ export function deriveObservationDays(
     }
   }
   for (const day of liveDays) rainByDate.set(day.date, day.rainfallMm);
-
-  // The change is only honest between consecutive calendar days: if the dataset
-  // ends on 2026-11-14 and the first stored day is 2026-11-17, subtracting the
-  // two would report three days of change as one.
-  let last = historyLevel(history);
 
   const windowSum = (date: string, days: number): number | null => {
     const end = Date.parse(`${date}T00:00:00Z`);
@@ -176,20 +248,23 @@ export function deriveObservationDays(
     return seen === days ? round1(total) : null;
   };
 
+  // The change is only honest between consecutive calendar days: if the dataset
+  // ends on 2026-11-14 and the first stored day is 2026-11-17, subtracting the
+  // two would report three days of change as one.
+  let last = historyLevel(history);
+  let state = calibration?.state ?? { quick: 0, slow: 0 };
+
   const days = liveDays.map((day) => {
     const ant3 = windowSum(day.date, 3);
     const ant7 = windowSum(day.date, 7);
     const ant30 = windowSum(day.date, 30);
 
-    const waterLevelM =
-      datum === null || ant3 === null || ant7 === null
-        ? null
-        : round2(
-            Math.max(
-              datum + det(day.rainfallMm, ant3, ant7, alarms),
-              datum - 0.5,
-            ),
-          );
+    state = advance(state, day.rainfallMm);
+    const waterLevelM = calibration
+      ? round2(
+          levelForIndex(stageIndex(day.rainfallMm, state), calibration, alarms),
+        )
+      : null;
 
     const previous = last;
     const consecutive =
@@ -212,29 +287,9 @@ export function deriveObservationDays(
     };
   });
 
-  return { days, waterLevelDatumM: datum, calibrationRows };
-}
-
-function dayBefore(date: string): string | null {
-  const stamp = Date.parse(`${date}T00:00:00Z`);
-  if (!Number.isFinite(stamp)) return null;
-  return new globalThis.Date(stamp - 86_400_000).toISOString().slice(0, 10);
-}
-
-interface LevelAnchor {
-  date: string;
-  value: number;
-}
-
-/**
- * The dataset's last water level and the day it belongs to, for the 24-hour
- * change on the first stored day. Read from the final row that carries a value.
- */
-function historyLevel(history: HistoryRow[]): LevelAnchor | null {
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const level = history[index].waterLevelM;
-    if (typeof level === "number")
-      return { date: history[index].date, value: level };
-  }
-  return null;
+  return {
+    days,
+    waterLevelDatumM: calibration?.dryFloorM ?? null,
+    calibrationRows: calibration?.rowsUsed ?? 0,
+  };
 }
