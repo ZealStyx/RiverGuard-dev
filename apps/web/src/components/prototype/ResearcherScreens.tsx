@@ -708,6 +708,10 @@ function ForecastProgress() {
 
   const snapshot = feed.snapshot;
   const stageIndex = snapshot ? stages.length - 1 : feed.isRunning ? 1 : 0;
+  // The seven day chips are the panel's only control: clicking one shows that
+  // day's probability, level and reasons. It used to be wired to a no-op, so
+  // the chips looked interactive and did nothing.
+  const [selectedDay, setSelectedDay] = useState(0);
   // Where the run actually went, from the response — not inferred from
   // `source`, which is "live" for every run this tab just performed.
   const storageLine = snapshot
@@ -719,9 +723,21 @@ function ForecastProgress() {
   return (
     <>
       <PageHeading
-        title="Forecast in progress"
+        title={
+          feed.error
+            ? "Forecast failed"
+            : snapshot
+              ? "Forecast complete"
+              : "Forecast in progress"
+        }
         eyebrow="Step 3 of 3"
-        description="Running the weather → model → storage pipeline."
+        description={
+          feed.error
+            ? "The pipeline stopped before it produced an outlook."
+            : snapshot
+              ? "Seven days scored. Pick a day below to read its numbers."
+              : "Running the weather → model → storage pipeline."
+        }
         actions={
           <ActionLink href="/admin/research/runs" variant="quiet">
             Run history
@@ -796,8 +812,8 @@ function ForecastProgress() {
             ) : null}
             <div className="mt-2">
               <RiskSummary
-                selectedDay={0}
-                onDayChange={() => undefined}
+                selectedDay={selectedDay}
+                onDayChange={setSelectedDay}
                 locationCode={locationCode}
                 days={snapshot.days}
                 source={snapshot.source}
