@@ -274,7 +274,13 @@ export function blendGaugeRainfall(
     const gauge = readings.get(day.date);
     if (gauge === undefined) return day;
     gaugeDays += 1;
-    return { ...day, rainfallMm: Math.round(gauge * 10) / 10 };
+    // Recorded per day so the observation store and the chart can say which
+    // numbers a gauge supplied instead of crediting the provider for them.
+    return {
+      ...day,
+      rainfallMm: Math.round(gauge * 10) / 10,
+      rainfallSource: "gauge" as const,
+    };
   });
 
   const last = history[history.length - 1];

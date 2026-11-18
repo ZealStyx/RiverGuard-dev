@@ -1639,6 +1639,16 @@ function ProviderConfiguration() {
                 : "Not configured — the provider's 30-day history is the only rainfall source.",
         ],
         [
+          "Observation store",
+          !status
+            ? "Reading…"
+            : status.observations.error
+              ? status.observations.error
+              : status.observations.configured
+                ? `${status.observations.days.toLocaleString()} observed day(s) in ${status.observations.file}. These extend the history chart past the dataset's last row.`
+                : "Empty — no real-provider run has stored its observed window yet. Fixture runs are refused.",
+        ],
+        [
           "River context",
           "GloFAS daily river discharge from the Open-Meteo Flood API, shown beside the result. Not a model input and not stored.",
         ],
@@ -1978,6 +1988,16 @@ function AdminSettings() {
                       : status.riverGauge.configured
                         ? `${status.riverGauge.rows.toLocaleString()} reading(s)`
                         : "Not configured"
+                    : "Reading…",
+                ],
+                [
+                  "Stored observation days",
+                  status
+                    ? status.observations.error
+                      ? "Unreadable — see provider configuration"
+                      : status.observations.configured
+                        ? `${status.observations.days.toLocaleString()} day(s) from real runs`
+                        : "None yet"
                     : "Reading…",
                 ],
                 [

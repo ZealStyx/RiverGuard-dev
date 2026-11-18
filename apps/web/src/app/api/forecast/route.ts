@@ -15,6 +15,10 @@
  * antecedent 3/7/30-day sums and soil moisture all come from its own past_days
  * window. `data/daily_observations.csv` is history for the charts, not a seed.
  *
+ * The window itself is also kept: `recordObservations` writes the observed days
+ * to `.data/observations.json`, so the history chart can show the days after the
+ * dataset's last row instead of freezing there. Fixture runs are refused.
+ *
  * Two additions hang off that window:
  *   - a local gauge file (`data/gauge/daily_rainfall.csv`, optional) replaces the
  *     provider's rainfall day by day, and the sums are recomputed from the blend;
@@ -30,6 +34,7 @@ import { fetchRiverContext } from "@/lib/flood";
 import { persistOutlook } from "@/lib/forecast-persistence";
 import { getLocation } from "@/lib/locations";
 import { MlServiceError, requestDailyForecast } from "@/lib/ml-client";
+import { recordObservations } from "@/lib/observation-store";
 import { describeModelInput } from "@/lib/model-input";
 import { getWeatherBundle, type WeatherBundle } from "@/lib/weather";
 
@@ -118,6 +123,10 @@ export async function POST(request: Request) {
     accessToken,
   );
 
+  // The observed window is worth keeping on its own: the run stores the forecast,
+  // not the weather that produced it. Best effort, and refused for the fixture.
+  const observations = await recordObservations(bundle);
+
   // Best effort: the run is already stored, so a failed audit write is reported
   // as a warning rather than replacing the forecast with an error.
   const audited = await recordAuditEvent({
@@ -141,6 +150,18 @@ export async function POST(request: Request) {
   }
   if (bundle.degraded) {
     warnings.push(bundle.degradationReason ?? "Weather data is degraded.");
+  }
+  if (observations.error) {
+    warnings.push(observations.error);
+  }
+  if (observations.skipped === "degraded") {
+    warnings.push(
+      "Offline fixture run: no observation days were stored. Illustrative numbers must not become observed history.",
+    );
+  } else if (observations.written > 0) {
+    warnings.push(
+      `${observations.written} observed day${observations.written === 1 ? "" : "s"} added to the observation store, so the history chart continues past the dataset's last row.`,
+    );
   }
   if (!persistence.stored) {
     warnings.push(`The run was not stored: ${persistence.error}`);
@@ -170,6 +191,12 @@ export async function POST(request: Request) {
       days: forecast.days,
     },
     persistence,
+    // How much of the observed window this run kept for the history chart.
+    observations: {
+      written: observations.written,
+      skipped: observations.skipped,
+      error: observations.error,
+    },
     riverContext: river.context,
     riverContextError: river.error,
     warnings,

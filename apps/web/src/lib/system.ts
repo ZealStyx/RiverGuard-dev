@@ -30,6 +30,16 @@ export interface SystemStatus {
     rows: number;
     error: string | null;
   };
+  /**
+   * Observed days kept from real provider runs. `configured: false` means no run
+   * has stored any yet, so the history chart still ends where the dataset does.
+   */
+  observations: {
+    configured: boolean;
+    file: string;
+    days: number;
+    error: string | null;
+  };
 }
 
 export const WEATHER_PROVIDER_LABEL: Record<WeatherProviderName, string> = {

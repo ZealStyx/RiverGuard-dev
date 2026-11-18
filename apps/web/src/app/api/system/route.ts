@@ -15,6 +15,7 @@ import { NextResponse } from "next/server";
 
 import { convexUrl } from "@/lib/convex-functions";
 import { gaugeStatus } from "@/lib/gauge";
+import { observationStoreStatus } from "@/lib/observation-store";
 import { countAuditEvents } from "@/lib/audit-store";
 import { countReviews } from "@/lib/review-store";
 import { countLocalRuns } from "@/lib/run-store";
@@ -26,17 +27,24 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const config = providerConfig();
 
-  const [runs, reviews, auditEvents, riverGauge] = await Promise.all([
-    countLocalRuns().catch(() => null),
-    countReviews().catch(() => null),
-    countAuditEvents().catch(() => null),
-    gaugeStatus().catch(() => ({
-      configured: false,
-      file: "",
-      rows: 0,
-      error: "The gauge file status could not be read.",
-    })),
-  ]);
+  const [runs, reviews, auditEvents, riverGauge, observations] =
+    await Promise.all([
+      countLocalRuns().catch(() => null),
+      countReviews().catch(() => null),
+      countAuditEvents().catch(() => null),
+      gaugeStatus().catch(() => ({
+        configured: false,
+        file: "",
+        rows: 0,
+        error: "The gauge file status could not be read.",
+      })),
+      observationStoreStatus().catch(() => ({
+        configured: false,
+        file: "",
+        days: 0,
+        error: "The observation store status could not be read.",
+      })),
+    ]);
 
   return NextResponse.json(
     {
@@ -51,6 +59,7 @@ export async function GET() {
         auditEvents,
       },
       riverGauge,
+      observations,
     },
     { headers: { "cache-control": "no-store" } },
   );
