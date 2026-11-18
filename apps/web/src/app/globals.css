@@ -23,6 +23,18 @@
   --color-warning: #a36726;
   --color-danger: #b9443f;
 
+  /*
+   * Readable variants of the brand colours.
+   *
+   * `brand-primary` and `brand-secondary` are also used as solid fills (`bg-*`
+   * with white text), so they cannot simply be lightened for a dark page. These
+   * two tokens carry the text/icon usage instead and are swapped per theme:
+   * `text-brand-primary-ink` and `text-brand-secondary-ink` are legible on both
+   * the canvas and a soft chip in either theme.
+   */
+  --color-brand-primary-ink: #284b63;
+  --color-brand-secondary-ink: #2f5c5f;
+
   --radius-control: 0.4375rem;
   --radius-panel: 0.75rem;
   --radius-structure: 1rem;
@@ -58,6 +70,57 @@
   --rg-space-5: 2rem;
   --rg-space-6: 2.5rem;
   color-scheme: light;
+}
+
+/*
+ * Dark theme.
+ *
+ * Chosen explicitly with the sun/moon control in the workspace header (or the
+ * Appearance setting), stored in this browser, and applied as `data-theme` on
+ * <html> before the first paint by the inline script in `app/layout.tsx`.
+ *
+ * This block is deliberately unlayered: `@theme` publishes the light palette
+ * from `:root` inside a cascade layer, and unlayered rules win over layered
+ * ones, so these overrides apply without `!important`.
+ *
+ * Solid brand fills keep their dark values so white text on them stays legible;
+ * only the neutral surfaces, the text tokens, and the `-ink` accent variants
+ * change. The map basemap keeps its own light tiles: raster tiles from
+ * OpenStreetMap are a third-party image and are not recoloured here, which the
+ * Appearance setting says in as many words.
+ */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-stage: #0d1113;
+  --color-canvas: #121719;
+  --color-canvas-soft: #1b2226;
+  --color-ink: #e7ebed;
+  --color-muted: #a2aeb4;
+  --color-line: #2f3a3f;
+
+  --color-brand-primary: #2f5b76;
+  --color-brand-primary-hover: #3a6d8b;
+  --color-brand-primary-active: #24495f;
+  --color-brand-secondary: #3f7377;
+  --color-brand-secondary-hover: #4c8488;
+  --color-brand-secondary-soft: #1d2f31;
+  --color-brand-secondary-muted: #3a5b5d;
+  --color-brand-primary-ink: #a9c9d8;
+  --color-brand-secondary-ink: #8fc1c4;
+
+  --color-chart-surface: #121719;
+  --color-chart-grid: #2f3a3f;
+  --color-chart-bar: #6fa3a6;
+
+  --color-success: #79a98a;
+  --color-warning: #d09a55;
+  --color-danger: #d9756f;
+}
+
+/* The map canvas stays light: tiles are third-party images, not app surfaces. */
+[data-theme="dark"] .maplibregl-map {
+  background: #e9edee;
 }
 
 .river-palette-preview .recharts-default-legend {
@@ -138,6 +201,23 @@ select {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/*
+ * The in-app "reduce motion" preference.
+ *
+ * `useAppliedPreferences` sets `data-reduce-motion` on <html> when the stored
+ * preference is on, so the setting has an effect the reader can see rather than
+ * being a checkbox that only writes to storage. The media query above stays for
+ * readers who set it at the operating-system level.
+ */
+html[data-reduce-motion="true"] *,
+html[data-reduce-motion="true"] *::before,
+html[data-reduce-motion="true"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }
 
 /*

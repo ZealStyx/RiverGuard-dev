@@ -37,8 +37,21 @@ export interface ObservedStateSummary {
   /** Last day of the provider window, ISO `YYYY-MM-DD`. */
   asOfDate: string;
   rainSource: string;
+  /** Where the soil figure came from, in words. */
+  soilSource?: string;
+  /** Days of the observed window supplied by a local gauge file. */
+  gaugeDays?: number;
   qualityStatus: string;
   waterLevelM: number | null;
+}
+
+/** GloFAS discharge as it arrives in the forecast response: context, not input. */
+export interface RiverContextSummary {
+  provider: string;
+  retrievedAt: string;
+  history: Array<{ date: string; dischargeM3s: number }>;
+  days: Array<{ date: string; dischargeM3s: number }>;
+  note: string;
 }
 
 export interface OutlookSnapshot {
@@ -63,6 +76,8 @@ export interface OutlookSnapshot {
    * just executed is `source: "live"` whether Convex stored it or not.
    */
   persistence: RunPersistence | null;
+  /** River context from the same request; never stored, never a feature. */
+  riverContext?: RiverContextSummary | null;
 }
 
 const LABELS: Record<string, OutlookDay["label"]> = {
@@ -127,6 +142,8 @@ export interface ForecastApiResponse {
     error?: string;
   };
   warnings: string[];
+  riverContext?: RiverContextSummary | null;
+  riverContextError?: string | null;
   error?: string;
   detail?: string;
 }
@@ -154,6 +171,7 @@ export function snapshotFromApiResponse(
     alerts: payload.persistence?.alerts ?? 0,
     warnings: payload.warnings ?? [],
     observed: payload.observedState ?? null,
+    riverContext: payload.riverContext ?? null,
     modelWarning: payload.forecast.warning ?? null,
     // `kind` is what the server actually did. Older payloads that predate it
     // report nothing rather than being optimistically labelled.

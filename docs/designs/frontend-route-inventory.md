@@ -1,6 +1,6 @@
 # RiverGuard Frontend Route Inventory
 
-This document records the connected frontend prototype implemented from the RiverGuard UI/UX Design Cheat Sheet. The routes use clearly labeled sample data and simulated actions. Real authentication, authorization, Convex persistence, external weather retrieval, local ML inference, verified GIS layers, alert publication, and dark mode are deferred.
+This document records the connected frontend prototype implemented from the RiverGuard UI/UX Design Cheat Sheet. The routes read the stores and services described in `docs/guides/forecast-pipeline.md`; where a capability is genuinely absent (verified GIS layers, alert publication, a credential store) the screen says so instead of simulating it. Appearance, search, and the workspace panels are implemented — see _Workspace chrome_ below.
 
 ## Public and account routes
 
@@ -117,3 +117,20 @@ The shared frontend data/service boundary should later replace fixture operation
 5. Stakeholder-approved alert governance before any publication capability.
 
 Navigation visibility is a user-experience aid only. The backend must independently enforce every protected operation.
+
+## Workspace chrome
+
+The header and rail on the research dashboard control real state; nothing here is a placeholder.
+
+| Control               | What it does                                                                                                                                                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sun / moon            | Switches the light and dark palettes, stored in this browser (`riverguard.preference.theme`) and applied to `<html data-theme>` before the first paint. The basemap keeps its own light tiles. Also on `/settings/accessibility`. |
+| Search (header, rail) | Opens a filter over this page's sections, the admin screens, the four supported cities, and locally stored runs. No index and no network call of its own.                                                                         |
+| Bell                  | Recent activity: the last six stored runs with their provider and how many days crossed the operating threshold, read from Convex when configured and from `.data/runs.json` otherwise.                                           |
+| Avatar                | The signed-in Firebase account when there is one, the settings links, and a sign-out that ends the session. Without an account it says so rather than inventing a name.                                                           |
+| Rail: map layers      | Shows or hides the map's layer panel and scrolls the map into view. The panel's unavailable rows explain what would enable them.                                                                                                  |
+| Rail: station data    | Jumps to the data-provenance section, which always exists — it reports a failed dataset read rather than vanishing.                                                                                                               |
+| Rail: settings        | `/settings/profile`.                                                                                                                                                                                                              |
+| Rail (bottom)         | Help and limitations (`/methodology`). There is no sign-out icon: the account menu owns that, and the build has no local credential store to end.                                                                                 |
+
+The two greyed-out rows in the map's layer panel are deliberate: a hazard overlay exists only after `npm run gis:verify` accepts a file listed in `data/gis/manifest.json`, and the model scores cities rather than shapes, so there is no outlook geometry to draw.

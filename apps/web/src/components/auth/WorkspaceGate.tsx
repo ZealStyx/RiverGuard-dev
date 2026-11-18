@@ -41,14 +41,16 @@ export function WorkspaceGate({
     !convexAuthenticated ||
     currentUser === undefined
   ) {
-    return <main className="p-6 text-muted">Checking your RiverGuard access…</main>;
+    return (
+      <main className="p-6 text-muted">Checking your RiverGuard access…</main>
+    );
   }
 
   if (currentUser === null) {
     return (
       <main className="p-6 text-muted">
-        Your account is not provisioned in RiverGuard yet. Return to sign in
-        and try again.
+        Your account is not provisioned in RiverGuard yet. Return to sign in and
+        try again.
       </main>
     );
   }
@@ -63,7 +65,9 @@ export function WorkspaceGate({
   }
 
   if (currentUser.role !== role) {
-    return <main className="p-6 text-muted">Redirecting to your workspace…</main>;
+    return (
+      <main className="p-6 text-muted">Redirecting to your workspace…</main>
+    );
   }
 
   return children;

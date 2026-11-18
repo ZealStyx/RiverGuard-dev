@@ -70,7 +70,7 @@ export function PageHeading({
     <header className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div className="max-w-3xl">
         {eyebrow ? (
-          <p className="text-metadata mb-1 font-semibold uppercase tracking-[0.12em] text-brand-secondary">
+          <p className="text-metadata mb-1 font-semibold uppercase tracking-[0.12em] text-brand-secondary-ink">
             {eyebrow}
           </p>
         ) : null}
@@ -131,8 +131,8 @@ export function Metric({
 }) {
   const toneClasses = {
     neutral: "text-ink",
-    primary: "text-brand-primary",
-    secondary: "text-brand-secondary",
+    primary: "text-brand-primary-ink",
+    secondary: "text-brand-secondary-ink",
     warning: "text-warning",
     danger: "text-danger",
   };
@@ -158,7 +158,7 @@ export function StatusBadge({
     success: "border-success/25 bg-success/10 text-success",
     warning: "border-warning/25 bg-warning/10 text-warning",
     danger: "border-danger/25 bg-danger/10 text-danger",
-    info: "border-brand-secondary/25 bg-brand-secondary-soft text-brand-primary",
+    info: "border-brand-secondary/25 bg-brand-secondary-soft text-brand-primary-ink",
   };
   return (
     <span
@@ -184,7 +184,7 @@ export function Notice({
   tone?: "info" | "warning" | "danger" | "success";
 }) {
   const toneClasses = {
-    info: "border-brand-secondary/25 bg-brand-secondary-soft text-brand-primary",
+    info: "border-brand-secondary/25 bg-brand-secondary-soft text-brand-primary-ink",
     warning: "border-warning/25 bg-warning/8 text-warning",
     danger: "border-danger/25 bg-danger/8 text-danger",
     success: "border-success/25 bg-success/8 text-success",
@@ -494,7 +494,7 @@ export function EmptyPanel({
 }) {
   return (
     <div className="flex min-h-48 flex-col items-center justify-center rounded-panel border border-dashed border-line bg-canvas-soft/50 p-6 text-center">
-      <Info size={24} className="text-brand-secondary" />
+      <Info size={24} className="text-brand-secondary-ink" />
       <h2 className="text-section mt-3">{title}</h2>
       <p className="text-body mt-1 max-w-md text-muted">{description}</p>
       {actionHref && actionLabel ? (

@@ -25,10 +25,20 @@ import {
 import Link from "next/link";
 
 import { BuildStamp } from "@/components/BuildStamp";
+import { SearchDialog } from "@/components/ui/SearchDialog";
 import { usePathname } from "next/navigation";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
-import { can, type ProductRole, roleDefinitions } from "@/data/prototype";
+import { convexConfigured } from "@/components/dashboard/OutlookBridge";
+import {
+  can,
+  supportedLocations,
+  type ProductRole,
+  roleDefinitions,
+} from "@/data/prototype";
+import { useAppliedPreferences } from "@/lib/preferences";
+import { formatRunTime } from "@/lib/runs";
+import { useLocalRuns } from "@/lib/use-runs";
 import { cx } from "@/lib/classnames";
 
 interface AppShellProps {
@@ -183,7 +193,10 @@ export function AppShell({ children, role }: AppShellProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [settingsMenuPinned, setSettingsMenuPinned] = useState(false);
-  const [query, setQuery] = useState("");
+  // Applies stored display preferences (theme, reduced motion) for every
+  // screen inside the shell, including the settings pages themselves.
+  useAppliedPreferences();
+  const { data: storedRuns } = useLocalRuns(20);
   const roleDefinition = roleDefinitions[role];
   const navigationItems = roleDefinition.navigation.filter(
     (item) => !item.capability || can(role, item.capability),
@@ -206,20 +219,58 @@ export function AppShell({ children, role }: AppShellProps) {
     );
   }, [navigationItems, role]);
 
-  const filteredItems = searchItems.filter((item) =>
-    item.label.toLowerCase().includes(query.trim().toLowerCase()),
+  /**
+   * Search covers more than page names.
+   *
+   * The dialog only matched navigation labels, so "Marikina" found nothing on a
+   * screen full of Marikina data. Supported cities and the runs this workspace
+   * has stored are searchable too, and each result navigates to the screen that
+   * shows it for the current role.
+   */
+  const searchResults = useMemo(() => {
+    const pages = searchItems.map((item) => ({
+      href: item.href,
+      label: item.label,
+      meta: item.href,
+    }));
+
+    const cityHref =
+      role === "lgu"
+        ? "/lgu/locations"
+        : role === "resident"
+          ? "/resident/locations"
+          : "/admin/locations";
+    const cities = supportedLocations.map((location) => ({
+      href: cityHref,
+      label: `${location.name} · city`,
+      meta: `${location.support} · ${location.status}`,
+    }));
+
+    const runs =
+      !convexConfigured && role !== "resident"
+        ? (storedRuns ?? []).slice(0, 8).map((run) => ({
+            href:
+              role === "admin"
+                ? `/admin/research/runs/${encodeURIComponent(run.runId)}`
+                : `/lgu/reviews/${encodeURIComponent(run.runId)}`,
+            label: `${run.locations.join(", ") || "Run"} · ${formatRunTime(run.requestedAt)}`,
+            meta: `Stored run ${run.runId}`,
+          }))
+        : [];
+
+    return [...pages, ...cities, ...runs];
+  }, [searchItems, role, storedRuns]);
+
+  const searchDialogItems = useMemo(
+    () =>
+      searchResults.map((item) => ({
+        ...item,
+        icon: navigationIcon(item.label),
+      })),
+    [searchResults],
   );
 
-  useEffect(() => {
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setSearchOpen(false);
-    }
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, []);
-
   function openSearch() {
-    setQuery("");
     setSearchOpen(true);
     setMobileOpen(false);
   }
@@ -315,7 +366,7 @@ export function AppShell({ children, role }: AppShellProps) {
               className={cx(
                 "text-navigation flex min-h-10 w-full items-center gap-3 rounded-control px-3 hover:bg-canvas-soft",
                 pathname.startsWith("/settings")
-                  ? "bg-brand-secondary-soft text-brand-primary"
+                  ? "bg-brand-secondary-soft text-brand-primary-ink"
                   : "text-muted hover:text-ink",
               )}
             >
@@ -448,71 +499,15 @@ export function AppShell({ children, role }: AppShellProps) {
       </div>
 
       {searchOpen ? (
-        <div
-          className="fixed inset-0 z-[70] flex items-start justify-center bg-ink/25 px-4 pt-[12vh] backdrop-blur-[2px]"
-          onMouseDown={() => setSearchOpen(false)}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="search-title"
-            onMouseDown={(event) => event.stopPropagation()}
-            className="w-full max-w-xl overflow-hidden rounded-panel border border-line bg-canvas shadow-2xl"
-          >
-            <div className="flex items-center gap-3 border-b border-line px-4 py-3">
-              <MagnifyingGlass size={19} className="text-muted" />
-              <div className="min-w-0 flex-1">
-                <h2 id="search-title" className="sr-only">
-                  Search RiverGuard pages
-                </h2>
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search pages and settings…"
-                  className="text-body w-full border-0 bg-transparent py-1 outline-none placeholder:text-muted"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setSearchOpen(false)}
-                aria-label="Close search"
-                className="inline-flex size-7 items-center justify-center rounded-control hover:bg-canvas-soft"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="max-h-80 overflow-y-auto p-2">
-              {filteredItems.length ? (
-                filteredItems.map((item) => (
-                  <Link
-                    key={`${item.href}-${item.label}`}
-                    href={item.href}
-                    onClick={() => setSearchOpen(false)}
-                    className="flex items-center gap-3 rounded-control px-3 py-2.5 hover:bg-canvas-soft"
-                  >
-                    <span className="text-brand-secondary">
-                      {navigationIcon(item.label)}
-                    </span>
-                    <span>
-                      <span className="text-button block">{item.label}</span>
-                      <span className="text-metadata block text-muted">
-                        {item.href}
-                      </span>
-                    </span>
-                  </Link>
-                ))
-              ) : (
-                <p className="text-body px-3 py-8 text-center text-muted">
-                  No matching RiverGuard page.
-                </p>
-              )}
-            </div>
-            <p className="text-metadata border-t border-line bg-canvas-soft px-4 py-2 text-muted">
-              Search navigates between available pages. Press Esc to close.
-            </p>
-          </section>
-        </div>
+        <SearchDialog
+          items={searchDialogItems}
+          onClose={() => setSearchOpen(false)}
+          footnote={
+            role === "resident"
+              ? "Search covers pages, settings, and the four supported cities."
+              : "Search covers pages, settings, supported cities, and stored runs."
+          }
+        />
       ) : null}
     </div>
   );

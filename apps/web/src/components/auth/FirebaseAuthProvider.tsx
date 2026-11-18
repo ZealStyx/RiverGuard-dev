@@ -57,7 +57,10 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
-    const result = await signInWithPopup(firebaseAuth, new GoogleAuthProvider());
+    const result = await signInWithPopup(
+      firebaseAuth,
+      new GoogleAuthProvider(),
+    );
     return result.user;
   }, []);
 
@@ -152,9 +155,7 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
 export function useFirebaseAuth() {
   const context = useContext(FirebaseAuthContext);
   if (context === null) {
-    throw new Error(
-      "useFirebaseAuth must be used inside FirebaseAuthProvider",
-    );
+    throw new Error("useFirebaseAuth must be used inside FirebaseAuthProvider");
   }
   return context;
 }

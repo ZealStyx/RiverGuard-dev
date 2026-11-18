@@ -1,4 +1,4 @@
-import { CheckCircle, Circle, Info, Warning } from "@phosphor-icons/react";
+import { CheckCircle, Circle, Info, Warning, X } from "@phosphor-icons/react";
 
 import type { GisLayerSummary, GisRejectedLayer } from "@/lib/gis-types";
 import { gisLayerKey } from "@/lib/gis-types";
@@ -12,6 +12,8 @@ export interface HazardLayerControlProps {
   /** Declared in the manifest but refused by the verifier. */
   rejected: GisRejectedLayer[];
   loading?: boolean;
+  /** Present when the panel can be dismissed from the map. */
+  onClose?: () => void;
 }
 
 const CLASSIFICATION_LABEL: Record<GisLayerSummary["classification"], string> =
@@ -58,7 +60,7 @@ function Row({
         aria-hidden="true"
         size={18}
         weight={selected ? "fill" : "regular"}
-        className={selected ? "text-brand-secondary" : "text-muted"}
+        className={selected ? "text-brand-secondary-ink" : "text-muted"}
       />
       <span className="min-w-0">
         <span className="text-button block">{label}</span>
@@ -82,6 +84,7 @@ export function HazardLayerControl({
   verified,
   rejected,
   loading = false,
+  onClose,
 }: HazardLayerControlProps) {
   const hasHazardLayer = verified.some(
     (layer) => layer.classification === "hazard",
@@ -95,12 +98,21 @@ export function HazardLayerControl({
       aria-labelledby="map-layers-title"
       className="max-h-[calc(100%-1rem)] w-[250px] overflow-y-auto rounded-panel border border-line bg-canvas-soft/95 p-3 text-ink shadow-xl backdrop-blur-sm"
     >
-      <p
-        id="map-layers-title"
-        className="text-section border-b border-line pb-2"
-      >
-        Map layers
-      </p>
+      <div className="flex items-center justify-between gap-2 border-b border-line pb-2">
+        <p id="map-layers-title" className="text-section">
+          Map layers
+        </p>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Hide map layers"
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded-control text-muted hover:bg-canvas hover:text-ink"
+          >
+            <X aria-hidden="true" size={14} />
+          </button>
+        ) : null}
+      </div>
       <div className="mt-2 grid">
         <Row
           available
@@ -207,6 +219,37 @@ export function HazardLayerControl({
             ? "RiverGuard overlays are hidden until verified local GIS data is added."
             : "Overlays are local files accepted by npm run gis:verify. Nothing is fetched from a GIS service at runtime."}
       </p>
+
+      {/* The two greyed-out rows are the honest answer to "why can't I click
+          this", so each one says what would change it. */}
+      <details className="text-metadata mt-1.5 text-muted">
+        <summary className="cursor-pointer">
+          What the unavailable layers need
+        </summary>
+        <ul className="mt-1.5 grid gap-1.5">
+          <li>
+            <span className="font-semibold text-ink">
+              Static hazard susceptibility
+            </span>
+            : a hazard layer declared in{" "}
+            <code className="rounded-sm bg-canvas px-1">
+              data/gis/manifest.json
+            </code>{" "}
+            with its source, licence, and checksum, plus the GeoJSON file
+            itself. Run{" "}
+            <code className="rounded-sm bg-canvas px-1">
+              npm run gis:verify
+            </code>{" "}
+            after adding it; the map draws nothing it has not verified.
+          </li>
+          <li>
+            <span className="font-semibold text-ink">Experimental outlook</span>
+            : nothing to add. The model scores a city for a day, not a shape, so
+            there is no geometry to draw. City-level numbers stay in the outlook
+            panel beside the map.
+          </li>
+        </ul>
+      </details>
     </fieldset>
   );
 }
