@@ -9,6 +9,7 @@ import {
   modelTypeValidator,
   riskLevelValidator,
   userRoleValidator,
+  userStatusValidator,
 } from "./validators";
 
 export default defineSchema({
@@ -31,6 +32,7 @@ export default defineSchema({
     email: v.string(),
     displayName: v.string(),
     role: userRoleValidator,
+    status: v.optional(userStatusValidator),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
