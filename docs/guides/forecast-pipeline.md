@@ -93,6 +93,20 @@ Convex subscription, so a reload does not spend another weather call.
 8. The dashboard renders the response immediately and the Convex subscription delivers the same run
    on the next page load.
 
+### What else is written locally
+
+Two files live beside the runs. Both are gitignored, both are written atomically with a
+temp-file rename, and both are capped so they cannot grow without bound:
+
+- `.data/reviews.json` — LGU review decisions recorded through `POST /api/reviews`, newest first,
+  capped at 500. A review is only accepted when the run it refers to exists in the active store.
+- `.data/audit.json` — audit events for a stored run or a recorded review, read back through
+  `GET /api/audit` (filtered on the server), capped at 500. There is no sign-in, so every actor is
+  `Local operator (unauthenticated)`; the screen says so rather than implying a real trail.
+
+`REVIEW_STORE_PATH` and `AUDIT_STORE_PATH` override the locations, as `RUN_STORE_PATH` does for the
+run store.
+
 ## 5. Failure modes
 
 | Symptom                                                                     | Cause                                                                                          | Behaviour                                                                                                                                                                                                                                                     |

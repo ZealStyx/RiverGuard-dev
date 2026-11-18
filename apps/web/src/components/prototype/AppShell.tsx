@@ -28,7 +28,16 @@ import { BuildStamp } from "@/components/BuildStamp";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
-import { can, type ProductRole, roleDefinitions } from "@/data/prototype";
+import { convexConfigured } from "@/components/dashboard/OutlookBridge";
+import {
+  can,
+  supportedLocations,
+  type ProductRole,
+  roleDefinitions,
+} from "@/data/prototype";
+import { useAppliedPreferences } from "@/lib/preferences";
+import { formatRunTime } from "@/lib/runs";
+import { useLocalRuns } from "@/lib/use-runs";
 import { cx } from "@/lib/classnames";
 
 interface AppShellProps {
@@ -184,6 +193,10 @@ export function AppShell({ children, role }: AppShellProps) {
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [settingsMenuPinned, setSettingsMenuPinned] = useState(false);
   const [query, setQuery] = useState("");
+  // Applies stored display preferences (currently reduced motion) for every
+  // screen inside the shell, including the settings pages themselves.
+  useAppliedPreferences();
+  const { data: storedRuns } = useLocalRuns(20);
   const roleDefinition = roleDefinitions[role];
   const navigationItems = roleDefinition.navigation.filter(
     (item) => !item.capability || can(role, item.capability),
@@ -206,8 +219,52 @@ export function AppShell({ children, role }: AppShellProps) {
     );
   }, [navigationItems, role]);
 
-  const filteredItems = searchItems.filter((item) =>
-    item.label.toLowerCase().includes(query.trim().toLowerCase()),
+  /**
+   * Search covers more than page names.
+   *
+   * The dialog only matched navigation labels, so "Marikina" found nothing on a
+   * screen full of Marikina data. Supported cities and the runs this workspace
+   * has stored are searchable too, and each result navigates to the screen that
+   * shows it for the current role.
+   */
+  const searchResults = useMemo(() => {
+    const pages = searchItems.map((item) => ({
+      href: item.href,
+      label: item.label,
+      meta: item.href,
+    }));
+
+    const cityHref =
+      role === "lgu"
+        ? "/lgu/locations"
+        : role === "resident"
+          ? "/resident/locations"
+          : "/admin/locations";
+    const cities = supportedLocations.map((location) => ({
+      href: cityHref,
+      label: `${location.name} · city`,
+      meta: `${location.support} · ${location.status}`,
+    }));
+
+    const runs =
+      !convexConfigured && role !== "resident"
+        ? (storedRuns ?? []).slice(0, 8).map((run) => ({
+            href:
+              role === "admin"
+                ? `/admin/research/runs/${encodeURIComponent(run.runId)}`
+                : `/lgu/reviews/${encodeURIComponent(run.runId)}`,
+            label: `${run.locations.join(", ") || "Run"} · ${formatRunTime(run.requestedAt)}`,
+            meta: `Stored run ${run.runId}`,
+          }))
+        : [];
+
+    return [...pages, ...cities, ...runs];
+  }, [searchItems, role, storedRuns]);
+
+  const filteredItems = searchResults.filter((item) =>
+    `${item.label} ${item.meta}`
+      .toLowerCase()
+      .includes(query.trim().toLowerCase()),
   );
 
   useEffect(() => {
@@ -463,13 +520,13 @@ export function AppShell({ children, role }: AppShellProps) {
               <MagnifyingGlass size={19} className="text-muted" />
               <div className="min-w-0 flex-1">
                 <h2 id="search-title" className="sr-only">
-                  Search RiverGuard pages
+                  Search RiverGuard
                 </h2>
                 <input
                   autoFocus
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search pages and settings…"
+                  placeholder="Search pages, cities, and stored runs…"
                   className="text-body w-full border-0 bg-transparent py-1 outline-none placeholder:text-muted"
                 />
               </div>
@@ -497,19 +554,20 @@ export function AppShell({ children, role }: AppShellProps) {
                     <span>
                       <span className="text-button block">{item.label}</span>
                       <span className="text-metadata block text-muted">
-                        {item.href}
+                        {item.meta}
                       </span>
                     </span>
                   </Link>
                 ))
               ) : (
                 <p className="text-body px-3 py-8 text-center text-muted">
-                  No matching RiverGuard page.
+                  No page, city, or stored run matches that search.
                 </p>
               )}
             </div>
             <p className="text-metadata border-t border-line bg-canvas-soft px-4 py-2 text-muted">
-              Search navigates between available pages. Press Esc to close.
+              Search covers pages, supported cities, and stored runs. Press Esc
+              to close.
             </p>
           </section>
         </div>
