@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { convexErrorHint, convexFunctions } from "@/lib/convex-functions";
+import type { PersistenceKind, RunPersistence } from "@/lib/persistence";
 import { useConvexQueryResult } from "@/lib/convex-query";
 import type { OutlookDay } from "@/types";
 
@@ -54,6 +55,13 @@ export interface OutlookSnapshot {
   observed: ObservedStateSummary | null;
   /** The model's own caveat string, carried through from the ML service. */
   modelWarning: string | null;
+  /**
+   * Where this run was written — `convex`, the local fallback, or nowhere.
+   *
+   * The UI must read this rather than guessing from `source`: a run that was
+   * just executed is `source: "live"` whether Convex stored it or not.
+   */
+  persistence: RunPersistence | null;
 }
 
 const LABELS: Record<string, OutlookDay["label"]> = {
@@ -104,13 +112,14 @@ interface ForecastApiDay {
   exceedsOperatingThreshold: boolean;
 }
 
-interface ForecastApiResponse {
+export interface ForecastApiResponse {
   location: { code: string; name: string };
   weather: { provider: string; degraded: boolean; degradationReason?: string };
   /** Absent when no provider answered, e.g. a 502 weather failure. */
   observedState: ObservedStateSummary | null;
   forecast: { modelVersion: string; days: ForecastApiDay[]; warning?: string };
   persistence: {
+    kind: PersistenceKind;
     enabled: boolean;
     stored: boolean;
     alerts?: number;
@@ -119,6 +128,42 @@ interface ForecastApiResponse {
   warnings: string[];
   error?: string;
   detail?: string;
+}
+
+/**
+ * The one place a `POST /api/forecast` payload becomes screen state.
+ *
+ * Extracted so the mapping — especially `persistence`, which the storage line
+ * is derived from — can be checked without a browser. It is also the only place
+ * that decides a just-executed run is `source: "live"`.
+ */
+export function snapshotFromApiResponse(
+  payload: ForecastApiResponse,
+  updatedAt: number,
+): OutlookSnapshot {
+  return {
+    days: payload.forecast.days.map(toOutlookDay),
+    source: "live",
+    updatedAt,
+    locationName: payload.location.name,
+    modelVersion: payload.forecast.modelVersion,
+    provider: payload.weather.provider,
+    degraded: payload.weather.degraded,
+    degradationReason: payload.weather.degradationReason ?? null,
+    alerts: payload.persistence?.alerts ?? 0,
+    warnings: payload.warnings ?? [],
+    observed: payload.observedState ?? null,
+    modelWarning: payload.forecast.warning ?? null,
+    // `kind` is what the server actually did. Older payloads that predate it
+    // report nothing rather than being optimistically labelled.
+    persistence: payload.persistence
+      ? {
+          kind: payload.persistence.kind ?? "none",
+          stored: Boolean(payload.persistence.stored),
+          error: payload.persistence.error,
+        }
+      : null,
+  };
 }
 
 export function useOutlookFeed(locationCode: string) {
@@ -152,20 +197,7 @@ export function useOutlookFeed(locationCode: string) {
         return;
       }
 
-      setSnapshot({
-        days: payload.forecast.days.map(toOutlookDay),
-        source: "live",
-        updatedAt: Date.now(),
-        locationName: payload.location.name,
-        modelVersion: payload.forecast.modelVersion,
-        provider: payload.weather.provider,
-        degraded: payload.weather.degraded,
-        degradationReason: payload.weather.degradationReason ?? null,
-        alerts: payload.persistence.alerts ?? 0,
-        warnings: payload.warnings ?? [],
-        observed: payload.observedState ?? null,
-        modelWarning: payload.forecast.warning ?? null,
-      });
+      setSnapshot(snapshotFromApiResponse(payload, Date.now()));
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Forecast request failed",
@@ -230,6 +262,7 @@ export function useStoredOutlook(
       warnings: [],
       observed: null,
       modelWarning: null,
+      persistence: { kind: "convex", stored: true },
     };
   }, [data, locationCode]);
 
