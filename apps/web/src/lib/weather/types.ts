@@ -15,6 +15,12 @@ export interface DailyWeatherPoint {
    * not a soil observation.
    */
   soilMoisturePercent?: number | null;
+  /**
+   * Where this day's rainfall came from, when it is not simply the provider.
+   * Set to `gauge` by `blendGaugeRainfall` for the days a local gauge file
+   * replaced; absent means the provider's own value.
+   */
+  rainfallSource?: RainfallSource;
 }
 
 /** Where the soil-moisture column came from. */

@@ -51,6 +51,11 @@ export interface HistoricalReading {
   qualityStatus?: string;
   split?: string;
   stationId?: string;
+  /**
+   * `dataset` for a row of `data/daily_observations.csv`, `live` for a day a
+   * forecast run stored from Open-Meteo. Absent is read as `dataset`.
+   */
+  origin?: "dataset" | "live";
 }
 
 /** A real model-attribution row from the ML service sensitivity sweep. */

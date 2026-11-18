@@ -28,7 +28,9 @@ import {
 } from "@/components/ui";
 import type { HistoricalReading } from "@/types";
 
+import { DRY_SEASON_DROP_M } from "@/lib/observed-history";
 import { LOCATIONS, type LocationCode } from "@/lib/locations";
+import { OBSERVATIONS_UPDATED_EVENT } from "@/lib/observation-refresh";
 
 type LoadState = "loading" | "ready" | "empty" | "error";
 
@@ -37,6 +39,9 @@ interface HistoricalResponse {
   location: string;
   dateMin: string;
   dateMax: string;
+  /** Days after the dataset's last row that came from stored Open-Meteo runs. */
+  liveDays?: number;
+  datasetDateMax?: string | null;
   readings: HistoricalReading[];
   error?: string;
   detail?: string;
@@ -61,6 +66,9 @@ export function RainfallChart({
 } = {}) {
   const [readings, setReadings] = useState<HistoricalReading[]>([]);
   const [range, setRange] = useState<{ min: string; max: string } | null>(null);
+  const [live, setLive] = useState<{ days: number; after: string } | null>(
+    null,
+  );
   const [dataset, setDataset] = useState<string>("");
   const [state, setState] = useState<LoadState>("loading");
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
@@ -71,6 +79,16 @@ export function RainfallChart({
   const [resolvedKey, setResolvedKey] = useState<string | null>(null);
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
+
+  // A forecast started elsewhere in the app may have added observed days. The
+  // panel fetched its payload on mount, so without this it would keep showing a
+  // pre-run snapshot and read as "still stuck on the dataset".
+  useEffect(() => {
+    const refresh = () => setAttempt((value) => value + 1);
+    window.addEventListener(OBSERVATIONS_UPDATED_EVENT, refresh);
+    return () =>
+      window.removeEventListener(OBSERVATIONS_UPDATED_EVENT, refresh);
+  }, []);
 
   const requestKey = `${location}|${limit}|${startDate ?? ""}|${endDate ?? ""}|${attempt}`;
   const isStale = resolvedKey !== requestKey;
@@ -102,6 +120,11 @@ export function RainfallChart({
         if (!active) return;
         setReadings(payload.readings ?? []);
         setRange({ min: payload.dateMin, max: payload.dateMax });
+        setLive(
+          payload.liveDays && payload.datasetDateMax
+            ? { days: payload.liveDays, after: payload.datasetDateMax }
+            : null,
+        );
         setDataset(payload.dataset);
         setErrorDetail(null);
         setState(payload.readings?.length ? "ready" : "empty");
@@ -143,10 +166,14 @@ export function RainfallChart({
   const showAlarms = alarms !== null && peak >= alarms[0] - 2.5;
 
   // The water level is a proxy, never a gauge reading, so it is labelled every
-  // time. The rainfall series is not annotated per-range by design.
+  // time — and the band is named, because "13.4 m" reads as alarming until you
+  // know the floor sits 2 m below the first alarm on purpose.
   const waterIsDerived = Boolean(latest?.qualityStatus?.includes("derived"));
+  const dryFloorM = alarms ? alarms[0] - DRY_SEASON_DROP_M : null;
   const dataNote = waterIsDerived
-    ? "Water level is a rainfall-derived proxy in this dataset, not a gauge reading."
+    ? alarms && dryFloorM !== null
+      ? `Water level is a rainfall-derived stage proxy on this river's alarm datum, not a gauge reading. Dry-season floor ${dryFloorM.toFixed(1)} m · Alarm 1 at ${alarms[0]} m${alarmsVerified ? "" : " (indicative)"} · the proxy saturates at Alarm 3 (${alarms[2]} m).`
+      : "Water level is a rainfall-derived proxy in this dataset, not a gauge reading."
     : null;
 
   return (
@@ -164,6 +191,9 @@ export function RainfallChart({
           <p className="text-metadata mt-0.5 text-muted">
             Daily rainfall and derived water-level proxy · {location}
             {range ? ` · ${range.min} → ${range.max}` : ""}
+            {live
+              ? ` · ${live.days} live day${live.days === 1 ? "" : "s"} after ${live.after}`
+              : ""}
           </p>
         </div>
         <StatusLabel className="border-line bg-canvas text-muted">
@@ -386,6 +416,9 @@ export function RainfallChart({
           <p className="text-metadata text-muted">
             Source: {latest?.rainSource ?? "undocumented"}
             {latest?.stationId ? ` · station ${latest.stationId}` : ""}
+            {live
+              ? ` · ${live.days} day${live.days === 1 ? "" : "s"} after ${live.after} read from the observation store (written by forecast runs), not the dataset`
+              : ""}
             {!showAlarms && alarms
               ? ` · alarm lines hidden: the series peaks at ${peak.toFixed(2)} m, more than 2.5 m below the ${alarms[0]} m first alarm${alarmsVerified ? "" : " (indicative)"}`
               : ""}
