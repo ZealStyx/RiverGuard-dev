@@ -29,6 +29,7 @@ import {
 import type { HistoricalReading } from "@/types";
 
 import { LOCATIONS, type LocationCode } from "@/lib/locations";
+import { OBSERVATIONS_UPDATED_EVENT } from "@/lib/observation-refresh";
 
 type LoadState = "loading" | "ready" | "empty" | "error";
 
@@ -77,6 +78,16 @@ export function RainfallChart({
   const [resolvedKey, setResolvedKey] = useState<string | null>(null);
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
+
+  // A forecast started elsewhere in the app may have added observed days. The
+  // panel fetched its payload on mount, so without this it would keep showing a
+  // pre-run snapshot and read as "still stuck on the dataset".
+  useEffect(() => {
+    const refresh = () => setAttempt((value) => value + 1);
+    window.addEventListener(OBSERVATIONS_UPDATED_EVENT, refresh);
+    return () =>
+      window.removeEventListener(OBSERVATIONS_UPDATED_EVENT, refresh);
+  }, []);
 
   const requestKey = `${location}|${limit}|${startDate ?? ""}|${endDate ?? ""}|${attempt}`;
   const isStale = resolvedKey !== requestKey;

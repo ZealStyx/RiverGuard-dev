@@ -15,9 +15,12 @@
  * antecedent 3/7/30-day sums and soil moisture all come from its own past_days
  * window. `data/daily_observations.csv` is history for the charts, not a seed.
  *
- * The window itself is also kept: `recordObservations` writes the observed days
- * to `.data/observations.json`, so the history chart can show the days after the
- * dataset's last row instead of freezing there. Fixture runs are refused.
+ * The window itself is kept as soon as it exists: `recordObservations` writes the
+ * observed days to the Convex deployment (or to `.data/observations.json` when
+ * there is none), so the history chart can show the days after the dataset's last
+ * row instead of freezing there. It runs *before* the model call on purpose — a
+ * failed ML service must not throw away weather that was retrieved successfully.
+ * Fixture and degraded runs are refused.
  *
  * Two additions hang off that window:
  *   - a local gauge file (`data/gauge/daily_rainfall.csv`, optional) replaces the
@@ -34,7 +37,10 @@ import { fetchRiverContext } from "@/lib/flood";
 import { persistOutlook } from "@/lib/forecast-persistence";
 import { getLocation } from "@/lib/locations";
 import { MlServiceError, requestDailyForecast } from "@/lib/ml-client";
-import { recordObservations } from "@/lib/observation-store";
+import {
+  recordObservations,
+  type RecordObservationsResult,
+} from "@/lib/observation-store";
 import { describeModelInput } from "@/lib/model-input";
 import { getWeatherBundle, type WeatherBundle } from "@/lib/weather";
 
@@ -84,6 +90,12 @@ export async function POST(request: Request) {
     );
   }
 
+  // Keep the observed window before anything can fail. The weather call already
+  // succeeded, so those days are real whether or not the model below answers;
+  // recording after the ML call meant a stopped service silently discarded them
+  // and left the history chart stuck on the dataset's last row.
+  const observations = await recordObservations(bundle);
+
   // The provider window is the model input: `bundle.observed` holds today's
   // rain, the antecedent sums and soil moisture derived from the same response,
   // with gauge rows substituted inside `getWeatherBundle`. Nothing comes from the
@@ -105,8 +117,11 @@ export async function POST(request: Request) {
         detail: error instanceof Error ? error.message : "unknown error",
         weather: summariseWeather(bundle),
         observedState: inputState,
+        // The weather was real even though the model was not, and it is kept.
+        observations: observationSummary(observations),
         riverContext: river.context,
         riverContextError: river.error,
+        warnings: observationWarnings(observations),
       },
       { status: error instanceof MlServiceError ? 503 : 500 },
     );
@@ -122,10 +137,6 @@ export async function POST(request: Request) {
     issueDate,
     accessToken,
   );
-
-  // The observed window is worth keeping on its own: the run stores the forecast,
-  // not the weather that produced it. Best effort, and refused for the fixture.
-  const observations = await recordObservations(bundle);
 
   // Best effort: the run is already stored, so a failed audit write is reported
   // as a warning rather than replacing the forecast with an error.
@@ -151,22 +162,7 @@ export async function POST(request: Request) {
   if (bundle.degraded) {
     warnings.push(bundle.degradationReason ?? "Weather data is degraded.");
   }
-  if (observations.error) {
-    warnings.push(observations.error);
-  }
-  if (observations.skipped === "degraded") {
-    warnings.push(
-      "Offline fixture run: no observation days were stored. Illustrative numbers must not become observed history.",
-    );
-  } else if (observations.written > 0) {
-    const where =
-      observations.backend === "convex"
-        ? "the Convex deployment"
-        : "the local observation store";
-    warnings.push(
-      `${observations.written} observed day${observations.written === 1 ? "" : "s"} added to ${where}, so the history chart continues past the dataset's last row.`,
-    );
-  }
+  warnings.push(...observationWarnings(observations));
   if (!persistence.stored) {
     warnings.push(`The run was not stored: ${persistence.error}`);
   } else if (persistence.kind === "local") {
@@ -196,16 +192,48 @@ export async function POST(request: Request) {
     },
     persistence,
     // How much of the observed window this run kept for the history chart.
-    observations: {
-      written: observations.written,
-      skipped: observations.skipped,
-      error: observations.error,
-      backend: observations.backend,
-    },
+    observations: observationSummary(observations),
     riverContext: river.context,
     riverContextError: river.error,
     warnings,
   });
+}
+
+/**
+ * What the run kept of its observed window, in the response's `observations`
+ * block. One shape for both the success and the ML-failure answer, so a client
+ * never has to guess whether the days were saved.
+ */
+function observationSummary(observations: RecordObservationsResult) {
+  return {
+    written: observations.written,
+    skipped: observations.skipped,
+    error: observations.error,
+    backend: observations.backend,
+  };
+}
+
+/** The same outcome, phrased for the run's `warnings` list. */
+function observationWarnings(observations: RecordObservationsResult): string[] {
+  if (observations.error) return [observations.error];
+  if (observations.skipped === "degraded") {
+    return [
+      "Offline fixture run: no observation days were stored. Illustrative numbers must not become observed history.",
+    ];
+  }
+  if (observations.skipped === "no-history") {
+    return [
+      "The provider returned no observed days, so there was nothing to add to the history chart.",
+    ];
+  }
+  if (observations.written === 0) return [];
+  const where =
+    observations.backend === "convex"
+      ? "the Convex deployment"
+      : "the local observation store";
+  return [
+    `${observations.written} observed day${observations.written === 1 ? "" : "s"} added to ${where}, so the history chart continues past the dataset's last row.`,
+  ];
 }
 
 function summariseWeather(bundle: WeatherBundle) {
