@@ -14,6 +14,7 @@ import type * as crons from "../crons.js";
 import type * as forecasts from "../forecasts.js";
 import type * as hazardLayers from "../hazardLayers.js";
 import type * as historical from "../historical.js";
+import type * as observations from "../observations.js";
 import type * as predictions from "../predictions.js";
 import type * as riskAssessments from "../riskAssessments.js";
 import type * as sensorReadings from "../sensorReadings.js";
@@ -35,6 +36,7 @@ const fullApi: ApiFromModules<{
   forecasts: typeof forecasts;
   hazardLayers: typeof hazardLayers;
   historical: typeof historical;
+  observations: typeof observations;
   predictions: typeof predictions;
   riskAssessments: typeof riskAssessments;
   sensorReadings: typeof sensorReadings;
