@@ -13,6 +13,10 @@ export const metadata: Metadata = {
   },
   description:
     "A local research prototype for experimental NCR flood-risk forecasting.",
+  // Sent on cross-origin subresource requests (map tiles). OpenStreetMap's tile
+  // policy requires a valid Referer from web pages, so this stays at the
+  // browser default rather than anything stricter.
+  referrer: "strict-origin-when-cross-origin",
 };
 
 export const viewport: Viewport = {

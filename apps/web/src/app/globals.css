@@ -139,3 +139,29 @@ select {
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * MapLibre attribution.
+ *
+ * OpenStreetMap's tile usage policy requires the licence attribution to stay
+ * visible — not collapsed behind a toggle, not covered by app chrome. `RiverMap`
+ * therefore creates the control with `compact: false` and keeps a clear band at
+ * the bottom of the canvas; these rules just make the un-collapsed text readable
+ * against the map and raise it above the canvas.
+ */
+.maplibregl-ctrl-bottom-right {
+  z-index: 1;
+}
+
+.maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--color-canvas) 92%, transparent);
+  border-radius: var(--radius-control);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0 6px 6px 0;
+  padding: 2px 8px;
+}
+
+.maplibregl-ctrl-attrib a {
+  color: var(--color-ink);
+}

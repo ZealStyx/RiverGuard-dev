@@ -32,10 +32,11 @@ Whole lines that match an attribution signature:
   `arena-agent`. Without that, a sentence like *"every commit was made with `--no-verify`, so none
   carries an Arena trailer"* matched `made … with … arena` and was deleted from a real PR body.
 - `Signed-off-by:` trailers (DCO is legitimate authorship metadata).
-- Commit messages and commit author/committer identity — those cannot be changed without
-  rewriting history. The team's convention is simply not to add attribution there; see
-  ["It still says Arena on my PR"](#it-still-says-arena-on-my-pr) for the sandbox hook that adds a
-  `Co-authored-by: arena-agent` trailer anyway.
+- Commit messages and commit author/committer identity — the workflow cannot rewrite those. It
+  **fails the check** instead when a PR's commits carry an agent/bot `Co-authored-by` trailer, so a
+  clean body cannot hide a dirty commit log; see
+  ["It still says Arena on my PR"](#it-still-says-arena-on-my-pr) for the sandbox hook that adds
+  `Co-authored-by: arena-agent` anyway.
 
 ### Scope and safety
 
@@ -46,8 +47,8 @@ Whole lines that match an attribution signature:
   `GITHUB_TOKEN` do not re-trigger workflows. `concurrency` cancels superseded runs.
 - **Idempotent.** If nothing matches, the job exits 0 without touching the PR (it does not
   reformat a description that has no attribution).
-- **Cannot fix commits.** Attribution trailers are reported in the run summary, not rewritten — see
-  below.
+- **Fails on dirty commits.** An agent/bot `Co-authored-by` trailer anywhere in the PR's commits is
+  reported in the run summary *and* fails the job — amending the commits is the only fix.
 
 ### Required repository setting
 
@@ -87,8 +88,35 @@ How to get rid of it:
 | Clean commits already pushed | rewrite the messages and force-push the PR branch |
 | Keep it out of `main` | merge with **Squash** and edit the squash message (drop the trailer) |
 
-The run summary of every workflow run now lists any commits that carry a trailer, so a "clean"
-PR body plus a dirty commit log is visible instead of silent.
+The run summary of every workflow run lists any commits that carry a trailer, and the job **fails**
+when there are any, so a "clean" PR body plus a dirty commit log cannot pass as green. The trailer
+regex deliberately ignores human co-authors: it matches only `agent`, `arena`, `bot`, `ai`, `llm`,
+`assistant`, `claude`, `copilot`, `codex`, `gpt`, `openai`, `anthropic`.
+
+### Cleaning trailers that already landed in `main`: optional and destructive
+
+Failing the check stops new ones; it does nothing about history. Rewriting is only worth it if the
+co-author credit on old commits actually bothers you, because it changes **every** SHA from the first
+touched commit onward:
+
+```bash
+# 1. Work on a fresh clone, nothing else in flight.
+# 2. Drop the trailer line from every commit message on main.
+git filter-branch --force --msg-filter \
+  "grep -v '^Co-authored-by: arena-agent <297053741+arena-agent@users.noreply.github.com>\$'" \
+  -- main
+
+# 3. Inspect before publishing: none of these may print a trailer.
+git log --format='%h %s | %(trailers:key=Co-authored-by,valueonly)' main | grep -i arena
+
+# 4. Publish (force-with-lease refuses if someone pushed meanwhile).
+git push --force-with-lease origin main
+```
+
+Consequences to accept first: every SHA changes, so existing clones and open PR branches must be
+re-based or re-cloned, PR links to old commit SHAs stop resolving, and CI re-runs from scratch. The
+merge commits themselves were never contaminated (`Merge pull request #N` carries no trailer); the
+14 commits that were are the agent-authored ones between 30 Oct and 18 Nov 2026.
 
 ### What a real Arena footer looks like
 

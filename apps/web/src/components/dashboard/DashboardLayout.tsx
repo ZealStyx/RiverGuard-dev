@@ -27,6 +27,10 @@ import { DEFAULT_LOCATION, LOCATIONS } from "@/lib/locations";
 import { useOutlookFeed } from "@/lib/outlook";
 
 import { ModelContributionPanel } from "./ModelContributionPanel";
+import { BuildStamp } from "@/components/BuildStamp";
+
+import { describeStorageShort } from "@/lib/persistence";
+
 import { convexConfigured, OutlookBridge } from "./OutlookBridge";
 import { RiskSummary } from "./RiskSummary";
 
@@ -77,6 +81,9 @@ export function DashboardLayout() {
   }, []);
   const isRunning = outlook.isRunning;
   const snapshot = outlook.snapshot;
+  const storageShort = snapshot
+    ? describeStorageShort(snapshot.persistence)
+    : null;
   const runNote = outlook.error
     ? `Forecast failed: ${outlook.error}`
     : snapshot
@@ -85,7 +92,11 @@ export function DashboardLayout() {
           minute: "2-digit",
           timeZone: "Asia/Manila",
         })} PHT · ${snapshot.provider} · model ${snapshot.modelVersion ?? "unknown"}${
-          snapshot.source === "convex" ? " · restored from Convex" : ""
+          snapshot.source === "convex"
+            ? " · restored from Convex"
+            : storageShort
+              ? ` · ${storageShort}`
+              : ""
         }`
       : "No run yet · press Run forecast to fetch weather and score the next seven days";
 
@@ -224,6 +235,9 @@ export function DashboardLayout() {
                     Reading the dataset…
                   </p>
                 )}
+                <p className="text-metadata mt-1 text-muted">
+                  <BuildStamp />
+                </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <Button
@@ -276,6 +290,8 @@ export function DashboardLayout() {
               <RiverMap
                 activeLayer={activeLayer}
                 onLayerChange={setActiveLayer}
+                className="min-[1180px]:sticky min-[1180px]:top-[5.5rem] z-0"
+                cooperativeGestures
               />
               <div className="grid content-start gap-3">
                 <RiskSummary

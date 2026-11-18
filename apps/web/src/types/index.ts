@@ -1,4 +1,13 @@
-export type MapLayerId = "base" | "experimental" | "static";
+/**
+ * A map layer selection.
+ *
+ * `base` is the OpenStreetMap basemap. `static` and `experimental` are the two
+ * overlays the product describes but does not draw: no verified hazard layer,
+ * and a city-level model with no geometry. A verified local overlay is
+ * addressed as `gis:<layer id>` and only exists if `npm run gis:verify` accepted
+ * its file.
+ */
+export type MapLayerId = "base" | "experimental" | "static" | `gis:${string}`;
 
 export type RiskLabel = "Elevated" | "Moderate" | "Lower" | "Unavailable";
 

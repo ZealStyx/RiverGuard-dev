@@ -15,6 +15,7 @@
     "convex:typecheck": "tsc --noEmit -p convex/tsconfig.json",
     "data:validate": "node scripts/import_historical_dataset.mjs --validate-only",
     "data:import": "node scripts/import_historical_dataset.mjs",
+    "gis:verify": "node scripts/verify_gis_layers.mjs && prettier --write apps/web/src/generated/gis-layers.json",
     "build": "npm run build --workspace @riverguard/web",
     "lint": "npm run lint --workspace @riverguard/web",
     "typecheck": "npm run typecheck --workspace @riverguard/web && npm run convex:typecheck",

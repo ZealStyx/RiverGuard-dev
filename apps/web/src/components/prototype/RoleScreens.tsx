@@ -9,6 +9,8 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+
+import { useGisLayers } from "@/lib/use-gis-layers";
 import { useState } from "react";
 
 import { RainfallChart } from "@/components/charts/RainfallChart";
@@ -154,6 +156,7 @@ function ResidentLocationsWorkspace({
 }) {
   const [saved, setSaved] = useState("Marikina");
   const [layer, setLayer] = useState<MapLayerId>("base");
+  const gis = useGisLayers();
   const searchParams = useSearchParams();
   const requestedView = searchParams.get("view");
   const activeView =
@@ -182,15 +185,25 @@ function ResidentLocationsWorkspace({
               Static susceptibility describes long-term context. It does not say
               whether flooding will occur today.
             </p>
-            <Notice
-              title="Verified GIS layer required"
-              tone="warning"
-              className="mt-3"
-            >
-              No RiverGuard hazard geometry is loaded. A verified local GIS
-              boundary and susceptibility layer must be supplied before this
-              view can show static hazard context.
-            </Notice>
+            {gis.layers.length === 0 ? (
+              <Notice
+                title="No verified hazard layer yet"
+                tone="warning"
+                className="mt-3"
+              >
+                No RiverGuard hazard geometry is loaded. Add a local GeoJSON
+                file, describe it in data/gis/manifest.json, and pass npm run
+                gis:verify before this view can show static hazard context.
+              </Notice>
+            ) : (
+              <p className="text-metadata mt-3 text-muted">
+                {gis.layers.length} verified local layer
+                {gis.layers.length === 1 ? "" : "s"}:{" "}
+                {gis.layers.map((entry) => entry.title).join(", ")}. Each one
+                carries its publisher, licence and retrieval date in the map
+                legend.
+              </p>
+            )}
           </Surface>
         </div>
       ) : (

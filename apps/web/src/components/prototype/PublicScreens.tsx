@@ -13,6 +13,8 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+
+import { BuildStamp } from "@/components/BuildStamp";
 import {
   type FormEvent,
   type ReactNode,
@@ -88,6 +90,9 @@ function PublicShell({
         ) : null}
       </header>
       {children}
+      <div className="text-metadata border-t border-line px-4 py-3 text-right text-muted sm:px-6">
+        <BuildStamp />
+      </div>
     </div>
   );
 }

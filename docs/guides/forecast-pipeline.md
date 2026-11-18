@@ -82,23 +82,46 @@ Convex subscription, so a reload does not spend another weather call.
 6. The ML service chains them: predict day _d_, fold its rain into the antecedent sums and the soil
    bucket, predict day _d+1_. Each day comes back with probability, water level, risk level, alarm
    crossing, and a one-sentence reason.
-7. The route calls the Convex mutation `forecasts:recordOutlook`, which writes one `forecastRuns` row,
-   seven `forecasts`, seven `riskAssessments`, a `modelVersions` row if it is new, and an alert for
-   every `elevated` day — then resolves alerts superseded by this run.
+7. The route stores the run, in one of two places:
+   - **Convex** (`NEXT_PUBLIC_CONVEX_URL` set) — `forecasts:recordOutlook` writes one `forecastRuns`
+     row, seven `forecasts`, seven `riskAssessments`, a `modelVersions` row if it is new, and an alert
+     for every `elevated` day, then resolves alerts superseded by this run.
+   - **This machine** (no deployment configured) — `lib/run-store.ts` appends the run to
+     `.data/runs.json` (gitignored, newest first, capped at 200 runs, written atomically). Without
+     this, a run existed only in the response that produced it and run history, run detail and the
+     comparison screen had nothing to read.
 8. The dashboard renders the response immediately and the Convex subscription delivers the same run
    on the next page load.
 
 ## 5. Failure modes
 
-| Symptom                                                                     | Cause                                                    | Behaviour                                                                                                                                                                                            |
-| --------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 503 `The local ML service did not produce a forecast`                       | uvicorn not running, or wrong `ML_API_BASE_URL`          | Weather result is still returned in `weather`; nothing is stored                                                                                                                                     |
-| 502 `Weather provider failed and the offline forecast fallback is disabled` | Open-Meteo unreachable and `WEATHER_ALLOW_FIXTURE=false` | Explicit failure instead of invented numbers; no input state exists, so nothing is scored or stored                                                                                                  |
-| `weather.degraded: true`                                                    | Provider failed and the fixture was allowed              | Runs end to end on the labelled fixture — which is now also its input — and the outlook panel renders a warning banner plus every warning, so illustrative rainfall is never presented as a forecast |
-| `observedState.qualityStatus: "degraded"`                                   | The input came from the offline fixture                  | Same as `weather.degraded`; the run is shown with a warning, never as a live forecast                                                                                                                |
-| 400 `Unknown locationCode`                                                  | Not one of the four cities                               | Lists the supported codes                                                                                                                                                                            |
-| Outlook not saved                                                           | `NEXT_PUBLIC_CONVEX_URL` unset, or mutation error        | Forecast still returned; `persistence.error` says why                                                                                                                                                |
-| Alert never appears                                                         | No day reached `elevated`                                | Only elevated days raise alerts                                                                                                                                                                      |
+| Symptom                                                                     | Cause                                                                                          | Behaviour                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 503 `The local ML service did not produce a forecast`                       | uvicorn not running, or wrong `ML_API_BASE_URL`                                                | Weather result is still returned in `weather`; nothing is stored                                                                                                                                                                                              |
+| 502 `Weather provider failed and the offline forecast fallback is disabled` | Open-Meteo unreachable and `WEATHER_ALLOW_FIXTURE=false`                                       | Explicit failure instead of invented numbers; no input state exists, so nothing is scored or stored                                                                                                                                                           |
+| `weather.degraded: true`                                                    | Provider failed and the fixture was allowed                                                    | Runs end to end on the labelled fixture — which is now also its input — and the outlook panel renders a warning banner plus every warning, so illustrative rainfall is never presented as a forecast                                                          |
+| `observedState.qualityStatus: "degraded"`                                   | The input came from the offline fixture                                                        | Same as `weather.degraded`; the run is shown with a warning, never as a live forecast                                                                                                                                                                         |
+| 400 `Unknown locationCode`                                                  | Not one of the four cities                                                                     | Lists the supported codes                                                                                                                                                                                                                                     |
+| Outlook not saved to `.data/runs.json`                                      | `persistence.kind: "none"` — disk full, permissions                                            | Forecast still returned; `persistence.error` says why                                                                                                                                                                                                         |
+| Run stored locally only                                                     | `NEXT_PUBLIC_CONVEX_URL` unset                                                                 | `persistence.kind: "local"`; the run is readable from `/admin/research/runs` on this machine and nowhere else                                                                                                                                                 |
+| Panel says "Convex is not configured" while the deployment is fine          | Fixed: the sentence was inferred from `source`, which is `live` for any run this tab performed | The screens now render `persistence` — `{kind, stored, error}` — so a stored run says so, a refused write says the write failed (`npm run convex:dev`), and only an unset URL mentions configuration. The same four words appear on the dashboard status line |
+| `Could not find public function for 'forecasts:getRun'`                     | Deployment behind `convex/`                                                                    | Run detail and comparison report it; push with `npm run convex:dev`                                                                                                                                                                                           |
+| Alert never appears                                                         | No day reached `elevated`                                                                      | Only elevated days raise alerts                                                                                                                                                                                                                               |
+
+## 5.1 Reading runs back
+
+Both stores expose the same records, so the screens do not care where a run lives:
+
+| Screen      | URL                                     | Reads                                          |
+| ----------- | --------------------------------------- | ---------------------------------------------- |
+| Run history | `/admin/research/runs`                  | `forecasts:recentRuns`, or `GET /api/runs`     |
+| Run detail  | `/admin/research/runs/<runId>`          | `forecasts:getRun`, or `GET /api/runs/<runId>` |
+| Compare     | `/admin/research/compare?a=<id>&b=<id>` | the two runs above, side by side               |
+
+The detail page shows the run record (provider, issue date, model, threshold, schema), the stored days,
+and the model's reason lines verbatim. The comparison page prints B − A per day and says so when the
+two runs are not like-for-like (different provider, model version, or input quality) — it does not
+pretend to be a model comparison.
 
 ## 6. What is deliberately not automated
 
@@ -142,3 +165,22 @@ provider window. The data-source catalogue in the app carries the same split in 
 If a source is missing, the panel says which one and offers the action that fixes it. There is no
 static fallback for observations or outlook days — an illustrative week and a real forecast are
 indistinguishable once drawn, so the UI refuses to draw one.
+
+### 5.2 Where a run went, and how the UI knows
+
+`POST /api/forecast` answers with `persistence: { kind, stored, error? }`. That object — not
+`snapshot.source` — is what every storage sentence is derived from, through
+`apps/web/src/lib/persistence.ts`:
+
+| `persistence`                            | Screen text                                                                         |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| `{kind: "convex", stored: true}`         | "Stored in Convex. Reloading this page restores this run…"                          |
+| `{kind: "convex", stored: false, error}` | "Convex is configured, but the write failed…" + the warning above carries the error |
+| `{kind: "local", stored: true}`          | "Stored on this machine only, in `.data/runs.json`…"                                |
+| `{kind: "none", stored: false, error}`   | "This run was not stored anywhere — the warning above says why."                    |
+| snapshot restored from the Convex query  | "Restored from Convex. These are the stored numbers, not a new forecast."           |
+
+`source` is still `"live"` for a run executed in this tab and `"convex"` for one restored from the
+deployment, which is what the risk panel's "just run / stored run" label reads. The two questions —
+_is this fresh?_ and _did it get saved?_ — are now answered by different fields, because one field
+cannot answer both.
