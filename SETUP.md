@@ -214,6 +214,34 @@ current `convex/` configuration. Run `npm run convex:dev` while targeting your
 own development deployment, then restart the Next.js server. Do not deploy
 these changes to somebody else's production deployment without permission.
 
+### Email verification recovery
+
+Email/password signup sends a Firebase verification link after the Firebase
+account is created and RiverGuard account provisioning succeeds or degrades
+gracefully. If the first email is not delivered:
+
+1. Sign in with the existing email and password.
+2. The app keeps the signed-in session on this verification state and opens the
+   verification recovery screen.
+3. Use **Resend verification email** after the resend cooldown expires.
+4. Open the link in the email, return to RiverGuard, and select
+   **I verified my email**.
+
+If the resend action fails, the screen names the Firebase error. Common Firebase
+Console setup failures are:
+
+- The local origin is missing from **Authentication → Settings → Authorized
+  domains**. For local use, keep `localhost` authorized.
+- Email templates or the Firebase project mail sender are disabled or misconfigured.
+- The verification request is being rate-limited; wait for the cooldown and retry.
+- The `NEXT_PUBLIC_FIREBASE_*` values point to a different Firebase project than
+  the account was created in. Re-check `apps/web/.env.local`.
+
+The verification link returns to `/auth/login`. A user who already verified can
+return to login and continue normally. If a user has lost or never received the
+email and cannot access the account, an administrator must verify the account
+directly through Firebase Authentication or provide a password reset.
+
 > **`Could not find public function for 'forecasts:latestOutlook'`** means the
 > deployment is behind the code — pull doesn't push. Run `npm run convex:dev`
 > again (or `npx convex deploy` for a production deployment) so the functions

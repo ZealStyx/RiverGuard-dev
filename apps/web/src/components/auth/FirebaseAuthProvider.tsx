@@ -73,11 +73,22 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => firebaseSignOut(firebaseAuth), []);
   const sendCurrentUserEmailVerification = useCallback(async () => {
-    if (!user) {
+    const currentUser = firebaseAuth.currentUser;
+    if (!currentUser) {
       throw new Error("You must be signed in to verify your email.");
     }
-    await sendEmailVerification(user);
-  }, [user]);
+    const origin =
+      typeof window === "undefined" ? undefined : window.location.origin;
+    await sendEmailVerification(
+      currentUser,
+      origin
+        ? {
+            url: `${origin}/auth/login`,
+            handleCodeInApp: false,
+          }
+        : undefined,
+    );
+  }, []);
   const getIdToken = useCallback(
     () => (user ? user.getIdToken() : Promise.resolve(null)),
     [user],

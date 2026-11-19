@@ -689,7 +689,11 @@ function LoginFormBody({
   ensureCurrent: ProvisionAccount | null;
 }) {
   const router = useRouter();
-  const { signInWithEmail, signInWithGoogle, signOut } = useFirebaseAuth();
+  const {
+    signInWithEmail,
+    signInWithGoogle,
+    sendEmailVerification,
+  } = useFirebaseAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   async function finishSignIn() {
@@ -725,8 +729,23 @@ function LoginFormBody({
         String(formData.get("login-password")),
       );
       if (!signedInUser.emailVerified) {
-        await signOut();
-        throw new Error("Please verify your email address before signing in.");
+        let verificationSent = false;
+        try {
+          await sendEmailVerification();
+          verificationSent = true;
+        } catch (verificationSendError) {
+          setError(formatAuthError(verificationSendError));
+        }
+        const account = await ensureCurrent?.({ requestedRole: "resident" });
+        const role =
+          account &&
+          ["resident", "lgu", "researcher", "admin"].includes(account.role)
+            ? account.role
+            : "resident";
+        router.push(
+          `/auth/verify?role=${role}&source=signup&sent=${verificationSent ? "1" : "0"}`,
+        );
+        return;
       }
       await finishSignIn();
     } catch (signInError) {
@@ -959,12 +978,20 @@ function ResidentSignupBody({
         String(formData.get("signup-email")).trim(),
         password,
       );
-      await sendEmailVerification();
       await ensureCurrent?.({
         requestedRole: role,
         roleProfile: buildRoleProfile(formData, role),
       });
-      router.push(`/auth/verify?role=${role}&source=signup`);
+      let verificationSent = false;
+      try {
+        await sendEmailVerification();
+        verificationSent = true;
+      } catch (verificationSendError) {
+        setError(formatAuthError(verificationSendError));
+      }
+      router.push(
+        `/auth/verify?role=${role}&source=signup&sent=${verificationSent ? "1" : "0"}`,
+      );
     } catch (signupError) {
       setError(formatAuthError(signupError));
     } finally {
@@ -1284,7 +1311,9 @@ function VerificationBody({
   const [verificationError, setVerificationError] = useState("");
   const [checking, setChecking] = useState(false);
   const [code, setCode] = useState("");
-  const [secondsRemaining, setSecondsRemaining] = useState(60);
+  const [secondsRemaining, setSecondsRemaining] = useState(
+    params.get("sent") === "0" ? 0 : 60,
+  );
   const codeInputs = useRef<Array<HTMLInputElement | null>>([]);
   const roleParam = params.get("role") ?? "lgu";
   const role: ProductRole = ["resident", "lgu", "researcher", "admin"].includes(
@@ -1294,6 +1323,10 @@ function VerificationBody({
     : "lgu";
   const source = params.get("source") ?? "access";
   const isEmailVerification = source === "signup";
+  const initialSendFailed = params.get("sent") === "0";
+  const [sendStatus, setSendStatus] = useState<
+    "idle" | "sent" | "failed"
+  >(initialSendFailed ? "failed" : "idle");
   useEffect(() => {
     if (secondsRemaining <= 0) return;
     const timer = window.setInterval(
@@ -1327,10 +1360,18 @@ function VerificationBody({
     <div className="grid min-w-0 gap-3">
       {isEmailVerification ? (
         <Notice
-          title={resent ? "Verification email resent" : "Check your email"}
+          title={
+            sendStatus === "failed"
+              ? "Verification email could not be sent"
+              : resent
+                ? "Verification email resent"
+                : "Check your email"
+          }
+          tone={sendStatus === "failed" ? "warning" : "info"}
         >
-          We sent a verification link to {user?.email ?? "your email address"}.
-          Open the email and click the link to confirm your address.
+          {sendStatus === "failed"
+            ? `Use Resend verification email to try again for ${user?.email ?? "your email address"}.`
+            : `We sent a verification link to ${user?.email ?? "your email address"}. Open the email and click the link to confirm your address.`}
         </Notice>
       ) : (
         <Notice title={resent ? "New code sent" : "Code sent"}>
@@ -1382,11 +1423,17 @@ function VerificationBody({
           disabled={secondsRemaining > 0}
           onClick={() => {
             if (isEmailVerification) {
-              void sendEmailVerification().then(
-                () => setResent(true),
-                (error: unknown) =>
-                  setVerificationError(formatAuthError(error)),
-              );
+              void sendEmailVerification()
+                .then(() => {
+                  setResent(true);
+                  setSendStatus("sent");
+                  setSecondsRemaining(60);
+                  setVerificationError("");
+                })
+                .catch((error: unknown) => {
+                  setSendStatus("failed");
+                  setVerificationError(formatAuthError(error));
+                });
             } else {
               setResent(true);
               setCode("");
