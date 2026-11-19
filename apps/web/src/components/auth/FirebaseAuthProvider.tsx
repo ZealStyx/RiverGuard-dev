@@ -1,15 +1,12 @@
 "use client";
 
 import {
-  ConfirmationResult,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
   onIdTokenChanged,
-  RecaptchaVerifier,
   sendEmailVerification,
   signInWithPopup,
-  signInWithPhoneNumber,
   signOut as firebaseSignOut,
   type User,
 } from "firebase/auth";
@@ -19,7 +16,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -32,8 +28,6 @@ type FirebaseAuthContextValue = {
   user: User | null;
   loading: boolean;
   createAccountWithEmail: (email: string, password: string) => Promise<User>;
-  confirmSmsCode: (code: string) => Promise<User>;
-  sendSmsCode: (phoneNumber: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<User>;
   signInWithGoogle: () => Promise<User>;
   signOut: () => Promise<void>;
@@ -46,9 +40,6 @@ const FirebaseAuthContext = createContext<FirebaseAuthContextValue | null>(
 export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const recaptchaVerifier = useRef<RecaptchaVerifier | null>(null);
-  const smsConfirmation = useRef<ConfirmationResult | null>(null);
-
   useEffect(() => {
     return onIdTokenChanged(firebaseAuth, (nextUser) => {
       setUser(nextUser);
@@ -80,32 +71,6 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const sendSmsCode = useCallback(async (phoneNumber: string) => {
-    if (recaptchaVerifier.current === null) {
-      recaptchaVerifier.current = new RecaptchaVerifier(
-        firebaseAuth,
-        "recaptcha-container",
-        { size: "invisible" },
-      );
-    }
-
-    smsConfirmation.current = await signInWithPhoneNumber(
-      firebaseAuth,
-      phoneNumber,
-      recaptchaVerifier.current,
-    );
-  }, []);
-
-  const confirmSmsCode = useCallback(async (code: string) => {
-    if (smsConfirmation.current === null) {
-      throw new Error("Request a verification code first.");
-    }
-
-    const result = await smsConfirmation.current.confirm(code);
-    smsConfirmation.current = null;
-    return result.user;
-  }, []);
-
   const signOut = useCallback(() => firebaseSignOut(firebaseAuth), []);
   const sendCurrentUserEmailVerification = useCallback(async () => {
     if (!user) {
@@ -125,21 +90,17 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       createAccountWithEmail,
-      confirmSmsCode,
       signInWithEmail,
       signInWithGoogle,
-      sendSmsCode,
       signOut,
     }),
     [
       createAccountWithEmail,
-      confirmSmsCode,
       getIdToken,
       loading,
       sendCurrentUserEmailVerification,
       signInWithEmail,
       signInWithGoogle,
-      sendSmsCode,
       signOut,
       user,
     ],

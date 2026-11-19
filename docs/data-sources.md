@@ -30,57 +30,11 @@ The distinction matters when reading any screen in the app:
 | Used for                                 | Source                                                               | When                                                           |
 | ---------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------- |
 | **Model training**                       | `data/daily_observations.csv` (S4 ERA5 tail + S6 synthetic backfill) | Offline, in `ml/` — writes `ml/artifacts/{model,metrics}.json` |
-| **Historical charts / provenance panel** | the same CSV, then stored provider days past its last row            | Every page load (`GET /api/historical`, `GET /api/dataset`)    |
+| **Historical charts / provenance panel** | the same CSV                                                         | Every page load (`GET /api/historical`, `GET /api/dataset`)    |
 | **Model input at run time**              | the live weather provider (Open-Meteo, or the labelled fixture)      | Every "Run forecast" (`POST /api/forecast`)                    |
 
 The CSV never feeds a live prediction. It is training data and history; the weather provider is the
 input a forecast is scored from. Anything that presents CSV rows as the input to a run is wrong.
-
-## 1.2 Observed days after the dataset ends
-
-The CSV is a snapshot: it ends on its generated `END_DATE` (currently 2026-11-14). Every forecast run
-already retrieves a live ~31-day window from Open-Meteo, so those observed days are now kept instead
-of being discarded with the HTTP response.
-
-| Code | `apps/web/src/lib/observation-store.ts` (read/write), `convex/observations.ts` (database side) |
-| Storage | **Convex deployment**, table `observedWeather`, when `NEXT_PUBLIC_CONVEX_URL` is set — the normal case |
-| Fallback | `<repo>/.data/observations.json` (gitignored; `OBSERVATION_STORE_PATH` overrides) when there is no deployment |
-| Written by | `POST /api/forecast`, after the run is stored — one row per `locationCode:date`, upserted |
-| Refused | degraded bundles, the offline fixture, and empty windows: illustrative numbers must never become history |
-| Read by | `GET /api/historical` (days strictly after the CSV's last row) and `GET /api/system` |
-| Caps | file store: 120 days per city, 480 in total. The deployment keeps every day it is given |
-
-Which backend is used follows run persistence exactly (`lib/forecast-persistence.ts`): with a deployment
-configured, nothing is written to the JSON file — one source of truth at a time — and a Convex failure is
-reported in the run's `warnings` rather than silently falling back. With no deployment the file is used, so
-the local prototype keeps working offline. The table needs the schema pushed once: `npm run convex:dev`
-(or `npx convex deploy`) with the current `convex/` directory.
-
-**What is stored** is only what the provider reported: rainfall, temperatures, ET0, soil moisture and the
-per-day rainfall source. No water level is written, because the proxy below is derived at read time — the
-table stays a faithful copy of the provider window instead of a second, drifting version of the dataset.
-
-**Water level on those days** is the dataset generator's own derivation
-(`data/generate_dataset.py`): rainfall routed through a fast store (`0.80/day`) and a slow baseflow store
-(`0.97/day`), with the resulting index mapped onto that river's alarm band — `p98(index)` at Alarm 1, the
-dry-season floor at `Alarm1 − 2.0 m`, and Alarm 3 as the cap. The chart replays the CSV's rainfall from
-its first row to recover the reservoir state at the dataset's end, then continues with the stored days,
-so the seam is continuous. The generator's `N(0, 0.05)` m noise is **not** reproduced: a derived proxy
-should not jitter because of a random number generator in another process. Against the CSV's own
-`WaterLevel_m` column the derivation agrees to within that noise (0.13 m worst case over four cities and
-40 days).
-
-**Rules that keep the chart honest**
-
-- A day the CSV already covers is never replaced. The CSV wins its dates; the store only extends the series.
-- Rain and antecedent windows come from the merged series. A window with a hole yields `null` rather than
-  a smaller number, so a level is withheld until its 3- and 7-day windows are complete.
-- The 24-hour change is only computed between consecutive calendar days. Across a gap the row shows no
-  change instead of reporting several days as one.
-- A location never covered by a run simply ends where the CSV does; the chart says so and shows no live days.
-
-To start over, delete that city's `observedWeather` rows — or `.data/observations.json` when no deployment
-is configured — and the chart returns to the CSV's last row.
 
 ---
 
@@ -159,16 +113,16 @@ training labels because the daily/site attribution needed for that is missing.
 
 ### S6 — RiverGuard synthetic generator
 
-| Field            | Value                                                                                                                                                                                                                                                                                                                                             |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| File             | `data/generate_dataset.py` (seed 42, deterministic)                                                                                                                                                                                                                                                                                               |
-| Rainfall         | Markov wet/dry state + Gamma intensity; monthly totals rescaled to S1 normals × U(0.85, 1.15); 60 % shared NCR synoptic factor                                                                                                                                                                                                                    |
-| Water level      | Rainfall routed through two stores — `quick_t = 0.80·quick + Rain`, `slow_t = 0.97·slow + 0.06·Rain`, `index = 0.012·quick + 0.030·slow` — then mapped onto the river's alarms: `p98(index)` → Alarm 1, dry-season floor `Alarm 1 − 2.0 m`, cap `Alarm 3`, noise `N(0, 0.05)`. Rises after a storm and recedes over days; Alarm 1 on ~2 % of days |
-| Soil moisture    | Bucket: `SM += Rain − ET0 − 0.08·SM`, clamped 5–95                                                                                                                                                                                                                                                                                                |
-| Flood label      | `WL ≥ Alarm1 OR (Rain ≥ 100 & Ant7 ≥ 150) OR Ant3 ≥ 250`                                                                                                                                                                                                                                                                                          |
-| Units / timezone | mm/day, m, %, °C · Asia/Manila local days                                                                                                                                                                                                                                                                                                         |
-| Licence          | Generated in-repo; no third-party data redistributed                                                                                                                                                                                                                                                                                              |
-| Limitation       | **Not observations.** Water level is a formula over rainfall, so any model trained on it partly relearns that formula.                                                                                                                                                                                                                            |
+| Field            | Value                                                                                                                                                 |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File             | `data/generate_dataset.py` (seed 42, deterministic)                                                                                                   |
+| Rainfall         | Markov wet/dry state + Gamma intensity; monthly totals rescaled to S1 normals × U(0.85, 1.15); 60 % shared NCR synoptic factor                        |
+| Water level      | `WL = base + 0.006·Ant7 + 0.018·Rain + 0.004·Ant3 + ((Alarm3−Alarm1)/40000)·Rain² + N(0, 0.10)`; datum calibrated so Alarm 1 is exceeded ~2 % of days |
+| Soil moisture    | Bucket: `SM += Rain − ET0 − 0.08·SM`, clamped 5–95                                                                                                    |
+| Flood label      | `WL ≥ Alarm1 OR (Rain ≥ 100 & Ant7 ≥ 150) OR Ant3 ≥ 250`                                                                                              |
+| Units / timezone | mm/day, m, %, °C · Asia/Manila local days                                                                                                             |
+| Licence          | Generated in-repo; no third-party data redistributed                                                                                                  |
+| Limitation       | **Not observations.** Water level is a formula over rainfall, so any model trained on it partly relearns that formula.                                |
 
 ---
 

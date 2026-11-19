@@ -75,6 +75,16 @@ export interface RecentRun {
   days: number;
   alerts: number;
   modelVersion: string | null;
+  reviewStatus: "pending" | "reviewed" | "escalated" | "returned";
+  reviewerName: string | null;
+}
+
+export interface LguReview {
+  status: "reviewed" | "escalated" | "returned";
+  locationCode: string;
+  notes: string;
+  reviewedAt: number;
+  reviewerName: string;
 }
 
 /** One day of a stored run, as `forecasts:getRun` returns it. */
@@ -110,59 +120,6 @@ export interface RemoteRun {
   days: RemoteRunDay[];
 }
 
-/** One provider day, as `observations:recordWindow` takes it. */
-export type RecordObservationDay = {
-  date: string;
-  rainfallMm: number;
-  tmaxC?: number;
-  tminC?: number;
-  et0Mm?: number;
-  soilMoisturePercent?: number;
-  soilMoistureSource?: string;
-  /** `provider` or `gauge`. */
-  rainfallSource?: string;
-};
-
-export type RecordObservationWindowArgs = {
-  locationCode: string;
-  locationName: string;
-  provider: string;
-  degraded: boolean;
-  retrievedAt: number;
-  days: RecordObservationDay[];
-};
-
-export interface RecordObservationWindowResult {
-  written: number;
-  created: number;
-  updated: number;
-}
-
-/** One row of `observedWeather`, as `observations:listWindow` returns it. */
-export interface RemoteObservationRow {
-  locationCode: string;
-  locationName: string;
-  date: string;
-  observedAt: number;
-  rainfallMm: number;
-  tmaxC?: number;
-  tminC?: number;
-  et0Mm?: number;
-  soilMoisturePercent?: number;
-  soilMoistureSource?: string;
-  rainfallSource?: string;
-  provider: string;
-  retrievedAt: number;
-  recordedAt: number;
-}
-
-export interface RemoteObservationStatus {
-  days: number;
-  dateMin: string | null;
-  dateMax: string | null;
-  truncated: boolean;
-}
-
 export const convexFunctions = {
   recordOutlook: makeFunctionReference<
     "mutation",
@@ -180,21 +137,20 @@ export const convexFunctions = {
   getRun: makeFunctionReference<"query", { runId: string }, RemoteRun | null>(
     "forecasts:getRun",
   ),
-  recordObservationWindow: makeFunctionReference<
+  getLguReview: makeFunctionReference<
+    "query",
+    { runId: string },
+    LguReview | null
+  >("reviews:getForRun"),
+  submitLguReview: makeFunctionReference<
     "mutation",
-    RecordObservationWindowArgs,
-    RecordObservationWindowResult
-  >("observations:recordWindow"),
-  listObservationWindow: makeFunctionReference<
-    "query",
-    { locationCode: string; fromDate?: string; limit?: number },
-    RemoteObservationRow[]
-  >("observations:listWindow"),
-  observationStatus: makeFunctionReference<
-    "query",
-    Record<string, never>,
-    RemoteObservationStatus
-  >("observations:status"),
+    {
+      runId: string;
+      status: "reviewed" | "escalated" | "returned";
+      notes: string;
+    },
+    { status: "reviewed" | "escalated" | "returned"; reviewedAt: number }
+  >("reviews:submit"),
   listOpenAlerts: makeFunctionReference<
     "query",
     { locationCode: string; limit?: number },

@@ -6,13 +6,14 @@ import {
   AuthScreen,
   OnboardingScreen,
   PublicInfoScreen,
-  SettingsScreen,
   WelcomeScreen,
+  WorkspaceMethodologyScreen,
+  WorkspaceSettingsScreen,
 } from "./PublicScreens";
 import { AdminScreen, LguScreen, ResidentScreen } from "./RoleScreens";
 import { ResearcherScreen } from "./ResearcherScreens";
 
-const productRoles: ProductRole[] = ["lgu", "resident", "admin"];
+const productRoles: ProductRole[] = ["lgu", "resident", "researcher", "admin"];
 
 export function isProductRole(value: string): value is ProductRole {
   return productRoles.includes(value as ProductRole);
@@ -26,12 +27,13 @@ export function PrototypeRouter({
   segments?: string[];
 }) {
   if (section === "welcome") return <WelcomeScreen />;
-  if (
-    section === "about" ||
-    section === "methodology" ||
-    section === "official-sources"
-  )
-    return <PublicInfoScreen screen={section} />;
+  if (section === "about" || section === "official-sources")
+    return (
+      <PublicInfoScreen screen={section as "about" | "official-sources"} />
+    );
+  // Help & limitations renders inside the workspace shell, so following the
+  // sidebar link keeps the navigation instead of dropping to a public page.
+  if (section === "methodology") return <WorkspaceMethodologyScreen />;
   if (section === "auth") return <AuthScreen screen={segments[0] ?? "login"} />;
   if (section === "onboarding") {
     const role = isProductRole(segments[0] ?? "")
@@ -39,22 +41,13 @@ export function PrototypeRouter({
       : "resident";
     return <OnboardingScreen role={role} />;
   }
-  if (section === "settings") {
-    return (
-      <WorkspaceGate role="admin">
-        <AppShell role="admin">
-          <main className="p-4 sm:p-5">
-            <SettingsScreen screen={segments[0] ?? "profile"} />
-          </main>
-        </AppShell>
-      </WorkspaceGate>
-    );
-  }
+  if (section === "settings")
+    return <WorkspaceSettingsScreen initialSection={segments[0]} />;
   if (section === "researcher") {
     return (
-      <WorkspaceGate role="admin">
-        <AppShell role="admin">
-          <main className="p-4 sm:p-5">
+      <WorkspaceGate role="researcher">
+        <AppShell role="researcher" variant="research">
+          <main className="workspace-page mx-auto min-h-screen max-w-[96rem] p-4 sm:p-5 lg:p-6">
             <ResearcherScreen segments={segments} />
           </main>
         </AppShell>
@@ -64,8 +57,17 @@ export function PrototypeRouter({
   if (isProductRole(section)) {
     return (
       <WorkspaceGate role={section}>
-        <AppShell role={section}>
-          <main className="p-4 sm:p-5">
+        <AppShell
+          role={section}
+          variant={
+            section === "researcher"
+              ? "research"
+              : section === "resident"
+                ? "resident"
+                : "default"
+          }
+        >
+          <main className="workspace-page mx-auto min-h-screen max-w-[96rem] p-4 sm:p-5 lg:p-6">
             {section === "resident" ? (
               <ResidentScreen segments={segments} />
             ) : null}

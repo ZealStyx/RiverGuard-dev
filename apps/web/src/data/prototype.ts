@@ -1,4 +1,4 @@
-export type ProductRole = "lgu" | "resident" | "admin";
+export type ProductRole = "lgu" | "resident" | "researcher" | "admin";
 
 export type AdminCapability =
   | "research.read"
@@ -26,10 +26,12 @@ export const roleCapabilities: Record<ProductRole, readonly AdminCapability[]> =
   {
     lgu: [],
     resident: [],
-    admin: [
+    researcher: [
       "research.read",
       "research.runForecast",
       "research.reviewModels",
+    ],
+    admin: [
       "governance.manageUsers",
       "governance.configureSystem",
       "governance.viewAudit",
@@ -74,25 +76,36 @@ export const roleDefinitions: Record<ProductRole, RoleDefinition> = {
       },
     ],
   },
+  researcher: {
+    label: "Researcher",
+    location: "NCR research workspace",
+    description:
+      "Inspect model inputs, forecasts, evaluation evidence, and stored research runs.",
+    navigation: [
+      {
+        label: "Forecast workspace",
+        shortLabel: "Workspace",
+        href: "/researcher",
+      },
+      {
+        label: "Forecast history",
+        shortLabel: "History",
+        href: "/researcher/runs",
+      },
+      {
+        label: "Model & data",
+        shortLabel: "Model",
+        href: "/researcher/models",
+      },
+    ],
+  },
   admin: {
     label: "Administrator",
     location: "RiverGuard system",
     description:
-      "Run research workflows and manage approved users, locations, and system configuration.",
+      "Manage approved users, supported locations, system configuration, and audit evidence.",
     navigation: [
       { label: "System overview", shortLabel: "Overview", href: "/admin" },
-      {
-        label: "Research",
-        shortLabel: "Research",
-        href: "/admin/research",
-        capability: "research.read",
-      },
-      {
-        label: "Forecasts",
-        shortLabel: "Forecasts",
-        href: "/admin/research/runs",
-        capability: "research.runForecast",
-      },
       {
         label: "Users & access",
         shortLabel: "Users",

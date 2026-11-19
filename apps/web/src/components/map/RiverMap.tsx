@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowCounterClockwise, Info, MapTrifold } from "@phosphor-icons/react";
+import { ArrowCounterClockwise } from "@phosphor-icons/react";
 import type {
   ExpressionSpecification,
   Map as MapLibreMap,
@@ -11,15 +11,13 @@ import { useEffect, useRef, useState } from "react";
 
 import type { GisLayerSummary } from "@/lib/gis-types";
 import { gisLayerIdFromKey, gisLayerKey } from "@/lib/gis-types";
-import { LOCATION_CODES, LOCATIONS } from "@/lib/locations";
 import { useGisLayers } from "@/lib/use-gis-layers";
 import type { MapLayerId } from "@/types";
-
-import { HazardLayerControl } from "./HazardLayerControl";
 
 export interface RiverMapProps {
   activeLayer: MapLayerId;
   onLayerChange: (layer: MapLayerId) => void;
+  hideChrome?: boolean;
   /** Extra classes for the map panel, e.g. sticky positioning on wide screens. */
   className?: string;
   /**
@@ -27,13 +25,6 @@ export interface RiverMapProps {
    * scrolling page, so a wheel gesture over the map does not trap the page.
    */
   cooperativeGestures?: boolean;
-  /**
-   * Whether the layer panel is on screen. The workspace rail toggles it, so the
-   * state lives with the caller rather than inside the map.
-   */
-  layersOpen?: boolean;
-  /** Present when the panel can be dismissed from the map itself. */
-  onLayersClose?: () => void;
 }
 
 type MapStatus = "loading" | "ready" | "error";
@@ -154,11 +145,9 @@ const BASEMAP_STYLE: StyleSpecification = {
 
 export function RiverMap({
   activeLayer,
-  onLayerChange,
   className = "",
   cooperativeGestures = false,
-  layersOpen = true,
-  onLayersClose,
+  hideChrome = false,
 }: RiverMapProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -192,14 +181,11 @@ export function RiverMap({
         cooperativeGestures,
       });
 
-      // Bottom-left, not top-right: the layer panel is pinned to the top-right
-      // corner, and MapLibre's zoom, compass and fullscreen controls were drawn
-      // underneath it — visible on narrow screens only, unclickable on desktop.
       map.addControl(
         new maplibregl.NavigationControl({ showCompass: true }),
-        "bottom-left",
+        "top-right",
       );
-      map.addControl(new maplibregl.FullscreenControl(), "bottom-left");
+      map.addControl(new maplibregl.FullscreenControl(), "top-right");
       // Never collapsed: the OSM tile policy forbids hiding attribution behind
       // a toggle, and this control is the canonical place for it.
       map.addControl(
@@ -388,43 +374,19 @@ export function RiverMap({
           className="absolute inset-0 h-full w-full"
         />
 
-        <div className="pointer-events-none absolute top-4 left-4 flex items-start gap-2">
-          <div className="pointer-events-auto rounded-control border border-line bg-canvas-soft/95 px-3 py-2.5 shadow-lg backdrop-blur-sm">
-            <div className="flex items-center gap-2">
-              <MapTrifold aria-hidden="true" size={18} weight="duotone" />
-              <div>
-                <h2 id="map-title" className="text-section">
-                  NCR (Metro Manila)
-                </h2>
-                <p className="text-metadata mt-0.5 text-muted">
-                  Interactive basemap · {BASEMAP.label}
-                </p>
-              </div>
-            </div>
+        {hideChrome ? null : (
+          <div className="pointer-events-none absolute top-4 left-4">
+            <button
+              type="button"
+              onClick={resetView}
+              aria-label="Reset NCR map view"
+              title="Reset NCR map view"
+              className="pointer-events-auto inline-flex size-9 items-center justify-center rounded-control border border-line bg-canvas-soft/95 text-muted shadow-lg hover:bg-canvas hover:text-ink"
+            >
+              <ArrowCounterClockwise aria-hidden="true" size={17} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={resetView}
-            aria-label="Reset NCR map view"
-            title="Reset NCR map view"
-            className="pointer-events-auto inline-flex size-9 items-center justify-center rounded-control border border-line bg-canvas-soft/95 text-muted shadow-lg hover:bg-canvas hover:text-ink"
-          >
-            <ArrowCounterClockwise aria-hidden="true" size={17} />
-          </button>
-        </div>
-
-        {layersOpen ? (
-          <div className="absolute top-4 right-4 z-10 max-w-[calc(100%-2rem)]">
-            <HazardLayerControl
-              activeLayer={activeLayer}
-              loading={gis.loading}
-              onClose={onLayersClose}
-              onLayerChange={onLayerChange}
-              rejected={gis.rejected}
-              verified={gis.layers}
-            />
-          </div>
-        ) : null}
+        )}
 
         {mapStatus === "loading" ? (
           <div className="absolute inset-x-4 top-24 flex justify-center">
@@ -470,79 +432,34 @@ export function RiverMap({
           </div>
         ) : null}
 
-        <div className="absolute right-4 bottom-14 left-4 flex flex-col items-stretch justify-between gap-3 sm:right-5 sm:left-5 lg:flex-row lg:items-end">
-          <div className="w-full rounded-panel border border-line bg-canvas-soft/95 p-3 text-ink shadow-lg backdrop-blur-sm lg:max-w-[270px]">
-            <p className="text-button">
-              {activeLayer === "base" ? "Basemap" : "RiverGuard overlay"}
-            </p>
-            <p className="text-metadata mt-2 text-muted">{layerSummary}</p>
-            <p className="text-metadata mt-2 border-t border-line pt-2 text-muted">
-              No RiverGuard prediction or hazard geometry is being fabricated on
-              this map.
-            </p>
-            {USING_OSM_TILES ? (
-              <p className="text-metadata mt-2 text-muted">
-                Tiles from OpenStreetMap&apos;s volunteer servers:{" "}
-                <a
-                  className="underline underline-offset-2 hover:text-ink"
-                  href="https://www.openstreetmap.org/fixthemap"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  report a map issue
-                </a>
-                .
+        {hideChrome ? null : (
+          <div className="absolute right-4 bottom-14 left-4 flex flex-col items-stretch justify-between gap-3 sm:right-5 sm:left-5 lg:flex-row lg:items-end">
+            <div className="w-full rounded-panel border border-line bg-canvas-soft/95 p-3 text-ink shadow-lg backdrop-blur-sm lg:max-w-[270px]">
+              <p className="text-button">
+                {activeLayer === "base" ? "Basemap" : "RiverGuard overlay"}
               </p>
-            ) : null}
-          </div>
-
-          <div className="flex max-w-sm items-start gap-2.5 rounded-panel bg-canvas-soft/95 p-3 text-ink shadow-lg backdrop-blur-sm">
-            <Info aria-hidden="true" size={20} className="mt-0.5 shrink-0" />
-            <div>
-              <p className="text-button">RiverGuard data coverage</p>
-              <p className="text-metadata mt-1 text-muted">
-                City-level development coverage: Quezon City, Marikina, Manila,
-                and Pasig.
+              <p className="text-metadata mt-2 text-muted">{layerSummary}</p>
+              <p className="text-metadata mt-2 border-t border-line pt-2 text-muted">
+                No RiverGuard prediction or hazard geometry is being fabricated
+                on this map.
               </p>
-              <p className="text-metadata mt-0.5 text-muted">
-                {gis.layers.length === 0
-                  ? "Boundaries, stations, and hazard layers still require verified local GIS files."
-                  : `${gis.layers.length} verified local layer${
-                      gis.layers.length === 1 ? "" : "s"
-                    }: ${gis.layers.map((layer) => layer.title).join(", ")}.`}
-              </p>
+              {USING_OSM_TILES ? (
+                <p className="text-metadata mt-2 text-muted">
+                  Tiles from OpenStreetMap&apos;s volunteer servers:{" "}
+                  <a
+                    className="underline underline-offset-2 hover:text-ink"
+                    href="https://www.openstreetmap.org/fixthemap"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    report a map issue
+                  </a>
+                  .
+                </p>
+              ) : null}
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="grid shrink-0 gap-px bg-line text-ink sm:grid-cols-[190px_repeat(4,1fr)]">
-        <div className="bg-canvas-soft/95 px-4 py-3 backdrop-blur-sm">
-          <p className="text-button">Supported data</p>
-          <p className="text-metadata mt-0.5 text-muted">
-            City-level development records
-          </p>
-        </div>
-        {LOCATION_CODES.map((code) => {
-          const city = LOCATIONS[code];
-          return (
-            <div
-              key={city.code}
-              className="hidden bg-canvas-soft/95 px-3 py-3 backdrop-blur-sm sm:block"
-            >
-              <p className="text-metadata flex items-center gap-2 text-ink">
-                <span className="size-2 rounded-full bg-success" /> {city.name}
-              </p>
-              <p className="text-metadata mt-1 text-muted">
-                City-level dataset
-              </p>
-              <p className="text-metadata text-muted">
-                Alarms {city.alarmLevelsM.join(" / ")} m
-                {city.alarmsVerified ? "" : " (indicative)"}
-              </p>
-            </div>
-          );
-        })}
+        )}
       </div>
     </section>
   );
