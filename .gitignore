@@ -2,7 +2,7 @@
 node_modules/
 .next/
 out/
-next-env.d.ts
+prototype/node_modules/
 
 # Environment variables
 .env
@@ -31,10 +31,6 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
-
-# Rain-gauge observations an operator supplies (lib/gauge.ts). Real measurements
-# are not shipped with the repository; data/gauge/README.md documents the format.
-data/gauge/*.csv
 
 # GIS geometry is licence-bound and usually large: keep it local, keep the
 # manifest and README in git. `npm run gis:verify` is what makes a file drawable.
