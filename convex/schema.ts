@@ -216,6 +216,25 @@ export default defineSchema({
     .index("by_event_date", ["eventDate"])
     .index("by_dataset_event", ["datasetId", "eventDate"]),
 
+  /**
+   * Daily observed weather pulled from Open-Meteo and kept so the history chart
+   * can be current instead of stopping at the last dataset row.
+   *
+   * Rainfall is the provider's value; nothing here is modelled. Water level is
+   * deliberately absent — the dataset's level is a rainfall-derived proxy, and
+   * extrapolating it would invent a number.
+   */
+  observedWeather: defineTable({
+    cityCode: v.string(),
+    isoDate: v.string(),
+    rainfallMm: v.number(),
+    tmaxC: v.optional(v.number()),
+    tminC: v.optional(v.number()),
+    et0Mm: v.optional(v.number()),
+    source: v.string(),
+    fetchedAt: v.number(),
+  }).index("by_city_date", ["cityCode", "isoDate"]),
+
   historicalImports: defineTable({
     datasetId: v.string(),
     datasetVersion: v.string(),

@@ -12,34 +12,45 @@
 
 ## 1. Two models, two gates
 
-| | Model A | Model B |
-|---|---|---|
-| Question | What will the water level be at station *s*, horizon *h*? | What is the probability of flooding in unit *u* on day *d*? |
-| Task type | Regression | Binary classification (probability) |
-| Target | `WaterLevel_m` at *t+h* | `FloodOccurrence` at *t+h* |
-| Minimum data gate | Timestamped gauge series with a documented datum | Dated, geographically attributable event labels |
-| Gate status today | **No-Go** — no gauge series exists | **No-Go** for calibrated probabilities — labels are a rule-based proxy |
+|                   | Model A                                                   | Model B                                                                |
+| ----------------- | --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Question          | What will the water level be at station _s_, horizon _h_? | What is the probability of flooding in unit _u_ on day _d_?            |
+| Task type         | Regression                                                | Binary classification (probability)                                    |
+| Target            | `WaterLevel_m` at _t+h_                                   | `FloodOccurrence` at _t+h_                                             |
+| Minimum data gate | Timestamped gauge series with a documented datum          | Dated, geographically attributable event labels                        |
+| Gate status today | **No-Go** — no gauge series exists                        | **No-Go** for calibrated probabilities — labels are a rule-based proxy |
 
 Both gates are open only when **real observations** replace the derived columns in dataset v2.
-Until then, models built here validate the *code path*, not the hydrology.
+Until then, models built here validate the _code path_, not the hydrology.
 
 ## 2. The circularity hazard (read before trusting any metric)
 
 Dataset v2 derives several columns from rainfall with published formulas:
 
 ```
-SoilMoisture_pct  = clip(SM_{t-1} + Rain − ET0 − 0.08·SM_{t-1}, 5, 95)
-WaterLevel_m      = base + 0.006·Ant7 + 0.018·Rain + 0.004·Ant3 + ((A3−A1)/40000)·Rain² + ε
-FloodOccurrence   = 1 if WL ≥ Alarm1 or (Rain ≥ 100 and Ant7 ≥ 150) or Ant3 ≥ 250
+SoilMoisture_pct = clip(SM_{t-1} + Rain − ET0 − 0.08·SM_{t-1}, 5, 95)
+
+quick_t = 0.80·quick_{t-1} + Rain_t              # direct runoff, ~5-day memory
+slow_t  = 0.97·slow_{t-1} + 0.06·Rain_t          # baseflow, ~3-week memory
+index_t = 0.012·quick_t + 0.030·slow_t           # metres of stage
+
+WaterLevel_m     = band(index_t) + ε             # Alarm1−2.0 … Alarm1 … Alarm3 (capped)
+FloodOccurrence  = 1 if WL ≥ Alarm1 or (Rain ≥ 100 and Ant7 ≥ 150) or Ant3 ≥ 250
 ```
 
-A model given rainfall and asked to predict water level will largely **recover this formula**.
-That produces excellent-looking MAE/R² and zero physical insight. Consequences for practice:
+`band()` maps the stage index onto each river's alarms in two segments: the 98th percentile of the
+index sits at Alarm 1, everything above it is spread up to Alarm 3, and the dry-season floor is
+Alarm 1 − 2.0 m. So the series rises after a storm, recedes over days, never exceeds the third alarm,
+and reaches Alarm 1 on ~2 % of days by construction.
 
-- Report any metric from dataset v2 under a heading like *"pipeline validation on synthetic data"*,
+A model given rainfall and asked to predict water level will largely **recover this routing**. That
+produces excellent-looking MAE/R² and zero physical insight. Consequences for practice:
+
+- Report any metric from dataset v2 under a heading like _"pipeline validation on synthetic data"_,
   never under "results".
-- Sanity-check the model against the formula: if a boosted tree cannot beat the linear form above,
-  the pipeline is wrong, not the hydrology.
+- Sanity-check the model against the derivation: a boosted tree that cannot beat persistence on a
+  series this smooth (`ml/artifacts/metrics.json` reports both numbers) means the pipeline is wrong,
+  not the hydrology.
 - The same applies to Model B: `FloodOccurrence` is a deterministic rule over the same features,
   so PR-AUC measures agreement with the rule.
 
@@ -48,14 +59,14 @@ That produces excellent-looking MAE/R² and zero physical insight. Consequences 
 Frozen definitions live in the `Data_Dictionary` tab of the workbook. Reuse them; do not
 recompute rolling sums with different windows, or train/serve skew appears immediately.
 
-| Group | Columns | Notes |
-|---|---|---|
-| Rainfall | `Rainfall_mm`, `AntecedentRain_3d/7d/30d_mm` | Already shifted one day → leakage-safe |
-| Catchment state | `SoilMoisture_pct`, `ET0_mm`, `Tmax_C`, `Tmin_C` | Bucket state is a slow memory of past rain |
-| River state | `WaterLevel_m`, `WaterLevel_Change_24h_m` | Lags only — never the same-day value |
-| Static | `Location`, `Elevation_m`, `Latitude`, `Longitude` | Encode as categorical/one-hot; never as a numeric trend |
-| Calendar | month, day-of-year, wet-season flag | Monsoon seasonality is strong; include it explicitly |
-| Excluded | `Split`, `RainSource`, `RiskLevel`, `DataSource`, `Notes` | These encode provenance or the label rule, not weather |
+| Group           | Columns                                                   | Notes                                                   |
+| --------------- | --------------------------------------------------------- | ------------------------------------------------------- |
+| Rainfall        | `Rainfall_mm`, `AntecedentRain_3d/7d/30d_mm`              | Already shifted one day → leakage-safe                  |
+| Catchment state | `SoilMoisture_pct`, `ET0_mm`, `Tmax_C`, `Tmin_C`          | Bucket state is a slow memory of past rain              |
+| River state     | `WaterLevel_m`, `WaterLevel_Change_24h_m`                 | Lags only — never the same-day value                    |
+| Static          | `Location`, `Elevation_m`, `Latitude`, `Longitude`        | Encode as categorical/one-hot; never as a numeric trend |
+| Calendar        | month, day-of-year, wet-season flag                       | Monsoon seasonality is strong; include it explicitly    |
+| Excluded        | `Split`, `RainSource`, `RiskLevel`, `DataSource`, `Notes` | These encode provenance or the label rule, not weather  |
 
 **Never** use `RainSource` as a feature: the provenance boundary (2025-11-15) is an artefact of
 data collection, not a physical signal. A model that learns it will look accurate and fail on
@@ -63,11 +74,11 @@ real data.
 
 ## 4. Splits
 
-| Split | Window | Rows | Positives |
-|---|---|---|---|
-| train | 2016-01-01 → 2023-12-31 | 11,688 | 256 |
-| validation | 2024-01-01 → 2024-12-31 | 1,464 | 19 |
-| test | 2025-01-01 → 2026-11-14 | 2,732 | 53 |
+| Split      | Window                  | Rows   | Positives |
+| ---------- | ----------------------- | ------ | --------- |
+| train      | 2016-01-01 → 2023-12-31 | 11,688 | 256       |
+| validation | 2024-01-01 → 2024-12-31 | 1,464  | 19        |
+| test       | 2025-01-01 → 2026-11-14 | 2,732  | 53        |
 
 Rules:
 
@@ -82,24 +93,26 @@ Rules:
 
 Cheap, interpretable references that any learned model must beat:
 
-| Model | Baseline | Metric to beat |
-|---|---|---|
-| A | Persistence (`WL_{t+h} = WL_t`) | MAE, RMSE per station and horizon |
-| A | Climatological mean by month | MAE |
-| A | Linear regression on `Ant7`, `Rain` | MAE — this is the generator's own form |
-| B | "Flood if `Ant7` ≥ 150 mm" rule | recall at fixed precision |
-| B | Logistic regression on 3 features | PR-AUC |
+| Model | Baseline                            | Metric to beat                         |
+| ----- | ----------------------------------- | -------------------------------------- |
+| A     | Persistence (`WL_{t+h} = WL_t`)     | MAE, RMSE per station and horizon      |
+| A     | Climatological mean by month        | MAE                                    |
+| A     | Linear regression on `Ant7`, `Rain` | MAE — this is the generator's own form |
+| B     | "Flood if `Ant7` ≥ 150 mm" rule     | recall at fixed precision              |
+| B     | Logistic regression on 3 features   | PR-AUC                                 |
 
 If a baseline wins, publish that — a defensible rule beats an unexplainable model.
 
 ## 6. Metrics
 
 **Model A (regression)**
+
 - MAE and RMSE by station and horizon; report bias separately (systematic under/over-prediction).
 - Error conditional on regime: dry season vs wet season vs event days.
 - Peak-timing error for events, not just magnitude error — a late alarm is useless.
 
 **Model B (classification, ~2 % prevalence)**
+
 - Precision, recall, F1, **PR-AUC** (not ROC-AUC alone), confusion matrix at a stated threshold.
 - **Probability calibration**: reliability curve and Brier score. An uncalibrated score must not
   be shown to users as a percentage chance.
@@ -137,5 +150,5 @@ random seed, split definition, library versions, metrics, and the exact command.
 - Baselines and at least one learned model per task, evaluated on the chronological split.
 - Calibration curve and PR-AUC reported for Model B; MAE/RMSE/bias by station for Model A.
 - SHAP reviewed and labelled as contribution, not causation.
-- A written statement of what the results *cannot* claim while the dataset is synthetic.
+- A written statement of what the results _cannot_ claim while the dataset is synthetic.
 - Model cards stored in `docs/report/`.
