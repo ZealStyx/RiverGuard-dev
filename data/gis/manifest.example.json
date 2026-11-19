@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "layers": [
+    {
+      "id": "flood-susceptibility",
+      "title": "Flood susceptibility",
+      "classification": "hazard",
+      "description": "Static susceptibility polygons, as published. Not a forecast.",
+      "file": "flood-susceptibility.geojson",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "bbox": [120.9, 14.35, 121.16, 14.78],
+      "geometry": "polygon",
+      "requiredProperties": ["hazard"],
+      "classProperty": "hazard",
+      "classColors": {
+        "low": "#fde68a",
+        "moderate": "#f59e0b",
+        "high": "#dc2626"
+      },
+      "fillOpacity": 0.45,
+      "strokeColor": "#334155",
+      "source": {
+        "publisher": "Name of the agency or project that published the data",
+        "url": "https://example.gov.ph/the-page-you-downloaded-it-from",
+        "license": "Licence as published, e.g. 'Government open data, attribution required'",
+        "retrievedAt": "2026-11-17",
+        "note": "Optional: the exact product or version, e.g. '50-year flood hazard map, provincial series'"
+      },
+      "verifiedBy": "Who checked the file against the publisher's own copy",
+      "verifiedAt": "2026-11-17"
+    }
+  ]
+}

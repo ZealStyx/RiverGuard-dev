@@ -1,574 +1,482 @@
-# RiverGuard — Technical Architecture (Minimal AWS Plan)
+# RiverGuard — Technical Architecture (NCR Local Demonstration Plan)
 
-> **Status:** Proposed architecture for the initial implementation  
-> **Architecture principle:** Use the existing Convex-first application design and spend AWS credits only on capabilities that benefit from AWS. Avoid always-on infrastructure until measured demand justifies it.  
-> **AWS budget constraint:** Approximately **US$130 in AWS credits** is available. The credit balance, expiry date, and eligible services must be verified in the AWS Billing console before deployment.
+> **Status:** Proposed architecture for the local research/demo implementation  
+> **Study area:** National Capital Region (NCR), Philippines  
+> **Initial development-data locations:** Quezon City, Marikina, Manila, and Pasig  
+> **Execution model:** Next.js and Python ML service run locally on the developer's computer  
+> **Hosted application dependency:** Convex development deployment only  
+> **External runtime data integration:** Weather forecast API  
+> **Deployment decision:** No public website, ML API, or AWS deployment in the current scope
 
 ## 1. Project overview
 
-RiverGuard is a web-based, explainable hydrological monitoring and flood-risk forecasting system. It is intended to help local government units (LGUs) and residents understand changing river conditions through near-future water-level forecasts, localized flood-risk estimates, interactive hazard maps, and timely warnings.
+RiverGuard is a local research prototype for explainable hydrological forecasting and localized flood-risk assessment across NCR. It combines historical rainfall and water-level observations, forecast weather inputs, flood-event records, and geographic information to explore future water-level behavior and flood occurrence risk.
 
-The initial system is designed around four capabilities:
+The initial supplied development CSV contains city-level daily records for Quezon City, Marikina, Manila, and Pasig. These four locations are the initial development subset, not complete NCR coverage. Additional NCR locations and finer spatial units must be enabled only when the necessary verified observations, labels, and geographic data are available.
 
-1. **Hazard-map visualization** — display Project NOAH hazard layers alongside monitoring stations and current risk information.
-2. **Hydrological data management** — collect, validate, and store time-stamped rainfall and water-level observations.
-3. **Forecasting and risk assessment** — use historical and current observations to forecast water levels and estimate the probability of exceeding locally defined thresholds.
-4. **Explainable warnings** — show the factors that contributed to a model result and provide LGU operators with tools to review and publish alerts.
+The demonstration has four capabilities:
 
-Project NOAH hazard maps provide static or baseline hazard context. They are not live flood forecasts and are not, by themselves, time-series data suitable for training a water-level forecasting model. Forecasting requires timestamped hydrological observations and suitable historical records.
+1. **Hazard/context visualization** — display locally prepared boundaries, relevant hazard layers, waterways, catchments, and available monitoring stations.
+2. **Hydrological data management** — inspect time-stamped rainfall, water-level, and environmental observations.
+3. **Seven-day forecast workflow** — retrieve weather from an external API, run local ML inference, and save traceable outputs in Convex.
+4. **Explainable review** — display risk estimates, model explanations, data quality, uncertainty, and forecast provenance.
 
-## 2. Architecture decisions
+Static hazard maps provide susceptibility context. They are not real-time forecasts and are not substitutes for dated flood-event labels or hydrological time series.
 
-### 2.1 Keep Convex as the primary application database
+## 2. Non-negotiable architecture decisions
 
-RiverGuard will continue to use **Convex** for application data and real-time application updates. Do not add PostgreSQL, PostGIS, TimescaleDB, or Amazon RDS to the initial deployment.
+### 2.1 The website and ML service run locally; they are never deployed
 
-Convex owns:
+Next.js runs on the developer's computer using its local development server. FastAPI and model inference also run on the same computer. Do not deploy the website or ML API to Vercel, AWS, or another public hosting provider.
 
-- Users, roles, and LGU profiles.
+The local computer hosts:
+
+- Next.js frontend and route handlers.
+- Python/FastAPI inference service.
+- Data import, preprocessing, training, and evaluation.
+- Local geographic files and model artifacts.
+
+The demo is not intended to be publicly accessible. Do not expose local ports through router forwarding or a tunneling service.
+
+### 2.2 Convex is the only hosted application backend/database
+
+Continue using Convex for application records and reactive data access. It owns:
+
+- Demo users/roles if required.
+- NCR location metadata and supported spatial-unit metadata.
 - Monitoring-station metadata.
-- Sensor observations and their quality/status metadata.
-- Forecast results and risk assessments.
-- Alerts and alert acknowledgements.
-- Hazard-layer metadata and references to externally hosted map files.
-- Model-version metadata and evaluation summaries.
+- Validated observations and data-quality status.
+- Weather snapshots and forecast-run metadata.
+- Station and spatial prediction records.
+- Alert/acknowledgement records if included in the demo.
+- Hazard-layer and model-version metadata.
 
-Use indexes for real application access patterns and paginate historical readings. Do not load unbounded station histories into a single query.
+Do not add PostgreSQL, PostGIS, TimescaleDB, RDS, DynamoDB, or a second application database.
 
-### 2.2 Use AWS Lambda for the initial Python/FastAPI deployment
+Convex is not a host for local model inference. A cloud-hosted Convex function cannot connect to `127.0.0.1` on the developer's computer. Therefore, local Next.js server routes orchestrate the weather request and local FastAPI call. The browser then uses Convex mutations/queries to persist and retrieve application records.
 
-The initial AWS workload will be **AWS Lambda running a container image that contains the FastAPI application**. Use the Mangum ASGI adapter to expose FastAPI through Lambda's event handler interface.
+### 2.3 Weather forecast API is the only external runtime data API
 
-Before committing to AWS Lambda, evaluate simplified PaaS hosting (for example Render or Railway) first to save time and reduce infrastructure operational overhead; proceed with AWS Lambda/Mangum only if a PaaS option does not meet the project's needs. This matches Phase 4 of the delivery plan.
+A local Next.js server route calls the configured seven-day weather forecast provider. Open-Meteo may be used as the initial provider if its current terms, variables, geographic coverage, and request limits fit the project.
 
-Why Lambda instead of ECS/Fargate for the current budget:
+For every requested NCR location, the application must use a documented coordinate or a representative point derived from a verified boundary. Do not invent coordinates. Record:
 
-- There is no continuously running container to pay for while idle.
-- The ML API can scale with requests.
-- Lambda can expose an HTTPS Function URL without a separate API Gateway for this simple server-to-server API.
-- The initial forecasting workload is request/response inference, not a long-running server process.
+- Provider name and product/endpoint.
+- Request and retrieval timestamps.
+- Coordinates and location identifier.
+- Timezone and forecast-valid timestamps.
+- Units, aggregation rules, and requested variables.
+- Provider issue/model metadata when supplied.
+- Raw or reproducible normalized input snapshot.
 
-The container image will be stored in **Amazon Elastic Container Registry (ECR)**. AWS Lambda supports container images stored in ECR, with a maximum uncompressed image size of 10 GB. Keep the image as small as practical because image storage is separately billed under ECR pricing.
+If a provider requires an API key, store it in a server-only local environment variable. Never expose it in `NEXT_PUBLIC_` variables or browser bundles.
 
-**Important workload boundary:** Lambda is for model inference and short preprocessing tasks. Do model training, large backfills, and long-running experiments locally or in a separate development environment. Lambda has a maximum execution timeout of 15 minutes, and synchronous request/response payloads have size limits. If inference becomes consistently long-running or needs persistent workers, reassess ECS/Fargate or another managed container host.
+No other external runtime APIs are required by the backend workflow. Historical datasets and RiverGuard GIS assets are acquired separately, then stored locally. The current frontend mapping milestone is a deliberate, temporary exception: MapLibre loads the public OpenStreetMap raster basemap with visible attribution so the map workspace can be exercised before verified local layers are supplied. Do not treat this basemap as a RiverGuard boundary, hazard, station, or prediction layer. Before production or an offline demo, replace it with an approved cached/local source and document that provider decision.
 
-### 2.3 Use a Lambda Function URL instead of API Gateway initially
+### 2.4 Geographic and model assets remain local
 
-Expose the inference function through an AWS Lambda Function URL. The Function URL has no separate endpoint fee; normal Lambda invocation and compute charges still apply.
+Prepare local NCR geographic assets, including only those layers whose sources and licenses are documented:
 
-For the initial Convex-to-Lambda integration:
+- NCR boundary and supported city/municipality boundaries.
+- Barangay boundaries when verified and available.
+- Rivers, creeks, lakes, drainage, and catchment features.
+- Elevation/terrain derivatives.
+- Flood susceptibility layers with appropriate attribution.
 
-- Configure the Function URL with `AuthType: NONE`.
-- Require a high-entropy bearer token in the FastAPI request handler.
-- Store the token only in Convex server-side environment variables and Lambda environment variables.
-- Never call the ML Function URL directly from browser code or expose the token to Next.js client components.
-- Keep CORS disabled because this is a server-to-server endpoint.
-- Set a low Lambda reserved-concurrency limit during development to limit unexpected parallel execution and protect the credit balance.
+Use local GeoJSON or local PMTiles for RiverGuard-specific layers. Keep raw archives and large source rasters in local gitignored directories. The current frontend baseline may use the explicitly documented OSM basemap exception above, but it must not be used as a substitute for verified RiverGuard GIS assets.
 
-This is application-level authentication: Lambda accepts the HTTP request before FastAPI checks the token, so an exposed URL can still receive unauthenticated invocation attempts. Do not treat the URL as private. For a stronger AWS-native option, change to `AuthType: AWS_IAM` and have the calling service sign requests with AWS Signature Version 4 (SigV4). That is more secure but requires implementing and testing request signing in the Convex server action.
+### 2.5 No cloud scheduler or always-on worker
 
-### 2.4 Keep Project NOAH hosted remotely during the initial implementation
+The user manually starts a forecast from the local dashboard. Do not introduce EventBridge, queues, cloud schedulers, or continuously running workers. Convex cron functions are not required for the initial workflow.
 
-Do not copy the multi-gigabyte PMTiles archives into the repository or AWS at the start. Continue loading the selected Project NOAH PMTiles archive directly from its Hugging Face source through MapLibre and the PMTiles protocol.
+### 2.6 No AWS, Vercel, or other deployment infrastructure
 
-This avoids using AWS credits for a dataset that is already hosted. The initial architecture does not use a separate object-storage service. If a future production requirement makes remote Hugging Face delivery unsuitable, storage can be reassessed separately. If the data is mirrored or adapted, preserve the source dataset's applicable ODbL attribution and share-alike obligations.
+Do not provision AWS Lambda, ECR, ECS/Fargate, EC2, API Gateway, S3, CloudFront, IoT Core, SQS, EventBridge, RDS, NAT Gateway, Vercel, a public API host, or a separate storage/CDN service. The previously considered AWS credit is not part of the current execution plan.
 
-### 2.5 Keep scheduled orchestration in Convex initially
+## 3. NCR study area and supplied data
 
-Use Convex scheduled functions/actions for application-level scheduled workflows, such as requesting a forecast for monitored stations. Do not introduce EventBridge solely to duplicate a schedule that Convex already owns.
+### 3.1 Initial supported development locations
 
-## 3. Recommended technology stack
+The target is NCR. The supplied CSV has city-level daily rows for:
 
-| Layer | Technology | Responsibility |
-|---|---|---|
-| Web application | Next.js | Public interface and LGU dashboard |
-| Language | TypeScript | Frontend and Convex application code |
-| UI styling | Tailwind CSS | Layout and styling |
-| UI components | shadcn/ui | Reusable dashboard components |
-| Charts | Recharts | Rainfall, water-level, and forecast charts |
-| Interactive maps | MapLibre GL JS | Hazard layers, stations, rivers, and risk overlays |
-| Map archive format | PMTiles | Cloud-optimized vector-tile access |
-| Initial hazard-map source | Hugging Face Project NOAH dataset | Remotely hosted baseline hazard layers |
-| Application database | Convex | Application records, observations, predictions, alerts, and live updates |
-| ML/API runtime | Python + FastAPI + Mangum | HTTP API and Lambda-compatible ASGI adapter |
-| ML compute | AWS Lambda | On-demand inference and short preprocessing |
-| Container registry | Amazon ECR | Versioned Lambda container images |
-| ML/data processing | Pandas + NumPy | Data cleaning and feature engineering |
-| Initial ML models | Scikit-learn + XGBoost | Regression and classification baselines |
-| Explainability | SHAP | Feature-contribution explanations |
-| Frontend hosting | Vercel | Next.js deployment |
-| Object storage | None initially | Keep Project NOAH PMTiles on Hugging Face and package the initial model artifact in the Lambda image. |
-| Future sensor ingress | AWS IoT Core + SQS + Lambda (optional) | Secure device messaging and buffered ingestion |
+- Quezon City
+- Marikina
+- Manila
+- Pasig
 
-## 4. System architecture
+The CSV does not provide records for all NCR LGUs, barangay identifiers, monitoring-station identifiers, coordinates, or river-reach identifiers. The initial demo must not imply broader coverage than the underlying data supports.
 
-### 4.1 High-level architecture — initial implementation
+Use city-level forecast requests and map summaries for these four locations until verified geographic and hydrological data supports a finer level. Do not expand a city-level label to every barangay in that city.
+
+### 3.2 Supplied CSV audit
+
+The uploaded archive contains `Flood_Prediction_NCR_Philippines.csv` with 7,308 rows and seven columns. It spans 2016-01-01 through 2020-12-31 with 1,827 daily records per each of the four listed locations. It has no missing values and no duplicate `Date` + `Location` pairs in the inspected file. There are 132 positive and 7,176 negative `FloodOccurrence` rows.
+
+Columns are `Date`, `Location`, `Rainfall_mm`, `WaterLevel_m`, `SoilMoisture_pct`, `Elevation_m`, and `FloodOccurrence`.
+
+The archive does not contain a data dictionary, provenance, source organization, station metadata, collection method, or definitions for the rainfall aggregation interval, water-level measurement datum, soil-moisture depth/method, or flood-event label. The city-level elevation field is constant within each location. These values must not be presumed to be official measurements or verified ground truth.
+
+Treat the CSV as a schema/pipeline smoke-test dataset only until provenance and semantics are independently verified. A model trained on it may be used to test code paths, but its performance must not be represented as evidence of real-world NCR flood-prediction capability.
+
+> **Update 2026-11-15 — dataset v2 supersedes this CSV for development.** The repository now ships
+> `data/RiverGuard_NCR_Dataset_v2.xlsx` and `data/daily_observations.csv`: 15,884 daily rows for the
+> same four cities from 2016-01-01 to 2026-11-14, with an explicit provenance column per row. Only
+> rainfall is real, and only for 2025-11-15 → 2026-11-14 (ERA5 reanalysis); water level, soil
+> moisture, and flood labels are derived from rainfall by documented formulas. The ingest path,
+> schema, and dashboard must therefore label those columns as modelled values, and the audit above
+> still governs how the original 7,308-row CSV may be described. See
+> [`docs/data-sources.md`](../data-sources.md) and [`data/README.md`](../../data/README.md).
+
+## 4. Recommended technology stack
+
+| Layer                 | Technology                              | Responsibility                                   | Execution                              |
+| --------------------- | --------------------------------------- | ------------------------------------------------ | -------------------------------------- |
+| Web application       | Next.js + TypeScript                    | Dashboard and route handlers                     | Local                                  |
+| Styling               | Tailwind CSS                            | Layout and responsive UI                         | Local                                  |
+| UI components         | shadcn/ui                               | Reusable components                              | Local                                  |
+| Charts                | Recharts                                | Rainfall, water-level, and risk timelines        | Local                                  |
+| Interactive maps      | MapLibre GL JS                          | Boundaries, stations, waterways, and risk layers | Local                                  |
+| Geographic formats    | GeoJSON / local PMTiles                 | Prepared NCR layers                              | Local files                            |
+| Application database  | Convex                                  | Application records and reactive queries         | Convex development deployment          |
+| ML/API runtime        | Python + FastAPI                        | Feature validation and inference                 | Local                                  |
+| Data processing       | Pandas + NumPy                          | Cleaning and feature engineering                 | Local                                  |
+| Geospatial processing | GeoPandas + Shapely + Rasterio          | GIS preprocessing                                | Local                                  |
+| ML baselines          | Scikit-learn + XGBoost                  | Regression and classification                    | Local                                  |
+| Explainability        | SHAP                                    | Feature-contribution explanations                | Local                                  |
+| Weather provider      | Open-Meteo or another verified provider | Seven-day forecast input                         | External API requested by local server |
+
+## 5. High-level architecture
 
 ```mermaid
 flowchart TB
-    subgraph USERS[Users]
-        RES[Residents]
-        LGU[LGU Operators]
+    USER[Administrator using research tools]
+
+    subgraph LOCAL[Developer computer — all application compute is local]
+        WEB[Next.js dashboard\nlocalhost:3000]
+        ROUTE[Next.js route handler\nWeather + ML orchestration]
+        MAP[MapLibre\nLocal GeoJSON / PMTiles]
+        ML[FastAPI service\n127.0.0.1:8000]
+        MODELS[Model A: water-level forecast\nModel B: localized flood risk]
+        FILES[(Local datasets, GIS layers\nand model artifacts)]
     end
 
-    subgraph FRONTEND[Frontend hosting]
-        WEB[Next.js on Vercel]
-        MAP[MapLibre GL JS]
+    subgraph HOSTED[Only hosted application service]
+        CONVEX[(Convex development deployment)]
     end
 
-    subgraph APP[Application backend]
-        CONVEX[(Convex database)]
-        ACTION[Convex actions / queries / mutations]
-    end
+    WEATHER[Weather forecast API]
 
-    subgraph AWS[AWS — use credit selectively]
-        URL[Lambda Function URL\nHTTPS endpoint]
-        LAMBDA[AWS Lambda container\nFastAPI + Mangum]
-        MODEL[XGBoost / Scikit-learn\nSHAP explanations]
-        ECR[(Amazon ECR\ncontainer image)]
-    end
-
-    NOAH[Hugging Face\nProject NOAH PMTiles]
-
-    RES --> WEB
-    LGU --> WEB
-    WEB <--> CONVEX
+    USER --> WEB
     WEB --> MAP
-    MAP -->|HTTP range requests| NOAH
-    CONVEX <--> ACTION
-    ACTION -->|Authenticated HTTPS request| URL
-    URL --> LAMBDA
-    LAMBDA --> MODEL
-    MODEL -->|Forecast + risk + explanation| ACTION
-    ACTION -->|Persist results| CONVEX
-    ECR -. deploy image .-> LAMBDA
+    MAP <--> FILES
+    WEB --> ROUTE
+    ROUTE -->|HTTPS forecast request| WEATHER
+    WEATHER --> ROUTE
+    ROUTE -->|Local HTTP| ML
+    ML --> MODELS
+    MODELS <--> FILES
+    ML --> ROUTE
+    WEB <-->|Queries / mutations / subscriptions| CONVEX
 ```
 
-### 4.2 Forecast request and response workflow
+The diagram intentionally has no hosted web server, hosted ML API, AWS compute, object storage, CDN, or remote map tile service.
+
+## 6. Seven-day forecast workflow
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant U as LGU Dashboard
+    participant U as User
+    participant W as Local Next.js UI
+    participant R as Local Next.js route
+    participant API as Weather API
+    participant F as Local FastAPI
+    participant A as Model A
+    participant B as Model B
     participant C as Convex
-    participant L as Lambda Function URL
-    participant F as FastAPI / Mangum
-    participant M as XGBoost + SHAP
 
-    U->>C: Request station forecast
-    C->>C: Read bounded historical readings and thresholds
-    C->>L: POST input features + station context + bearer token
-    L->>F: Invoke Lambda container
-    F->>F: Validate request and freshness metadata
-    F->>M: Run forecast and risk inference
-    M-->>F: Forecast values, probabilities, SHAP contributions
-    F-->>L: Structured JSON response
-    L-->>C: Forecast response
-    C->>C: Validate and persist prediction / risk records
-    C-->>U: Reactive dashboard update
+    U->>W: Select supported NCR location(s) and request 7-day outlook
+    W->>R: POST /api/forecast/run
+    R->>API: Request forecast for selected location coordinates
+    API-->>R: Forecast + retrieval/validity metadata
+    R->>R: Normalize units, timestamps, timezone, and rainfall windows
+    R->>R: Join recent observations and local geographic features
+    R->>F: POST validated feature payload to 127.0.0.1
+    F->>A: Run if suitable gauge data and model exist
+    A-->>F: Station water-level output or unavailable status
+    F->>B: Run for supported spatial units
+    B-->>F: Daily flood-risk output or experimental/unavailable status
+    F-->>R: Predictions + explanations + quality metadata
+    R-->>W: Structured response
+    W->>C: Save forecast run and daily predictions
+    C-->>W: Confirmation / reactive query update
+    W-->>U: Display map, charts, risk details, and limitations
 ```
 
-### 4.3 Future physical-sensor workflow — not part of the first deployment
+### 6.1 Why local Next.js orchestrates
 
-```mermaid
-flowchart LR
-    SENSOR[River monitoring device] -->|MQTT over TLS| IOT[AWS IoT Core]
-    IOT --> RULE[IoT Rule]
-    RULE --> SQS[(Amazon SQS queue)]
-    SQS --> INGEST[Ingestion Lambda]
-    INGEST -->|Authenticated HTTPS| CONVEX[Convex ingestion endpoint]
-    CONVEX --> DATA[(Convex sensor_readings)]
-    DATA --> ACTION[Convex forecast action]
-    ACTION --> ML[AWS Lambda ML API]
+A Convex cloud function cannot access a FastAPI server bound to the developer's loopback address. The request must be orchestrated by the local Next.js server:
+
+1. Browser asks a local Next.js route to create a forecast.
+2. The local route calls the external weather API.
+3. The local route prepares the feature payload and calls local FastAPI.
+4. The route returns results to the browser.
+5. The browser saves the result through Convex mutations.
+
+Do not put Convex credentials or write secrets into the browser. Use authenticated Convex mutations and the project's configured authentication/authorization rules.
+
+## 7. Spatial and forecast behavior
+
+### 7.1 NCR location coverage
+
+The UI may provide a region-wide NCR selector, but the application must show the actual support status for each location. The initial CSV only covers Quezon City, Marikina, Manila, and Pasig. Other NCR areas remain unsupported until data acquisition is completed.
+
+For weather forecast calls, use representative coordinates from verified administrative polygons or documented monitoring stations. Weather data at a city representative point is regional context, not street-level rainfall measurement. Do not imply that one forecast coordinate resolves barangay-to-barangay differences.
+
+### 7.2 Spatial units
+
+- Use monitoring stations for Model A.
+- Use subcatchments or grid cells for Model B where hydrological and event data support them.
+- Aggregate spatial predictions to barangay or city summaries only using a documented method.
+- If the only verified data is city-level, make city-level outputs only.
+- Display “No prediction” for unsupported areas; never default them to low risk.
+
+### 7.3 Seven-day horizons
+
+- Preserve hourly weather values when needed by model features.
+- Generate daily summaries only with explicit aggregation rules.
+- Days 1–3 should be described according to demonstrated lead-time performance.
+- Days 4–7 should be marked as extended outlook unless held-out validation supports stronger claims.
+- Record forecast retrieval time, validity timestamps, source, coordinates, and model version for every run.
+
+## 8. Local API contracts
+
+### 8.1 Next.js route
+
+Suggested route:
+
+```text
+POST /api/forecast/run
 ```
 
-Only add IoT Core and SQS when physical devices are available and their communication protocol, message rate, and device identity requirements are known. A simulator or manually imported sample dataset does not need this infrastructure.
+Responsibilities:
 
-### 4.4 Project NOAH map delivery
+1. Validate supported location IDs and forecast horizon.
+2. Resolve stored/verified coordinates for each supported location.
+3. Retrieve weather data from the configured provider.
+4. Normalize timestamps, timezone, units, and accumulation windows.
+5. Combine available recent observations and local geographic features.
+6. Call local FastAPI.
+7. Return predictions and provenance/quality metadata.
 
-```mermaid
-flowchart LR
-    NOAH[Hugging Face\nProject NOAH PMTiles] -->|Remote byte-range requests| PM[PMTiles protocol]
-    PM --> MAP[MapLibre GL JS]
-    CONVEX[(Convex)] -->|Station metadata, latest readings, risks| WEB[Next.js]
-    WEB --> MAP
-    MAP --> UI[RiverGuard interactive map]
-```
-
-## 5. AWS service scope and exclusions
-
-### 5.1 AWS services to enable initially
-
-| AWS service | Initial use | Cost-control approach |
-|---|---|---|
-| AWS Lambda | Run the FastAPI ML inference container on demand | No provisioned concurrency; low reserved concurrency; short timeout appropriate to inference |
-| Amazon ECR | Store the Lambda container image | Keep the image small; configure an image lifecycle policy to remove old untagged images |
-| AWS Budgets | Alert on AWS account/project spend | Create a low monthly cost budget and forecast alerts |
-| IAM | Lambda execution role and deployment permissions | Least-privilege policies; do not use root credentials for deployment |
-
-### 5.2 AWS services explicitly deferred
-
-| Service | Decision | Reason to defer |
-|---|---|---|
-| ECS / Fargate | Do not use initially | An always-running API container is unnecessary for low-volume inference and can consume credits while idle. Reconsider if persistent workers, low-latency warm capacity, or long-running requests become necessary. |
-| API Gateway | Do not use initially | A Lambda Function URL is sufficient for the private server-to-server inference endpoint. Add API Gateway only if advanced throttling, API keys, stage management, or gateway features are required. |
-| Separate object storage or CDN | Do not use initially | Project NOAH is already hosted on Hugging Face, and the initial model artifact can be packaged with the Lambda image. Avoid adding storage and CDN configuration before a production need exists. |
-| AWS IoT Core | Future phase | There are no confirmed physical sensors in the initial application. |
-| Amazon SQS | Future phase | Add a durable queue when device ingestion or burst buffering requires it. |
-| EventBridge | Defer | Convex scheduled functions can orchestrate the first scheduled forecasts. |
-| RDS / Aurora / DynamoDB | Do not add | Convex remains the authoritative application database. |
-| NAT Gateway | Avoid | The Lambda function does not need private VPC connectivity for this design. A VPC-connected Lambda that needs public internet access can require NAT infrastructure and add cost. |
-| Load Balancer | Avoid | Lambda Function URL does not require an application load balancer. |
-| EKS / Kubernetes | Avoid | Unnecessary operational overhead for this project stage. |
-
-## 6. Convex and AWS integration boundary
-
-Convex remains the source of truth for application data. AWS Lambda is a stateless compute service that receives a bounded inference payload and returns a result. Do not make Lambda a second application database.
-
-Recommended flow:
-
-1. The frontend calls a Convex action to request a forecast.
-2. The Convex action reads the station configuration, locally established thresholds, and a bounded window of recent readings.
-3. The Convex action constructs a validated feature payload and calls the Lambda Function URL over HTTPS.
-4. FastAPI validates the bearer token and request schema, then executes inference.
-5. Lambda returns forecast values, risk probabilities, SHAP contributions, model version, input window, and data-quality metadata.
-6. The Convex action validates the response and calls an internal mutation to save prediction and risk-assessment records.
-7. Convex subscriptions update the dashboard.
-
-This boundary avoids giving the ML container broad Convex database credentials. The ML service should not independently read or write arbitrary application records.
-
-Example request shape (illustrative; finalize with the shared schema before implementation):
+Illustrative request:
 
 ```json
 {
-  "station_id": "station-001",
-  "generated_at": "2026-10-30T08:00:00+08:00",
-  "input_window": {
-    "start": "2026-10-30T02:00:00+08:00",
-    "end": "2026-10-30T08:00:00+08:00"
-  },
-  "measurements": [],
-  "thresholds": [],
-  "feature_schema_version": "v1"
+  "location_ids": ["quezon-city", "marikina", "manila", "pasig"],
+  "forecast_horizon_days": 7,
+  "timezone": "Asia/Manila"
 }
 ```
 
-The payload is an interface example, not a claim that these measurements or thresholds already exist.
+Illustrative response:
 
-## 7. FastAPI implementation for Lambda
-
-### 7.1 Application entry point
-
-Keep the FastAPI application usable locally with Uvicorn and expose a Mangum handler for Lambda. The final implementation should follow this pattern:
-
-```python
-from fastapi import FastAPI
-from mangum import Mangum
-
-app = FastAPI(title="RiverGuard ML API")
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-# AWS Lambda handler. Local development still uses Uvicorn.
-handler = Mangum(app)
+```json
+{
+  "run_id": "local-run-identifier",
+  "study_area": "NCR",
+  "supported_locations": ["quezon-city", "marikina", "manila", "pasig"],
+  "model_status": {
+    "hydrological": "unavailable_or_ready",
+    "flood_risk": "experimental_or_ready"
+  },
+  "forecast_metadata": {
+    "provider": "configured-weather-provider",
+    "retrieved_at": "2026-11-06T08:00:00+08:00",
+    "timezone": "Asia/Manila",
+    "horizon_days": 7
+  },
+  "daily_predictions": [],
+  "data_quality_warnings": [],
+  "model_versions": {}
+}
 ```
 
-Local development command:
+Examples are schema illustrations, not current weather results or real model outputs.
 
-```bash
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-```
+### 8.2 Local FastAPI endpoints
 
-Lambda handler setting:
+| Method | Endpoint                      | Purpose                                           |
+| ------ | ----------------------------- | ------------------------------------------------- |
+| GET    | `/health`                     | Confirm local ML service availability             |
+| GET    | `/api/v1/models`              | Report loaded model names and versions            |
+| POST   | `/api/v1/predict/water-level` | Run Model A for supported stations                |
+| POST   | `/api/v1/predict/flood-risk`  | Run Model B for supported spatial units           |
+| POST   | `/api/v1/predict/combined`    | Run both supported paths for one forecast request |
 
-```text
-app.main.handler
-```
+Request and response schemas must be versioned and tested. FastAPI running does not mean that every model is trained or available.
 
-### 7.2 Container deployment
+## 9. Convex data ownership
 
-Add a Lambda-compatible Dockerfile under `services/ml/Dockerfile`. Use an official AWS Lambda Python base image and install only production inference dependencies. Do not include notebooks, training-only packages, development tools, or raw training datasets in the deployment image.
+Convex is the source of truth for application records in the demo. It is not a raw scientific data lake and does not host local inference.
 
-A Lambda container image is not launched with the normal Uvicorn command. The AWS Lambda base image uses the handler configured as the image command. Keep local Uvicorn execution as a separate development path.
+Suggested tables:
 
-### 7.3 Model packaging
+| Table                 | Purpose                                         | Example fields                                                           |
+| --------------------- | ----------------------------------------------- | ------------------------------------------------------------------------ |
+| `users`               | Demo users and roles                            | name, email, role                                                        |
+| `locations`           | NCR city/municipality and spatial-unit registry | locationCode, name, type, parentId, coordinates, coverageStatus          |
+| `monitoring_stations` | Station registry                                | stationCode, name, coordinates, riverName, status, units                 |
+| `sensor_readings`     | Time-stamped observations                       | stationId, timestamp, waterLevel, rainfall, source, qualityStatus        |
+| `weather_snapshots`   | Retrieved weather inputs                        | runId, provider, retrievedAt, locationId, validAt, variables             |
+| `forecast_runs`       | Execution/provenance record                     | locationIds, generatedAt, horizonDays, weatherSnapshotIds, status        |
+| `station_forecasts`   | Model A outputs                                 | runId, stationId, targetTimestamp, predictedWaterLevel, modelVersion     |
+| `spatial_forecasts`   | Model B outputs                                 | runId, spatialUnitId, validDate, probability, riskCategory, modelVersion |
+| `risk_thresholds`     | Documented thresholds                           | location/station, threshold, unit, source, effectiveFrom                 |
+| `alerts`              | Demo alert lifecycle                            | locationId, severity, status, message, createdAt, acknowledgedAt         |
+| `hazard_layers`       | Local map-layer metadata                        | name, hazardType, source, attribution, localAssetPath, enabled           |
+| `model_versions`      | Model registry metadata                         | modelName, version, trainedAt, metrics, featureSchemaVersion             |
 
-For the initial model:
+Suggested indexes:
 
-- Train and evaluate outside Lambda.
-- Export a versioned model artifact.
-- Include a small inference artifact in the versioned Lambda image.
-- Record model version and feature-schema version with every prediction.
-- Rebuild and redeploy the image when promoting a new model.
+- `sensor_readings`: station ID + timestamp.
+- `weather_snapshots`: location ID + retrieved timestamp.
+- `forecast_runs`: generated timestamp.
+- `station_forecasts`: run ID + station ID + target timestamp.
+- `spatial_forecasts`: run ID + spatial unit ID + valid date.
 
-If model artifacts become too large for the Lambda image or need independent updates, reassess the deployment design before adding object storage. For the initial implementation, keep the model artifact versioned and packaged with the Lambda image.
+Use bounded and paginated historical queries. Keep raw raster files, satellite scenes, and large model artifacts on the local filesystem.
 
-## 8. Data ownership and storage boundaries
+## 10. Local datasets, GIS, and model storage
 
-| Data category | Initial storage | Notes |
-|---|---|---|
-| Users and roles | Convex | Role-based authorization for privileged operations. |
-| LGU profiles | Convex | Associate users, stations, and alert permissions with an LGU. |
-| Monitoring stations | Convex | Station ID, name, coordinates, river/basin association, units, and operational status. |
-| Sensor readings | Convex | Timestamped observations with source and quality metadata. Use indexed, bounded queries. |
-| Forecasts | Convex | Forecast horizon, predicted level, generation time, model version, and input-data window. |
-| Risk assessments | Convex | Threshold, estimated exceedance probability, category, and explanation metadata. |
-| Alerts | Convex | Status, severity, affected area/stations, timestamps, issuer, and acknowledgement history. |
-| Hazard-layer metadata | Convex | Layer name, description, attribution, source, and PMTiles URL. |
-| Project NOAH PMTiles | Hugging Face initially | Access remotely; do not commit map archives to Git. |
-| ML container image | Amazon ECR | Versioned image used by Lambda. |
-| Initial model artifact | Included in Lambda image | No separate object-storage bucket is required initially. |
-| Historical archive / bulk datasets | Not selected yet | Define a retention and archival policy before introducing another storage service. |
+Keep the following local:
 
-### 8.1 Suggested Convex tables
+- Raw CSV/XLSX and downloaded source datasets.
+- Processed training tables and feature matrices.
+- NCR administrative boundaries and spatial-unit layers.
+- River, creek, drainage, catchment, land-cover, soil, DEM/DTM, and derived terrain layers.
+- Model artifacts, preprocessing pipelines, model cards, and evaluation reports.
 
-| Table | Example fields | Purpose |
-|---|---|---|
-| `users` | `name`, `email`, `role`, `lguId` | User identity and authorization metadata |
-| `lgu_profiles` | `name`, `region`, `province`, `municipality` | LGU organization information |
-| `monitoring_stations` | `stationCode`, `name`, `latitude`, `longitude`, `riverName`, `status`, `waterLevelUnit` | Station registry and location metadata |
-| `sensor_readings` | `stationId`, `timestamp`, `waterLevel`, `rainfall`, `soilMoisture`, `source`, `qualityStatus` | Time-stamped observations |
-| `predictions` | `stationId`, `generatedAt`, `horizonMinutes`, `targetTimestamp`, `predictedWaterLevel`, `modelVersion`, `inputWindow` | Forecast results |
-| `risk_assessments` | `stationId`, `generatedAt`, `thresholdId`, `exceedanceProbability`, `riskCategory`, `modelVersion`, `explanation` | Flood-threshold risk estimates |
-| `risk_thresholds` | `stationId` or `locationId`, `name`, `waterLevel`, `unit`, `source`, `effectiveFrom` | Locally established thresholds and provenance |
-| `alerts` | `stationId`, `locationId`, `severity`, `status`, `message`, `createdAt`, `issuedBy` | Warning lifecycle and operator actions |
-| `hazard_layers` | `name`, `hazardType`, `source`, `attribution`, `tileUrl`, `format`, `enabled` | External hazard-layer metadata |
-| `model_versions` | `modelName`, `version`, `artifactUrl`, `trainedAt`, `metrics`, `featureSchemaVersion` | Model metadata and evaluation results |
-
-### 8.2 Index and query patterns
-
-For `sensor_readings`, the primary historical access pattern is retrieving a bounded time range for one station. Define a compound index equivalent to:
-
-```typescript
-.index("by_station_timestamp", ["stationId", "timestamp"])
-```
-
-Also:
-
-- Always bound historical queries by station and time range where possible.
-- Paginate older readings and historical records.
-- Avoid fetching an entire station history for each dashboard render.
-- Preserve units, source timestamps, ingestion timestamps, and quality flags.
-- Define a retention and export policy before sensor volume grows significantly.
-
-## 9. Machine-learning design
-
-### 9.1 Start with a measurable baseline
-
-Begin with supervised-learning models for structured hydrological observations. Do not begin with deep learning unless dataset size, sampling frequency, and validation results justify it.
-
-- **Water-level forecasting:** XGBoost regression as a baseline, compared with persistence and simple statistical baselines.
-- **Flood-threshold classification:** Scikit-learn or XGBoost to estimate the probability of exceeding a locally defined water-level threshold within a stated forecast horizon.
-- **Explainability:** SHAP feature contributions for supported model types.
-
-### 9.2 Candidate input features
-
-Select features based on actual availability and quality:
-
-- Current and lagged water-level measurements.
-- Water-level change over recent intervals.
-- Rolling rainfall totals (for example, 1-hour, 3-hour, 6-hour, and 24-hour windows).
-- Recent and forecast rainfall, when a reliable forecast source exists.
-- Soil-moisture observations, when measured and reliable.
-- Station, river, and catchment characteristics.
-- Elevation, slope, and other terrain-derived attributes.
-- Upstream station observations, where hydrological connectivity and travel time are established.
-
-Do not treat unavailable inputs as measured values. Track missingness and input quality, and define safe behavior when required inputs are stale or absent.
-
-### 9.3 Forecast and risk outputs
-
-Every output should identify:
-
-- Station and location.
-- Forecast generation timestamp and target timestamp/horizon.
-- Predicted water level and unit, where applicable.
-- Threshold and threshold source, where applicable.
-- Estimated exceedance probability and risk category, where applicable.
-- Model name/version and feature-schema version.
-- Input-data time window and freshness.
-- Missing-input or data-quality warnings.
-- Explanation method and feature contributions, when available.
-
-Validate and calibrate probabilities against held-out historical events. A probability is not certainty and must not be presented as such.
-
-### 9.4 Explainability and evaluation
-
-SHAP describes how input features contributed to a particular model output; it does not prove physical causation. Present these values as model explanations, not causal conclusions.
-
-Use time-aware, storm-event-based validation. Do not randomly split adjacent observations from the same storm event across training and test sets.
-
-| Task | Evaluation |
-|---|---|
-| Water-level regression | MAE, RMSE, error by forecast horizon and station |
-| Threshold classification | Precision, recall, F1, precision-recall AUC, confusion matrix |
-| Probability estimates | Calibration curve and an appropriate probability scoring metric |
-| Operational warning performance | Lead time, missed events, false alarms, and data availability |
-
-## 10. Security, reliability, and public-safety safeguards
-
-- Keep the Lambda Function URL, shared token, Convex credentials, and deployment credentials out of browser code and Git.
-- Authenticate all ML inference requests. Never rely on the Function URL being secret.
-- Use a dedicated least-privilege Lambda execution role. Do not grant broad administrator permissions to the runtime.
-- Do not attach the initial Lambda function to a customer VPC. It only needs HTTPS access to Convex; Lambda has internet connectivity by default outside a customer VPC. Attaching it to a VPC can require additional networking to retain internet access.
-- Set a small reserved-concurrency limit during the prototype and increase it only after load testing.
-- Set Lambda timeout and memory based on measured inference time and peak memory use.
-- Use local structured logs during development; never log raw sensor payloads, credentials, or bearer tokens. Keep production error responses generic.
-- Validate station identifiers, timestamps, measurement units, and plausible value ranges.
-- Preserve source timestamp and ingestion timestamp to identify delayed/out-of-order observations.
-- Track sensor health, data freshness, missing values, and quality status.
-- Record model version and input-data provenance with every prediction.
-- Record alert creation, publication, acknowledgement, and resolution actions.
-- Treat ML output as decision support. Do not equate a model classification with an official evacuation order.
-- Ensure warning thresholds, escalation rules, and public messaging are reviewed by responsible authorities.
-
-## 11. AWS credit and cost-control plan
-
-### 11.1 Treat the US$130 credit as a finite project budget
-
-Before creating services, open **Billing and Cost Management → Credits** and verify:
-
-- Remaining credit balance.
-- Expiration date.
-- Eligible services and products.
-- Whether the credit is promotional, educational, or attached to a specific AWS program.
-
-AWS promotional credits apply only to eligible charges and stop applying when exhausted or expired. Do not assume every AWS service, Marketplace item, tax, or account charge is covered by the credit. Review the terms attached to the actual credit in the account.
-
-### 11.2 Configure cost monitoring before deploying
-
-Create an AWS Budget for the project. A suggested initial warning budget is **US$10 per month**, with notifications at 50%, 80%, and 100%, plus a forecasted-cost notification. Adjust the threshold if the project has a known deadline or planned experiment.
-
-A budget alert is a notification, **not a hard spending cap**. AWS Budgets data can also be delayed, so check the Billing console regularly and delete unused resources.
-
-### 11.3 Keep the first AWS footprint small
-
-The initial deployment should use only:
-
-1. One Lambda function (FastAPI + inference).
-2. One private ECR repository for its container image.
-3. IAM roles/policies.
-4. One AWS Budget with alerts.
-
-Do not configure a separate logging/monitoring platform or object-storage bucket for the initial prototype. Use local structured logs during development and Lambda test invocations for basic deployment checks. This keeps the initial infrastructure small, but it also means production observability and centralized log retention are limited.
-
-Cost controls:
-
-- Do not enable provisioned concurrency.
-- Do not run ECS/Fargate or EC2 continuously for the initial ML API.
-- Do not create an Application Load Balancer or NAT Gateway.
-- Do not create RDS, Aurora, or another database.
-- Do not introduce a separate object-storage service; keep Project NOAH PMTiles hosted remotely on Hugging Face.
-- Keep ECR images small and remove old images with a lifecycle policy.
-- Keep Lambda out of a customer VPC unless a private resource later requires it.
-- Cap reserved concurrency during development to limit parallel invocations.
-- Train models locally; use Lambda only for inference.
-
-The published Lambda pricing currently lists a monthly free tier of 1 million requests and 400,000 GB-seconds. ECR currently lists 500 MB/month of private image storage for one year for new ECR customers. These allowances are subject to AWS account eligibility and pricing terms; they are not a guarantee that the entire RiverGuard deployment will be free. Do not assume free-tier eligibility or calculate the project's runway from the US$130 balance alone. The actual cost depends on image size, invocation count, memory, execution duration, data transfer, region, and credit eligibility. Recheck the official pricing pages before deployment.
-
-## 12. When to expand AWS usage
-
-| Trigger / requirement | Possible AWS addition | Decision rule |
-|---|---|---|
-| Need an independent copy of PMTiles or large model/data archives | Reassess storage separately | Do not add storage unless Hugging Face availability, map delivery performance, or model artifact size creates a measured requirement. |
-| Physical monitoring devices are ready to transmit data | AWS IoT Core | Select after the device protocol, authentication, sampling rate, and device count are known. |
-| Device bursts need durable buffering and retry handling | SQS and a separate ingestion Lambda | Add when ingestion needs decoupling, retries, or dead-letter handling. |
-| Forecast inference is too slow or requests need persistent workers | ECS/Fargate or another managed container service | Benchmark Lambda duration, cold starts, memory, concurrency, and cost first. |
-| Need centralized scheduled AWS workflows | EventBridge Scheduler | Add only if Convex scheduled actions no longer meet scheduling needs. |
-| Need relational SQL analytics or advanced server-side spatial/time-series queries | Evaluate PostgreSQL/PostGIS/TimescaleDB separately | Do not add them merely because AWS is already in use. |
-
-## 13. Development phases
-
-Delivery is organized into six phases. Detailed objectives, key tasks, entry/exit criteria, and go/no-go decisions for each phase live in [`docs/plan/roadmap-phases.md`](plan/roadmap-phases.md). The phase summaries below show how they map to the architecture decisions in this document.
-
-| Phase | Scope | Architectural result |
-|---|---|---|
-| 1. Data Acquisition & Exploration (Critical Path) | Secure clean, multi-year rainfall and river-level data; document licensing, coverage, measurement units, and update frequency | Go/No-Go decision recorded before any application or ML work proceeds |
-| 2. Local ML Prototyping | Feature-engineering pipelines, baseline XGBoost/Scikit-learn models, SHAP explanations, chronological evaluation | Reproducible local models and evaluation results documented in `docs/report/` |
-| 3. Application Foundation | Next.js, TypeScript, Convex schema, indexes, ingest observations, initial dashboard | Convex-backed dashboard with historical charts and data-freshness indicators |
-| 4. API Integration & Simplified Hosting | FastAPI inference service, versioned API contract, Convex-to-ML connection; evaluate PaaS (e.g. Render/Railway) before AWS Lambda/Mangum | Forecasts flow from the ML service to Convex and update the dashboard reactively |
-| 5. Project NOAH Map & Explainability UI | MapLibre GL JS + remotely hosted Project NOAH PMTiles, SHAP explanations, station markers, attribution | Interactive hazard map and explainable risk surfaces on the dashboard |
-| 6. Alerts and Operational Validation | Alert rules, acknowledgement workflow, user roles, failure/missing-data testing, stakeholder validation | LGU alerting workflow; no experimental predictions presented as operational warnings |
-
-## 14. Initial repository organization
+Suggested layout:
 
 ```text
 riverguard/
-├── apps/
-│   └── web/                    # Next.js application
-├── convex/                     # Convex schema, queries, mutations, actions
-├── services/
-│   └── ml/
-│       ├── app/
-│       │   ├── api/
-│       │   ├── core/
-│       │   ├── schemas/
-│       │   └── services/
-│       ├── tests/
-│       ├── models/
-│       ├── Dockerfile           # AWS Lambda-compatible container image
-│       └── pyproject.toml
-├── data/                        # Small development samples and schemas only
-├── docs/
-│   ├── architecture/
-│   │   └── riverguard-architecture.md
-│   ├── data-sources.md
-│   ├── guides/
-│   ├── issues/
-│   ├── ml-methodology.md
-│   ├── plan/
-│   │   └── roadmap-phases.md
-│   ├── README.md
-│   ├── reference/
-│   └── report/
-└── README.md
+├── apps/web/
+│   ├── app/api/forecast/run/route.ts
+│   └── public/maps/
+├── convex/
+├── services/ml/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── core/
+│   │   ├── schemas/
+│   │   └── services/
+│   ├── models/
+│   │   ├── hydrological/
+│   │   └── flood_risk/
+│   ├── tests/
+│   └── pyproject.toml
+├── data/
+│   ├── samples/
+│   ├── raw/                 # gitignored
+│   ├── processed/           # gitignored
+│   ├── geographic/          # gitignored when large/private
+│   └── external/            # optional local copies with provenance
+└── docs/
 ```
 
-Do not commit PMTiles archives, raw sensor dumps, secrets, or private model artifacts to Git. Keep only small, non-sensitive fixtures and schemas in the repository.
+Keep small, non-sensitive fixtures and schemas in Git. Do not commit large raw data, private sensor records, or trained model binaries without an explicit repository decision.
 
-## 15. Initial decision summary
+## 11. Supplied NCR dataset: limitations and intended use
 
-The initial RiverGuard deployment will use:
+The supplied `Flood_Prediction_NCR_Philippines.csv` has 7,308 rows and seven fields for Quezon City, Marikina, Manila, and Pasig, daily from 2016-01-01 through 2020-12-31. It contains one record per date and location, no missing values in the inspected file, no duplicate date/location pairs, and 132 positive `FloodOccurrence` values.
 
-- **Next.js + TypeScript on Vercel** for the web application.
-- **Convex** as the primary application database, backend, and real-time update layer.
-- **MapLibre GL JS + PMTiles** for interactive hazard-map visualization.
-- **Hugging Face Project NOAH PMTiles** as the initial remote hazard-map source.
-- **Python + FastAPI + Mangum** for the machine-learning API.
-- **AWS Lambda** for on-demand inference.
-- **Amazon ECR** for the Lambda container image.
-- **XGBoost / Scikit-learn** for initial forecasting and classification baselines.
-- **SHAP** for feature-contribution explanations.
+Fields:
 
-Do not initially deploy ECS/Fargate, API Gateway, a separate object-storage/CDN service, IoT Core, SQS, RDS, or a NAT Gateway. Add those services only when a measured requirement justifies the extra cost and operations.
+- `Date`
+- `Location`
+- `Rainfall_mm`
+- `WaterLevel_m`
+- `SoilMoisture_pct`
+- `Elevation_m`
+- `FloodOccurrence`
 
-The highest-priority project risk remains the availability and quality of timestamped rainfall and river-level observations. Establish data provenance, units, sampling intervals, historical coverage, and ground-truth flood events before making claims about model performance or warning reliability.
+The archive does not document source, collection method, station/site identity, coordinates, rainfall aggregation period, water-level datum, soil-moisture depth, elevation reference, or flood-label definition. The `Elevation_m` value is constant within each city in the file. Therefore:
+
+- Treat this as a provisional schema/pipeline test dataset until provenance is verified.
+- Do not present its rows as official observed data or confirmed flood records.
+- Do not assume it represents all NCR LGUs or any barangay-level condition.
+- Do not report model performance on it as real-world predictive performance.
+- Preserve it unchanged and record its archive checksum/source notes.
+
+The dataset's date-level frequency also means it cannot train hourly prediction targets without additional higher-frequency observations.
+
+## 12. Security and failure handling
+
+### Local network boundaries
+
+- Bind FastAPI to `127.0.0.1`, not `0.0.0.0`, during the local demo.
+- Do not expose local ports through router forwarding or tunnels.
+- Keep weather API keys and other secrets in server-only local environment variables.
+- Keep Convex credentials and local environment files out of Git.
+- Protect Convex mutations with the project's authentication and authorization rules.
+- Do not embed secret credentials in browser bundles.
+
+### Failure behavior
+
+| Failure                       | Required behavior                                                                        |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
+| Weather API unavailable       | Show retrieval failure; do not silently present stale data as current                    |
+| Weather forecast stale        | Display retrieval and validity timestamps                                                |
+| Local ML service offline      | Keep weather display available; mark ML predictions unavailable                          |
+| Model A missing/inadequate    | Do not display station-level water-level prediction                                      |
+| Model B untrained/unvalidated | Display static context only or clearly labeled experimental output                       |
+| Required feature missing      | Return data-quality warning; do not zero-fill                                            |
+| Convex unavailable            | Keep the run locally visible where feasible, mark it unsaved, and allow controlled retry |
+| Unsupported NCR location      | Show “No prediction” rather than low risk                                                |
+| Model/schema mismatch         | Reject inference with a clear compatibility error                                        |
+
+## 13. Explainability, evaluation, and public-safety safeguards
+
+- SHAP values describe model contribution, not physical causation.
+- Evaluate water-level regression with MAE, RMSE, and bias by location and lead time.
+- Evaluate flood classification with precision, recall, F1, PR-AUC, confusion matrices, and probability calibration.
+- Use chronological and event-based holdouts to prevent leakage.
+- Assess false alarms, missed events, and lead time.
+- Show model version, feature-schema version, weather source, retrieval time, and input window for each prediction.
+- Distinguish static susceptibility, model-generated flood risk, and official warnings.
+- Never imply an experimental result is an official PAGASA or LGU warning.
+- Do not automatically issue evacuation orders.
+
+## 14. Local operational model
+
+No AWS or public hosting budget is required by the current scope. The expected remote dependencies are:
+
+1. Convex development deployment for application persistence and reactive data access.
+2. The selected weather forecast API for user-requested forecasts.
+
+All frontend hosting, backend compute, ML inference, model training, and GIS preprocessing happen locally. The local machine needs sufficient memory, CPU, and disk for the selected models and datasets. RiverGuard-specific map layers must use local files; the frontend currently uses the documented OSM basemap exception until an approved local/cached basemap is supplied.
+
+## 15. Local startup checklist
+
+1. Start Convex with the project's configured `npx convex dev` command.
+2. Start FastAPI on `127.0.0.1:8000`.
+3. Start Next.js on `localhost:3000`.
+4. Verify Convex connection and FastAPI `/health`.
+5. Verify the weather API can return seven-day data for the selected NCR locations using documented coordinates.
+6. Verify the local route passes the normalized feature payload to local FastAPI.
+7. Verify results are saved to Convex and can be reloaded.
+8. Verify unavailable locations, missing data, stale forecasts, and model uncertainty are presented accurately.
 
 ## 16. References
 
-### AWS
-
-- [AWS Lambda pricing](https://aws.amazon.com/lambda/pricing/)
-- [AWS Lambda quotas and limits](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html)
-- [Create a Lambda function using a container image](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html)
-- [Create and manage Lambda Function URLs](https://docs.aws.amazon.com/lambda/latest/dg/urls-configuration.html)
-- [Control access to Lambda Function URLs](https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html)
-- [Invoke Lambda Function URLs](https://docs.aws.amazon.com/lambda/latest/dg/urls-invocation.html)
-- [Amazon ECR pricing](https://aws.amazon.com/ecr/pricing/)
-- [AWS Budgets documentation](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html)
-- [Applying AWS credits](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/useconsolidatedbilling-credits.html)
-- [Lambda networking and internet access](https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc-internet.html)
-
-### RiverGuard application stack and data
-
 - [Convex documentation](https://docs.convex.dev/)
+- [Next.js documentation](https://nextjs.org/docs)
+- [FastAPI documentation](https://fastapi.tiangolo.com/)
+- [Open-Meteo Forecast API documentation](https://open-meteo.com/en/docs)
 - [MapLibre GL JS documentation](https://maplibre.org/maplibre-gl-js/docs/)
 - [PMTiles documentation](https://docs.protomaps.com/pmtiles/)
-- [FastAPI documentation](https://fastapi.tiangolo.com/)
-- [Mangum documentation](https://mangum.fastapiexpert.com/)
+- [GeoPandas documentation](https://geopandas.org/en/stable/)
 - [XGBoost documentation](https://xgboost.readthedocs.io/)
 - [Scikit-learn documentation](https://scikit-learn.org/stable/)
 - [SHAP documentation](https://shap.readthedocs.io/)
-- [Project NOAH hazard-map dataset](https://huggingface.co/datasets/bettergovph/project-noah-hazard-maps/tree/main/PMTiles)

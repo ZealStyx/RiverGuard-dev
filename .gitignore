@@ -14,7 +14,11 @@ prototype/node_modules/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+*.tsbuildinfo
 *.py[cod]
+
+# Local fallback run store (lib/run-store.ts) — this machine only
+.data/
 
 # Large datasets and map tiles
 *.pmtiles
@@ -27,3 +31,14 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# GIS geometry is licence-bound and usually large: keep it local, keep the
+# manifest and README in git. `npm run gis:verify` is what makes a file drawable.
+data/gis/*.geojson
+data/gis/*.topojson
+data/gis/*.gpkg
+data/gis/*.shp
+data/gis/*.shx
+data/gis/*.dbf
+data/gis/*.prj
+data/gis/*.kml

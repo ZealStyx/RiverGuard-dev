@@ -1,0 +1,656 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --color-stage: #353535;
+  --color-canvas: #ffffff;
+  --color-canvas-soft: #f4f4f4;
+  --color-ink: #353535;
+  --color-muted: #666666;
+  --color-line: #d9d9d9;
+  --color-brand-primary: #284b63;
+  --color-brand-primary-hover: #1f3d52;
+  --color-brand-primary-active: #193245;
+  --color-brand-secondary: #3c6e71;
+  --color-brand-secondary-hover: #315e61;
+  --color-brand-secondary-soft: #e8f0f0;
+  --color-brand-secondary-muted: #a5bdbe;
+  --color-chart-surface: #ffffff;
+  --color-chart-grid: #d9d9d9;
+  --color-chart-bar: #284b63;
+  --color-success: #4f7b61;
+  --color-warning: #a36726;
+  --color-danger: #b9443f;
+
+  --radius-control: 0.4375rem;
+  --radius-panel: 0.75rem;
+  --radius-structure: 1rem;
+
+  --text-page-title: 1.75rem;
+  --text-page-title--line-height: 2.1rem;
+  --text-page-title--font-weight: 650;
+  --text-major-status: 1.125rem;
+  --text-major-status--line-height: 1.4rem;
+  --text-major-status--font-weight: 600;
+  --text-section: 0.875rem;
+  --text-section--line-height: 1.2rem;
+  --text-section--font-weight: 600;
+  --text-navigation: 0.75rem;
+  --text-navigation--line-height: 1rem;
+  --text-navigation--font-weight: 550;
+  --text-body: 0.8125rem;
+  --text-body--line-height: 1.2rem;
+  --text-button: 0.8125rem;
+  --text-button--line-height: 1.1rem;
+  --text-button--font-weight: 600;
+  --text-metadata: 0.6875rem;
+  --text-metadata--line-height: 0.95rem;
+  --text-metadata--font-weight: 500;
+}
+
+:root {
+  --rg-space-1: 0.375rem;
+  --rg-space-2: 0.75rem;
+  --rg-space-3: 1.125rem;
+  --rg-space-4: 1.5rem;
+  --rg-space-5: 2rem;
+  --rg-space-6: 2.5rem;
+  color-scheme: light;
+}
+
+.river-palette-preview .recharts-default-legend {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 0.75rem;
+  width: 100% !important;
+}
+
+.river-palette-preview .recharts-legend-item {
+  margin-right: 0 !important;
+}
+
+.river-palette-preview .recharts-legend-wrapper {
+  left: 0 !important;
+  width: 100% !important;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--color-canvas);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+
+::selection {
+  background: var(--color-brand-secondary-soft);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-secondary);
+  outline-offset: 3px;
+}
+
+[data-dashboard-section] {
+  scroll-margin-top: 6rem;
+  transition:
+    outline-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+[data-dashboard-section]:target {
+  outline: 2px solid
+    color-mix(in srgb, var(--color-brand-secondary) 72%, transparent);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px
+    color-mix(in srgb, var(--color-brand-secondary) 18%, transparent);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+@keyframes password-check {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes landing-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.landing-page {
+  --landing-ink: #071b3d;
+  --landing-blue: #086ccf;
+  --landing-teal: #168191;
+  --landing-mist: #eaf2f7;
+}
+
+.auth-page {
+  --color-canvas: #ffffff;
+  --color-canvas-soft: #f3f7fa;
+  --color-ink: #092847;
+  --color-muted: #53697d;
+  --color-line: #d7e2e9;
+  --color-brand-primary: #086ccf;
+  --color-brand-primary-hover: #075db2;
+  --color-brand-primary-active: #064f98;
+  --color-brand-secondary: #147384;
+  --color-brand-secondary-hover: #105f6d;
+  --color-brand-secondary-soft: #e3f2f5;
+  --radius-control: 0.75rem;
+  --radius-panel: 1.25rem;
+}
+
+.auth-story,
+.auth-panel {
+  animation: landing-enter 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.auth-panel {
+  animation-delay: 90ms;
+}
+
+.auth-panel input:not([type="checkbox"]),
+.auth-panel select,
+.auth-panel textarea {
+  min-height: 2.75rem;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.auth-panel input:not([type="checkbox"]):focus,
+.auth-panel select:focus,
+.auth-panel textarea:focus {
+  border-color: #168191;
+  box-shadow: 0 0 0 3px rgb(22 129 145 / 12%);
+  outline: none;
+}
+
+.auth-panel button,
+.auth-panel a[class*="inline-flex"] {
+  min-height: 2.75rem;
+}
+
+.auth-panel button:not(:disabled) {
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.auth-panel button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.auth-panel button:not(:disabled):active {
+  transform: translateY(0);
+}
+
+.check-control:hover {
+  border-color: #a9c1ce;
+  background: #f8fbfd;
+}
+
+.auth-checkbox {
+  appearance: none;
+  flex: none;
+  border: 1.5px solid #91a5b3;
+  border-radius: 0.3rem;
+  background-color: #ffffff;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.auth-checkbox:hover {
+  border-color: #147384;
+}
+
+.auth-checkbox:checked {
+  border-color: #147384;
+  background-color: #147384;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.2 8.1l3.1 3.1 6.5-6.5' fill='none' stroke='white' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  box-shadow: 0 0 0 3px rgb(20 115 132 / 10%);
+}
+
+.auth-checkbox:active {
+  transform: scale(0.92);
+}
+
+.resident-shell {
+  --color-canvas: #ffffff;
+  --color-canvas-soft: #f3f7fa;
+  --color-ink: #092847;
+  --color-muted: #53697d;
+  --color-line: #d7e2e9;
+  --color-brand-primary: #086ccf;
+  --color-brand-primary-hover: #075db2;
+  --color-brand-primary-active: #064f98;
+  --color-brand-secondary: #147384;
+  --color-brand-secondary-hover: #105f6d;
+  --color-brand-secondary-soft: #e3f2f5;
+  --radius-control: 0.75rem;
+  --radius-panel: 1.25rem;
+  background: #edf5f9;
+}
+
+.workspace-shell {
+  --color-canvas: #ffffff;
+  --color-canvas-soft: #f3f7fa;
+  --color-ink: #092847;
+  --color-muted: #53697d;
+  --color-line: #d7e2e9;
+  --color-brand-primary: #086ccf;
+  --color-brand-primary-hover: #075db2;
+  --color-brand-primary-active: #064f98;
+  --color-brand-secondary: #147384;
+  --color-brand-secondary-hover: #105f6d;
+  --color-brand-secondary-soft: #e3f2f5;
+  --radius-control: 0.75rem;
+  --radius-panel: 1.25rem;
+  background: #edf5f9;
+}
+
+.workspace-page .role-page-heading {
+  position: relative;
+  overflow: hidden;
+  padding: 1.5rem 1.75rem;
+  border-radius: 1.75rem;
+  background: #e7f0f5;
+  box-shadow:
+    0 14px 40px rgb(7 42 76 / 6%),
+    0 0 0 1px rgb(11 51 88 / 8%);
+}
+
+.workspace-page .role-page-eyebrow {
+  color: #147384;
+}
+
+.workspace-page .role-page-title {
+  color: #092847;
+  font-size: clamp(1.875rem, 3vw, 2.25rem);
+  line-height: 1.08;
+  letter-spacing: -0.05em;
+}
+
+.workspace-page .role-page-description {
+  margin-top: 0.5rem;
+  color: #53697d;
+  line-height: 1.5rem;
+}
+
+.workspace-page .role-page-actions {
+  align-items: center;
+}
+
+.workspace-page .role-surface,
+.workspace-page .role-metric {
+  border-color: transparent;
+  border-radius: 1.35rem;
+  background: #ffffff;
+  box-shadow:
+    0 10px 35px rgb(7 42 76 / 5.5%),
+    0 0 0 1px rgb(11 51 88 / 10%);
+}
+
+.workspace-page .role-metric {
+  min-height: 7.25rem;
+  padding: 1rem;
+}
+
+.workspace-page .role-notice {
+  min-height: 2.75rem;
+  border-radius: 0.75rem;
+}
+
+.workspace-page .role-action-link {
+  min-height: 2.75rem;
+  padding-inline: 1rem;
+  border-radius: 0.75rem;
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease;
+}
+
+.workspace-page .role-action-link:hover {
+  transform: translateY(-1px);
+}
+
+.workspace-page .role-action-link:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 639px) {
+  .workspace-page .role-page-heading {
+    padding: 1.25rem;
+    border-radius: 1.35rem;
+  }
+
+  .workspace-page .role-page-actions,
+  .workspace-page .role-page-actions > * {
+    width: 100%;
+  }
+}
+
+.app-shell aside {
+  font-size: 0.8125rem;
+}
+
+.app-shell {
+  --sidebar-icon-column: 3.5rem;
+}
+
+.app-shell aside .role-sidebar-item {
+  min-height: 2.75rem;
+  width: 100%;
+  display: grid;
+  grid-template-columns: var(--sidebar-icon-column) minmax(0, 1fr);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 0.75rem;
+  text-align: left;
+}
+
+.app-shell aside .role-sidebar-icon {
+  width: var(--sidebar-icon-column);
+  height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.app-shell aside .role-sidebar-icon-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-shell aside .role-sidebar-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-0.25rem);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.app-shell aside:hover .role-sidebar-label,
+.app-shell aside:focus-within .role-sidebar-label {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.app-shell aside .unified-nav-item {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.1rem;
+}
+
+.app-shell aside .unified-nav-item[aria-current="page"] {
+  background: transparent;
+  color: white;
+}
+
+.app-shell
+  aside:not(:hover):not(:focus-within)
+  .unified-nav-item[aria-current="page"]
+  .role-sidebar-icon-glyph {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #168191;
+  box-shadow: 0 7px 16px rgb(20 115 132 / 28%);
+}
+
+.app-shell aside:hover .unified-nav-item[aria-current="page"],
+.app-shell aside:focus-within .unified-nav-item[aria-current="page"] {
+  background: #168191;
+  color: white;
+}
+
+.app-shell aside button,
+.app-shell aside a {
+  border-radius: 0.75rem;
+}
+
+.resident-shell main {
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.workspace-shell main section,
+.workspace-shell main article,
+.workspace-shell main [class*="rounded-panel"] {
+  border-radius: 1.25rem;
+}
+
+.workspace-shell main button,
+.workspace-shell main a[class*="inline-flex"],
+.workspace-shell main [role="button"] {
+  border-radius: 0.75rem;
+}
+
+.landing-enter {
+  animation: landing-enter 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.landing-product-frame.landing-enter {
+  animation-delay: 100ms;
+}
+
+.landing-river-glow {
+  background:
+    radial-gradient(circle at 76% 32%, rgb(35 157 191 / 20%), transparent 29%),
+    radial-gradient(circle at 65% 72%, rgb(8 108 207 / 15%), transparent 31%),
+    linear-gradient(135deg, #f8fbfd 0%, #eef6fa 50%, #f8fbfd 100%);
+}
+
+.landing-contours,
+.landing-dark-contours {
+  background-image:
+    repeating-radial-gradient(
+      ellipse at 28% 44%,
+      transparent 0 16px,
+      rgb(13 112 137 / 11%) 17px 18px,
+      transparent 19px 31px
+    ),
+    repeating-radial-gradient(
+      ellipse at 76% 58%,
+      transparent 0 22px,
+      rgb(8 108 207 / 9%) 23px 24px,
+      transparent 25px 42px
+    );
+  background-size:
+    80% 105%,
+    88% 115%;
+  background-position:
+    -20% 0,
+    115% 0;
+  background-repeat: no-repeat;
+}
+
+.landing-dark-contours {
+  background-image:
+    repeating-radial-gradient(
+      ellipse at 22% 40%,
+      transparent 0 18px,
+      rgb(103 209 218 / 22%) 19px 20px,
+      transparent 21px 36px
+    ),
+    repeating-radial-gradient(
+      ellipse at 80% 62%,
+      transparent 0 25px,
+      rgb(90 161 229 / 20%) 26px 27px,
+      transparent 28px 46px
+    );
+}
+
+.landing-nav-link {
+  position: relative;
+  transition: color 180ms ease;
+}
+
+.landing-nav-link::after {
+  position: absolute;
+  right: 0;
+  bottom: -6px;
+  left: 0;
+  height: 1px;
+  content: "";
+  background: #086ccf;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 180ms ease;
+}
+
+.landing-nav-link:hover {
+  color: #086ccf;
+}
+
+.landing-nav-link:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.landing-primary-button svg {
+  transition: transform 180ms ease;
+}
+
+.landing-primary-button:hover svg {
+  transform: translateX(3px);
+}
+
+@media (max-width: 639px) {
+  .landing-hero h1 {
+    font-size: clamp(3rem, 16vw, 4.4rem);
+  }
+
+  .landing-product-frame {
+    border-radius: 1.4rem;
+    padding: 0.5rem;
+  }
+}
+
+@media (min-width: 1280px) and (max-height: 780px) {
+  .landing-hero {
+    height: auto !important;
+    min-height: calc(100svh - 1.75rem) !important;
+    padding-bottom: 4.5rem !important;
+  }
+
+  .landing-hero-grid {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .landing-product-frame {
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  .landing-preview-evidence,
+  .landing-preview-pipeline {
+    padding: 1rem;
+  }
+
+  .landing-preview-title {
+    margin-top: 1rem;
+    font-size: 1.75rem;
+  }
+
+  .landing-preview-steps {
+    margin-top: 0.75rem;
+    gap: 0.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+ * MapLibre attribution.
+ *
+ * OpenStreetMap's tile usage policy requires the licence attribution to stay
+ * visible — not collapsed behind a toggle, not covered by app chrome. `RiverMap`
+ * therefore creates the control with `compact: false` and keeps a clear band at
+ * the bottom of the canvas; these rules just make the un-collapsed text readable
+ * against the map and raise it above the canvas.
+ */
+.maplibregl-ctrl-bottom-right {
+  z-index: 1;
+}
+
+.maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--color-canvas) 92%, transparent);
+  border-radius: var(--radius-control);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0 6px 6px 0;
+  padding: 2px 8px;
+}
+
+.maplibregl-ctrl-attrib a {
+  color: var(--color-ink);
+}

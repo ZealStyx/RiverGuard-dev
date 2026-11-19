@@ -2,7 +2,8 @@
 
 **Project:** RiverGuard — Explainable Machine Learning for Hydrological Flood Risk and Water-Level Forecasting  
 **Source of truth:** Project root [`README.md`](../README.md) — "Development Roadmap" section  
-**Status:** Early development / architecture and implementation scaffold  
+**Status:** Phase 1 partially delivered (development dataset v2); Phase 2 pipeline work unblocked  
+**Last updated:** 2026-11-15  
 **Owner docs folder:** `docs/plan/`
 
 ---
@@ -19,8 +20,8 @@ This file is the single source of truth for RiverGuard delivery planning. It sum
 
 | Phase | Focus | Entry gate | Exit / go-no-go |
 |-------|-------|------------|-----------------|
-| **Phase 1** | Data Acquisition & Exploration (Critical Path) | Repo + dev accounts available | Clean multi-year dataset secured; **Go** decision recorded |
-| **Phase 2** | Local ML Prototyping | Phase 1 Go | Baseline models trained & evaluated chronologically; SHAP verified |
+| **Phase 1** | Data Acquisition & Exploration (Critical Path) | Repo + dev accounts available | **In progress** — development dataset delivered; **Conditional Go** for engineering, **No-Go** for operational models. Observed gauge data still outstanding. |
+| **Phase 2** | Local ML Prototyping | Phase 1 Go (conditional) | **Unblocked for pipeline work** — baselines may be built, but metrics are pipeline-validation only until real observations replace derived columns |
 | **Phase 3** | Application Foundation | Phase 2 complete | Next.js + Convex dashboard with charts and freshness indicators |
 | **Phase 4** | API Integration & Simplified Hosting | Phase 3 complete | Forecasts flow from ML service → Convex → dashboard |
 | **Phase 5** | Project NOAH Map & Explainability UI | Phase 4 complete | Hazard map + SHAP explanations rendered on dashboard |
@@ -41,10 +42,28 @@ This file is the single source of truth for RiverGuard delivery planning. It sum
 
 ---
 
+## Dataset status (2026-11-15)
+
+| Item | Value |
+|---|---|
+| File | `data/RiverGuard_NCR_Dataset_v2.xlsx` (+ `data/*.csv`, `data/dataset_preview.html`) |
+| Coverage | 2016-01-01 → 2026-11-14 · 3,971 days × 4 cities (QC, Marikina, Manila, Pasig) = **15,884 rows** |
+| Rainfall | Synthetic calibrated to PAGASA 1991–2020 normals before 2025-11-15; **real ERA5 reanalysis** for the last 365 days |
+| Water level / soil moisture | **Derived** from rainfall — not observations |
+| Flood label | **Rule-based proxy** over PAGASA thresholds and river alarm levels — not official events |
+| Splits | train 2016–2023 (11,688) / validation 2024 (1,464) / test 2025–2026 (2,732) |
+| Catalogue | [`docs/data-sources.md`](../data-sources.md) · [`data/README.md`](../../data/README.md) |
+
+This dataset satisfies the *engineering* need (schema, ingest, features, API, UI, CI). It does
+**not** satisfy Phase 1's observational exit criteria, and no model trained on it may be
+described as validated for NCR flood prediction. See the Phase 1 Go/No-Go record.
+
+---
+
 ## Cross-cutting rules (all phases)
 
 - **Sequencing:** Do not start a phase until the previous phase's exit criteria are met and its go/no-go decision is recorded.
-- **No large binaries:** Do not commit datasets, PMTiles archives, secrets, or large model binaries to Git without an explicit reason and approved storage strategy.
+- **No large binaries:** Do not commit datasets, PMTiles archives, secrets, or large model binaries to Git without an explicit reason and approved storage strategy. *Current exception (approved):* the ~6 MB development dataset in `data/` is committed so the pipeline and preview are reproducible offline; revisit if it grows.
 - **Documentation:** When architecture or data contracts change, update the relevant documentation under `docs/` (see root README [Contributing](../README.md#contributing)).
 - **Mock data labeling:** Clearly label mock data and illustrative predictions so they cannot be mistaken for observations or validated forecasts.
 - **Safety:** Static Project NOAH hazard maps are not forecasts; return periods are not schedules; ML explainability is not causality; model output is decision support, not an official warning.
@@ -59,7 +78,8 @@ The project has a limited **US$130 AWS credit balance**. Before creating AWS ser
 
 | # | Decision | Phase | Status |
 |---|----------|-------|--------|
-| D1 | Proceed from Phase 1 to Phase 2 (Go/No-Go on dataset) | 1 | Pending |
+| D1 | Proceed from Phase 1 to Phase 2 (Go/No-Go on dataset) | 1 | **Recorded 2026-11-15 — Conditional Go.** Engineering unblocked with dataset v2; operational Model A and calibrated Model B remain **No-Go** until real gauge + LGU event data are acquired. |
+| D5 | Commit the ~6 MB development dataset to Git | 1 | **Accepted 2026-11-15** — reproducibility beats repository slimness at this size; move to external storage if it grows or real agency data lands |
 | D2 | PaaS vs AWS Lambda for ML hosting | 4 | Pending |
 | D3 | Remote Project NOAH PMTiles vs mirrored storage | 5 | Pending (default: remote) |
 | D4 | Stakeholder validation of warning workflows | 6 | Pending |
