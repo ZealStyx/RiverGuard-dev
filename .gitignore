@@ -42,3 +42,6 @@ data/gis/*.shx
 data/gis/*.dbf
 data/gis/*.prj
 data/gis/*.kml
+
+# Next rewrites this on every build; it is generated, not source.
+apps/web/next-env.d.ts
