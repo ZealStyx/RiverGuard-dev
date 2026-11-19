@@ -2,6 +2,8 @@ import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
 
 type AuthContext = GenericQueryCtx<any> | GenericMutationCtx<any>;
 
+export type AuthenticatedUser = Awaited<ReturnType<typeof requireCurrentUser>>;
+
 export async function requireCurrentUser(ctx: AuthContext) {
   const identity = await ctx.auth.getUserIdentity();
   if (identity === null) {
@@ -27,7 +29,7 @@ export async function requireCurrentUser(ctx: AuthContext) {
 
 export async function requireRole(
   ctx: AuthContext,
-  roles: Array<"resident" | "lgu" | "admin">,
+  roles: Array<"resident" | "lgu" | "researcher" | "admin">,
 ) {
   const user = await requireCurrentUser(ctx);
   if (!roles.includes(user.role)) {

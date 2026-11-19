@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-18T10:25:29+00:00",
+  "generated_at": "2026-11-16T15:46:37+00:00",
   "dataset": "data/daily_observations.csv (dataset v2)",
   "samples": {
     "total": 15872,
@@ -7,53 +7,53 @@
     "validation": 1460,
     "test": 2728,
     "positives": {
-      "train": 265,
-      "validation": 17,
-      "test": 46
+      "train": 256,
+      "validation": 19,
+      "test": 53
     },
-    "positive_rate_test": 0.0169
+    "positive_rate_test": 0.0194
   },
   "classifier": {
-    "average_precision_test": 0.713,
-    "roc_auc_test": 0.9935,
-    "brier_test": 0.0082,
-    "operating_threshold": 0.4,
+    "average_precision_test": 0.786,
+    "roc_auc_test": 0.9937,
+    "brier_test": 0.0087,
+    "operating_threshold": 0.3439,
     "at_operating_threshold_test": {
-      "threshold": 0.4,
-      "precision": 0.625,
-      "recall": 0.6522,
-      "f1": 0.6383,
-      "tp": 30,
-      "fp": 18,
-      "fn": 16,
-      "tn": 2664,
-      "false_alarm_rate": 0.0067
+      "threshold": 0.3439,
+      "precision": 0.775,
+      "recall": 0.5849,
+      "f1": 0.6667,
+      "tp": 31,
+      "fp": 9,
+      "fn": 22,
+      "tn": 2666,
+      "false_alarm_rate": 0.0034
     },
     "at_0.5_test": {
       "threshold": 0.5,
-      "precision": 0.65,
-      "recall": 0.5652,
-      "f1": 0.6047,
-      "tp": 26,
-      "fp": 14,
-      "fn": 20,
-      "tn": 2668,
-      "false_alarm_rate": 0.0052
+      "precision": 0.8529,
+      "recall": 0.5472,
+      "f1": 0.6667,
+      "tp": 29,
+      "fp": 5,
+      "fn": 24,
+      "tn": 2670,
+      "false_alarm_rate": 0.0019
     },
     "calibration_test": [
       {
         "n": 546,
-        "predicted": 0.0002,
+        "predicted": 0.0003,
         "observed": 0.0
       },
       {
         "n": 546,
-        "predicted": 0.0002,
+        "predicted": 0.0003,
         "observed": 0.0
       },
       {
         "n": 546,
-        "predicted": 0.0002,
+        "predicted": 0.0003,
         "observed": 0.0
       },
       {
@@ -63,21 +63,21 @@
       },
       {
         "n": 545,
-        "predicted": 0.084,
-        "observed": 0.0844
+        "predicted": 0.0702,
+        "observed": 0.0972
       }
     ],
     "baselines": [
       {
         "name": "antecedent 7-day rain >= 150 mm",
-        "recall": 0.696,
-        "precision": 0.248,
+        "recall": 0.585,
+        "precision": 0.24,
         "flagged": 129
       },
       {
         "name": "forecast rain >= 50 mm",
-        "recall": 0.109,
-        "precision": 0.25,
+        "recall": 0.208,
+        "precision": 0.55,
         "flagged": 20
       },
       {
@@ -89,15 +89,15 @@
     ]
   },
   "regressor": {
-    "mae_test_m": 0.0574,
-    "rmse_test_m": 0.0752,
-    "r2_test": 0.9969,
-    "persistence_mae_test_m": 0.0911,
+    "mae_test_m": 0.0936,
+    "rmse_test_m": 0.1194,
+    "r2_test": 0.991,
+    "persistence_mae_test_m": 0.1725,
     "per_city_mae_test_m": {
-      "Quezon City": 0.0609,
-      "Marikina": 0.0607,
-      "Manila": 0.0529,
-      "Pasig": 0.055
+      "Quezon City": 0.0969,
+      "Marikina": 0.0955,
+      "Manila": 0.0923,
+      "Pasig": 0.0895
     }
   },
   "caveat": "WaterLevel_m and FloodOccurrence are derived from Rainfall_mm in dataset v2, so these scores measure how well the model recovers the generator, not forecast skill. See docs/ml-methodology.md section 2."

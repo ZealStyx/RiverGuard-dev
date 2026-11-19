@@ -370,30 +370,6 @@ npm run format        # rewrite files with prettier
 (`node scripts/import_historical_dataset.mjs --validate-only` to check it first);
 neither is needed to run the website locally.
 
-### Backfilling observed days
-
-The history chart continues past the dataset's last row only with days a forecast run retrieved, so any
-day nobody opened the app for is a gap. `data:backfill` fills gaps from Open-Meteo's **historical forecast
-archive** (2021-01-01 onward), writing through the same store the app writes to:
-
-```bash
-npm run data:backfill -- --from 2026-11-15 --to 2026-11-17 --dry-run   # fetch, validate, report
-npm run data:backfill -- --from 2026-11-15 --to 2026-11-17             # write the missing days
-npm run data:backfill -- --from ... --to ... --city marikina --freeze backfill.json
-npm run data:backfill -- --from-file backfill.json --target local      # replay offline
-```
-
-- `--target` is `auto` by default: the Convex deployment when `NEXT_PUBLIC_CONVEX_URL` (or `CONVEX_URL`)
-  is set — read from the environment, then from `apps/web/.env.local` — otherwise `.data/observations.json`.
-- Existing days are left alone unless you pass `--overwrite`, so a re-run is always safe.
-- The script reports per-city `dropped`, `coverage` (ET0 and soil moisture are not continuous in the
-  archive) and `written`, and exits non-zero if it refused or wrote nothing.
-- Rows it writes are labelled `provider = open-meteo-historical-forecast`. They are model output — a
-  near-analysis — not gauge readings, and not the forecast as it was issued at the time.
-
-`npm run data:backfill -- --help` lists every flag. What the archive is, and what it cannot cover, is
-section S7 of [`docs/data-sources.md`](docs/data-sources.md).
-
 ---
 
 ## 5. Troubleshooting

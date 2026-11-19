@@ -6,7 +6,7 @@
 >
 > **Initial study coverage:** Quezon City, Marikina, Manila, and Pasig.
 
-> **Current role consolidation (November 2026):** The active prototype uses three product roles: Resident, LGU operator, and Administrator. Research workflows are administrator tools under `/admin/research/*`; the older Researcher role and `/researcher/*` routes are retained only as compatibility aliases.
+> **Current redesign direction (November 2026):** RiverGuard uses four product roles: Resident, LGU operator, Researcher, and Administrator. Researcher forecasting is being rebuilt as a dedicated workspace. New screens should first be validated under an isolated preview route before replacing the existing `/researcher/*` experience.
 
 ## 1. How to use this document
 
@@ -40,16 +40,147 @@ Use this cheat sheet when creating the sitemap, user flows, low-fidelity wirefra
 9. Predictions do not replace PAGASA advisories, LGU procedures, professional assessment, or evacuation instructions.
 10. Every result should expose its location, valid date, retrieval/creation time, source, model version, quality status, and limitations when available.
 
+## 2A. Canonical premium visual direction
+
+RiverGuard should feel like a premium environmental-intelligence product: calm, precise, spacious, and trustworthy. The visual reference is a map-led weather dashboard with an atmospheric blue backdrop, a large white application shell, restrained navigation, and clearly grouped analytical surfaces. Use the reference for hierarchy and mood, not for copied branding, copy, or unrelated weather widgets.
+
+### Experience principles
+
+1. **One dominant task per page.** The Researcher Forecast Workspace answers one question: what is the forecast, where is it, and why did the model produce it?
+2. **Map first, evidence second.** The map is the largest visual surface. Prediction evidence sits beside and below it in a predictable reading order.
+3. **Progressive disclosure.** Show the current result first. Detailed inputs, provenance, metrics, and limitations follow without competing for attention.
+4. **One navigation system.** Researcher screens use one horizontal application header. Do not combine a top navigation with one or two sidebars.
+5. **Premium through restraint.** Use generous whitespace, exact alignment, quiet borders, and strong typography. Avoid decorative clutter, excessive pills, glass effects, and dense admin-style card grids.
+6. **Evidence is never decoration.** Every chart, status, and map layer must have a source, unit, valid time, and user purpose.
+
+### 60–30–10 colour system
+
+| Share   | Use                                                       | Direction                                                                                         |
+| ------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **60%** | Application shell and content surfaces                    | White and very pale blue-white surfaces                                                           |
+| **30%** | Atmospheric ground, navigation emphasis, and data context | Deep ocean blue through clear sky blue; subtle cloud texture is allowed outside the content shell |
+| **10%** | Actions and semantic emphasis                             | Teal for primary actions; blue for rainfall; green, amber, and red only for risk/status meaning   |
+
+The application shell must remain readable without the atmospheric background. Gradients belong to the outer ground or a single deliberate data treatment, not every card.
+
+### Typography and density
+
+- Use Geist as the application typeface.
+- Use a confident page title, compact section titles, readable body text, and small metadata only for secondary evidence.
+- Prefer sentence case. Avoid all-caps except short status labels such as `LIVE FORECAST`.
+- Use tabular numerals for probabilities, rainfall, water levels, dates, and model metrics.
+- Keep controls at least 44 px high and preserve visible keyboard focus.
+- Research pages may be information-rich, but no section should look like an undifferentiated spreadsheet.
+
+### Shape, depth, and iconography
+
+- Use one soft radius scale across the shell, cards, controls, and charts.
+- Use subtle borders before shadows; reserve the strongest shadow for the outer application shell.
+- Keep content nesting to two surfaces deep.
+- Use a consistent professional icon family. Do not use emoji as product icons or logos.
+- Risk must never be communicated by colour alone; pair colour with text and, where useful, an icon.
+
+### Motion
+
+- Buttons may lift or brighten slightly on hover and compress on press.
+- Charts may animate once when fresh data arrives, then remain still.
+- Map and panel transitions should be quiet and functional.
+- Respect `prefers-reduced-motion` and never animate every card on scroll.
+
+### Explicitly avoid
+
+- cartoon backgrounds or decorative illustrations;
+- emoji-style logos;
+- duplicate navigation or double sidebars;
+- unrelated weather, air-quality, or station widgets;
+- large collections of equal-weight cards;
+- neon gradients, violet accents, or heavy glassmorphism;
+- invented precision, unsupported map overlays, or unlabeled fixture data.
+
+## 2B. Researcher information architecture
+
+The dedicated Researcher experience has three destinations:
+
+1. **Forecast Workspace** — run and understand the current seven-day forecast.
+2. **History** — review stored forecast runs created by authorized roles.
+3. **Model & Data Reference** — read how the current model, inputs, metrics, sources, and limitations work.
+
+### Forecast Workspace composition
+
+```text
+Application header
+    RiverGuard · Forecast Workspace · History · Model & Data Reference · account
+
+Live forecast strip
+    provider status · selected location · retrieved time · Run forecast
+
+Primary split
+    dominant map and location context | forecast overview
+
+Seven-day forecast
+    rainfall bars · probability line · threshold · daily risk labels
+
+Evidence
+    exact model inputs | why this prediction / sensitivity
+
+Data status
+    source · freshness · model version · quality · limitations
+```
+
+The map may show the selected city, verified boundaries, rivers, and hazard layers. A future multi-point Open-Meteo layer may be labelled **Rainfall context**. Do not call it a flood-risk heatmap. The current city-level model cannot produce a spatial ML-risk surface.
+
+### History composition
+
+History is a shared forecast-run record, not the 30-day weather history used as model input. It should show filters, creator/role, location, requested time, provider, model version, completion/quality status, highest risk, peak probability, and a compact selected-run preview. Visibility remains role-specific and must be enforced by the backend.
+
+### Model & Data Reference composition
+
+This page is read-only for researchers. It explains the active model version, feature schema, required inputs, operating threshold, data sources, performance reference, model limitations, and the meaning of probability and predicted water level. It is documentation and evidence, not model configuration.
+
+### Responsive behaviour
+
+- **Desktop:** horizontal navigation; map and forecast overview share the first content row.
+- **Tablet:** keep the horizontal header compact; stack forecast overview below the map when necessary.
+- **Mobile:** use a single-column reading order: status, result, map, seven-day outlook, inputs, explanation, provenance.
+- Tables become labelled run cards or an accessible horizontal table with a deliberate overflow treatment.
+- Every chart requires a readable table or textual alternative.
+
+### Role reuse
+
+Use shared forecast, map, provenance, and status components with role-specific detail:
+
+| Component         | Researcher                     | LGU operator                      | Resident                    | Administrator                                     |
+| ----------------- | ------------------------------ | --------------------------------- | --------------------------- | ------------------------------------------------- |
+| Forecast result   | Full technical result          | Operational interpretation        | Plain-language summary      | System/audit view                                 |
+| Seven-day outlook | Full chart and daily evidence  | Action-oriented outlook           | Simplified daily outlook    | Available for audit                               |
+| Model inputs      | Full read-only values          | Important contributing conditions | Hidden                      | Full values                                       |
+| Explanation       | Sensitivity charts and reasons | Short reasons                     | Plain-language explanation  | Full evidence                                     |
+| History           | Authorized technical history   | Assigned-location history         | Own requests/public results | All runs                                          |
+| Model reference   | Full read-only reference       | Summary                           | Hidden                      | Reference plus controlled configuration elsewhere |
+
+### Safe implementation path
+
+Build and validate the redesign under isolated preview routes before replacing production navigation:
+
+```text
+/researcher-preview
+/researcher-preview/history
+/researcher-preview/model-data
+```
+
+The preview must use real forecast and Convex responses where available. Mock values must be visibly identified and must not survive into the replacement routes.
+
 ## 3. Application roles and account policy
 
 ### 3.1 Product roles
 
-| Role                       | Primary goal                                                                                                              | Initial availability         |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| **Guest / Public Visitor** | View general project information and, in a future public version, supported public outlooks                               | **Future public experience** |
-| **Resident / Public User** | View a simplified location outlook, save preferences, and read official-source reminders                                  | **Future**                   |
-| **LGU / DRRMO Operator**   | Review forecasts, record assessments, acknowledge items, and prepare controlled alert drafts                              | **Optional/Future**          |
-| **Administrator**          | Use research tools, approve users, assign roles, configure supported locations/providers/models, and review audit history | **Prototype primary role**   |
+| Role                       | Primary goal                                                                                                    | Initial availability       |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| **Guest / Public Visitor** | View project information and supported public outlooks                                                          | **Public information**     |
+| **Resident / Public User** | View a simplified location outlook and request an informational personal forecast                               | **Active / being refined** |
+| **LGU / DRRMO Operator**   | Review assigned-location forecasts and prepare controlled operational communication                             | **Active / being refined** |
+| **Researcher**             | Run forecasts, inspect complete model evidence, review shared history, and read model/data reference material   | **Dedicated redesign**     |
+| **Administrator**          | Approve users, assign roles, configure supported locations/providers/models, and review system and audit status | **Active governance role** |
 
 Product Owner, Scrum Master, and Development Team are project-delivery roles. They do not automatically need separate application roles. If they use the application, they receive one of the product roles above.
 
@@ -57,16 +188,15 @@ Product Owner, Scrum Master, and Development Team are project-delivery roles. Th
 
 - Public information may be browsed without an account in a future hosted version.
 - Residents may self-register only for resident features such as saved locations or notification preferences.
-- A person must **not** gain LGU or Administrator permissions merely by selecting that role during sign-up.
-- LGU access uses an access request that an administrator approves. Administrator access is invitation-only.
+- A person must **not** gain LGU, Researcher, or Administrator permissions merely by selecting that role during sign-up.
+- LGU and Researcher access use an access request that an administrator approves. Administrator access is assigned by an existing administrator or controlled setup.
 - The first administrator is created through a controlled setup process, not public sign-up.
-- LGU and Administrator accounts should use multi-factor authentication when authentication is implemented.
-- The authentication provider has not yet been selected. Designs should remain provider-neutral.
-- Because the current application is local, login/sign-up may remain a designed future flow until account infrastructure is implemented.
+- Firebase provides email/password and Google authentication. SMS, OTP, password recovery, and multi-factor authentication are outside the current delivery scope.
+- Firebase proves identity; Convex stores RiverGuard role, status, profile, and authorization data.
 
-### 3.4 Administrator capabilities
+### 3.4 Capability boundaries
 
-The Administrator role is intentionally broad for the current small-team prototype, but its UI is divided into capabilities so a dedicated Researcher role can be restored later without redesigning the workspace:
+Research and governance are separate responsibilities even when one developer tests both roles:
 
 - `research.read`
 - `research.runForecast`
@@ -74,6 +204,8 @@ The Administrator role is intentionally broad for the current small-team prototy
 - `governance.manageUsers`
 - `governance.configureSystem`
 - `governance.viewAudit`
+
+Researchers receive the research capabilities only. Administrators receive governance capabilities and may inspect research records for auditing, but administration should not be presented as the primary research workspace.
 
 ### 3.3 Account states
 
@@ -98,17 +230,17 @@ flowchart TD
     D -->|Yes| E[Log in]
     D -->|No| F[Create account / request access]
     E --> G{Credentials valid?}
-    G -->|No| H[Inline error / forgot password / locked account]
-    G -->|Yes| I{MFA required?}
-    I -->|Yes| J[MFA challenge]
-    I -->|No| K{Account state}
-    J --> K
+    G -->|No| H[Inline credential or account-state error]
+    G -->|Yes| K{Account state}
     F --> L[Verify email or identity]
     L --> M{Requested role}
     M -->|Resident| N[Resident onboarding]
     M -->|LGU operator| O[Pending administrator approval]
+    M -->|Researcher| O
+    M -->|Administrator| U[Controlled administrator assignment]
     O -->|Approved| P[Role-specific onboarding]
     O -->|Rejected| Q[Access request result]
+    U --> P
     K -->|Active, first visit| R[Role-specific onboarding]
     K -->|Active, returning| S[Role dashboard]
     K -->|Pending / suspended / locked| T[Account status or recovery]
@@ -234,6 +366,8 @@ flowchart TD
 
 ### AUTH-07 — Forgot password
 
+**Status:** Deferred and removed from the current authentication flow.
+
 **Input:** account email.
 
 **Buttons:** `Send Reset Link`, `Back to Log In`.
@@ -241,6 +375,8 @@ flowchart TD
 Always show a neutral success message whether or not an account exists.
 
 ### AUTH-08 — Reset password
+
+**Status:** Deferred and removed from the current authentication flow.
 
 **Inputs:** new password and confirm new password.
 
@@ -252,7 +388,7 @@ Always show a neutral success message whether or not an account exists.
 
 ### AUTH-09 — MFA setup and challenge
 
-**Status:** Future; recommended for LGU and Administrator roles.
+**Status:** Future and outside the current delivery scope.
 
 **Setup flow:** choose supported method → scan/register → enter test code → show recovery codes → confirm recovery-code storage.
 
@@ -296,14 +432,14 @@ Each screen must explain what happened without exposing security details and pro
 
 **Skip behavior:** preference steps may be skipped; safety/limitations acknowledgement should not be hidden.
 
-### ONB-02 — Administrator research orientation
+### ONB-02 — Researcher orientation
 
 1. Confirm profile and organization
 2. Explain supported geography and data limitations
-3. Explain Model A versus Model B and experimental statuses
-4. Tour Data Sources, Run Forecast, Forecast History, and Model Evaluation
+3. Explain the current model, inputs, and experimental status
+4. Tour Forecast Workspace, History, and Model & Data Reference
 5. Confirm responsible-use acknowledgement
-6. `Go to Research Dashboard`
+6. `Go to Forecast Workspace`
 
 ### ONB-03 — LGU operator onboarding
 
@@ -318,7 +454,7 @@ Each screen must explain what happened without exposing security details and pro
 ### ONB-04 — Administrator onboarding
 
 1. Verify organization and administrator assignment
-2. Complete MFA setup
+2. Confirm account and security responsibilities
 3. Review supported locations and role policy
 4. Review weather-provider, model, and data-source configuration status
 5. Review audit and user-approval responsibilities
@@ -396,17 +532,17 @@ If public hosting does not exist, this flow remains a future wireframe only.
 
 Create account → Verify → Resident onboarding → Select/save city → View seven-day outlook → Open a day → Read experimental status and limitations → View static hazard context separately → Review the official-source reminder → Adjust preferences → Log out.
 
-### 9.3 Administrator research flow
+### 9.3 Researcher flow
 
-Receive administrator invitation → Verify → MFA → Administrator onboarding → Open Research tools → Review data quality → Inspect data source → Configure manual forecast → Review inputs → Run → Monitor progress → Inspect result/explanation → Compare previous run → Review model card/methodology → Return to governance tools → Log out.
+Create account/request Researcher access → Verify identity → Administrator approval → Researcher onboarding → Open Forecast Workspace → Select location → Run forecast → Inspect seven-day result, model inputs, explanation, and quality → Review shared History → Read Model & Data Reference → Log out.
 
 ### 9.4 LGU operator flow
 
-Request access/invitation → Verify → Administrator approval → MFA → LGU onboarding → Open assigned-area dashboard → Review latest run and quality warnings → Inspect day/location details → Acknowledge review → Add internal note → Escalate for official assessment when needed → Prepare alert draft in a future phase → Authorized approval outside/inside defined workflow → Log out.
+Request access/invitation → Verify → Administrator approval → LGU onboarding → Open assigned-area dashboard → Review latest run and quality warnings → Inspect day/location details → Acknowledge review → Add internal note → Escalate for official assessment when needed → Prepare alert draft in a future phase → Authorized approval outside/inside defined workflow → Log out.
 
 ### 9.5 Administrator flow
 
-Controlled administrator invitation/setup → Verify → MFA → Admin onboarding → Review pending access requests → Approve/reject and assign locations → Check supported-location configuration → Review provider/model status → Review audit log → Suspend/deactivate an account when authorized → Log out.
+Controlled administrator assignment/setup → Verify → Admin onboarding → Review pending access requests → Approve/reject and assign locations → Check supported-location configuration → Review provider/model status → Review audit log → Suspend/deactivate an account when authorized → Log out.
 
 ## 10. Core product screens
 
@@ -414,7 +550,7 @@ Controlled administrator invitation/setup → Verify → MFA → Admin onboardin
 
 **Common outputs:** supported locations, latest data/forecast time, quality warnings, service status, recent activity, and coverage map.
 
-**Administrator research buttons:** `Run Forecast`, `Open Map`, `View Latest Run`, `Review Data Quality`.
+**Researcher buttons:** `Run Forecast`, `Open History`, `View Model & Data Reference`.
 
 **LGU buttons:** `Review Latest Forecast`, `Open Assigned Area`, `Open Review Queue`.
 
@@ -531,9 +667,9 @@ Publication is a separate, high-consequence action and must never occur automati
 
 ### APP-14 — Users and roles
 
-**Table:** name, organization, role, status, assigned locations, MFA status, last access.
+**Table:** name, organization, role, status, assigned locations, and last access.
 
-**Actions:** `Invite User`, `Edit Access`, `Suspend`, `Reactivate`, `Deactivate`, `Reset MFA`, and `View Activity`.
+**Actions:** `Invite User`, `Edit Access`, `Suspend`, `Reactivate`, `Deactivate`, and `View Activity`.
 
 Destructive or security-sensitive actions require clear confirmation and audit recording.
 
@@ -583,9 +719,9 @@ Controls may include increased contrast, reduced motion, text-size guidance, cha
 
 ### SET-04 — Security and sessions
 
-Show password last changed, MFA state, active sessions/devices, and recent security activity.
+Show password last changed, active sessions/devices when available, and recent security activity.
 
-Buttons: `Change Password`, `Set Up/Manage MFA`, `Download New Recovery Codes`, `Log Out Other Sessions`, and `Report Suspicious Activity`.
+Buttons may include `Change Password`, `Log Out Other Sessions`, and `Report Suspicious Activity` when supported by the authentication provider.
 
 ### SET-05 — Change password
 
@@ -604,18 +740,19 @@ Account menu action → end session → return to landing/login → show “You 
 
 ## 12. Route and permission matrix
 
-| Area                      |       Guest |          Resident |                     LGU |          Admin |
-| ------------------------- | ----------: | ----------------: | ----------------------: | -------------: |
-| Public About/Limitations  |        View |              View |                    View |           View |
-| Simplified public outlook | Future view |       Future view |                    View |           View |
-| Detailed historical data  |          No |                No |           Assigned view |           View |
-| Run forecast              |          No |                No | Optional assigned areas |            Yes |
-| Model evaluation          |          No |                No |            Summary only | View/configure |
-| Review queue              |          No |                No |                     Yes |           View |
-| Alert draft               |          No |                No |   Future assigned users |  Future manage |
-| User/role management      |          No |                No |                      No |            Yes |
-| System configuration      |          No |                No |                      No |            Yes |
-| Audit log                 |          No | Own activity only |       Assigned activity |            Yes |
+| Area                       | Guest |                    Resident |                   LGU |                   Researcher |         Admin |
+| -------------------------- | ----: | --------------------------: | --------------------: | ---------------------------: | ------------: |
+| Public About/Limitations   |  View |                        View |                  View |                         View |          View |
+| Simplified public outlook  |  View |                        View |                  View |                         View |          View |
+| Run informational forecast |    No |                Own location |        Assigned areas |              Supported areas |           Yes |
+| Forecast history           |    No | Own requests/public results |    Assigned locations | Authorized technical history |      All runs |
+| Detailed model inputs      |    No |                          No |               Summary |                    Read-only |          View |
+| Model & Data Reference     |    No |                          No |               Summary |                    Read-only |          View |
+| Review queue               |    No |                          No |                   Yes |                           No |          View |
+| Alert draft                |    No |                          No | Future assigned users |                           No | Future manage |
+| User/role management       |    No |                          No |                    No |                           No |           Yes |
+| System configuration       |    No |                          No |                    No |                           No |           Yes |
+| Audit log                  |    No |           Own activity only |     Assigned activity | Own/shared research activity |  All activity |
 
 The backend must enforce permissions. Hiding navigation items is not sufficient authorization.
 
@@ -764,7 +901,7 @@ Forms must preserve valid input after recoverable failures, identify errors next
 2. Authentication and account-state flow
 3. Role-specific onboarding
 4. Shared shell and navigation
-5. Administrator research workspace and core forecast journey
+5. Researcher Forecast Workspace and core forecast journey
 6. Map, location, data-source, and model-detail screens
 7. LGU review and future alert-approval journey
 8. Resident simplified journey
@@ -775,6 +912,6 @@ Forms must preserve valid input after recoverable failures, identify errors next
 
 The recommended first connected prototype is:
 
-**Welcome → Log In → Administrator MFA → Administrator Onboarding → Research Tools → Run Forecast → Progress → Results → Day Detail → Log Out.**
+**Welcome → Log In → Researcher Workspace → Run Forecast → Review Seven-Day Result → Open History → Open Model & Data Reference → Log Out.**
 
-After that path works, adapt the shared system for Resident, LGU, and Administrator flows instead of designing four unrelated products.
+After that path works, adapt the shared forecast, map, provenance, and status components for Resident, LGU, and Administrator views instead of designing four unrelated products.

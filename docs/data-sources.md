@@ -30,66 +30,11 @@ The distinction matters when reading any screen in the app:
 | Used for                                 | Source                                                               | When                                                           |
 | ---------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------- |
 | **Model training**                       | `data/daily_observations.csv` (S4 ERA5 tail + S6 synthetic backfill) | Offline, in `ml/` — writes `ml/artifacts/{model,metrics}.json` |
-| **Historical charts / provenance panel** | the same CSV, then stored provider days past its last row            | Every page load (`GET /api/historical`, `GET /api/dataset`)    |
+| **Historical charts / provenance panel** | the same CSV                                                         | Every page load (`GET /api/historical`, `GET /api/dataset`)    |
 | **Model input at run time**              | the live weather provider (Open-Meteo, or the labelled fixture)      | Every "Run forecast" (`POST /api/forecast`)                    |
 
 The CSV never feeds a live prediction. It is training data and history; the weather provider is the
 input a forecast is scored from. Anything that presents CSV rows as the input to a run is wrong.
-
-## 1.2 Observed days after the dataset ends
-
-The CSV is a snapshot: it ends on its generated `END_DATE` (currently 2026-11-14). Every forecast run
-already retrieves a live ~31-day window from Open-Meteo, so those observed days are now kept instead
-of being discarded with the HTTP response.
-
-| Code | `apps/web/src/lib/observation-store.ts` (read/write), `convex/observations.ts` (database side) |
-| Storage | **Convex deployment**, table `observedWeather`, when `NEXT_PUBLIC_CONVEX_URL` is set — the normal case |
-| Fallback | `<repo>/.data/observations.json` (gitignored; `OBSERVATION_STORE_PATH` overrides) when there is no deployment |
-| Written by | `POST /api/forecast`, after the run is stored — one row per `locationCode:date`, upserted |
-| Refused | degraded bundles, the offline fixture, and empty windows: illustrative numbers must never become history |
-| Read by | `GET /api/historical` (days strictly after the CSV's last row) and `GET /api/system` |
-| Caps | file store: 120 days per city, 480 in total. The deployment keeps every day it is given |
-
-Which backend is used follows run persistence exactly (`lib/forecast-persistence.ts`): with a deployment
-configured, nothing is written to the JSON file — one source of truth at a time — and a Convex failure is
-reported in the run's `warnings` rather than silently falling back. With no deployment the file is used, so
-the local prototype keeps working offline. The table needs the schema pushed once: `npm run convex:dev`
-(or `npx convex deploy`) with the current `convex/` directory.
-
-**What is stored** is only what the provider reported: rainfall, temperatures, ET0, soil moisture and the
-per-day rainfall source. No water level is written, because the proxy below is derived at read time — the
-table stays a faithful copy of the provider window instead of a second, drifting version of the dataset.
-
-**Water level on those days** is the dataset generator's own derivation
-(`data/generate_dataset.py`): rainfall routed through a fast store (`0.80/day`) and a slow baseflow store
-(`0.97/day`), with the resulting index mapped onto that river's alarm band — `p98(index)` at Alarm 1, the
-dry-season floor at `Alarm1 − 2.0 m`, and Alarm 3 as the cap. The chart replays the CSV's rainfall from
-its first row to recover the reservoir state at the dataset's end, then continues with the stored days,
-so the seam is continuous. The generator's `N(0, 0.05)` m noise is **not** reproduced: a derived proxy
-should not jitter because of a random number generator in another process. Against the CSV's own
-`WaterLevel_m` column the derivation agrees to within that noise (0.13 m worst case over four cities and
-40 days).
-
-**Rules that keep the chart honest**
-
-- A day the CSV already covers is never replaced. The CSV wins its dates; the store only extends the series.
-- Rain and antecedent windows come from the merged series. A window with a hole yields `null` rather than
-  a smaller number, so a level is withheld until its 3- and 7-day windows are complete.
-- The 24-hour change is only computed between consecutive calendar days. Across a gap the row shows no
-  change instead of reporting several days as one.
-- A location never covered by a run simply ends where the CSV does; the chart says so and shows no live days.
-
-**Filling the gaps.** A day nobody opened the app for is missing from the store, and the live endpoint's
-`past_days` only reaches back 92 days (and returns today's view of those days anyway).
-`npm run data:backfill` (`scripts/backfill_observed_weather.mjs`) asks the historical forecast archive (S7)
-for a date range and writes the missing days through the same `observations:recordWindow` mutation, so the
-chart fills in with no other change. Those rows carry `provider = open-meteo-historical-forecast`: an
-archive day is never mistaken for one a run collected, or for a gauge. Days already stored are left alone
-unless `--overwrite` is passed, and the run reports per-column coverage — ET0 and soil moisture are not
-continuous in the archive, and the script writes `null` rather than a substitute.
-
-To start over, delete that city's `observedWeather` rows — or `.data/observations.json` when no deployment
-is configured — and the chart returns to the CSV's last row.
 
 ---
 
@@ -168,48 +113,29 @@ training labels because the daily/site attribution needed for that is missing.
 
 ### S6 — RiverGuard synthetic generator
 
-| Field            | Value                                                                                                                                                                                                                                                                                                                                             |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| File             | `data/generate_dataset.py` (seed 42, deterministic)                                                                                                                                                                                                                                                                                               |
-| Rainfall         | Markov wet/dry state + Gamma intensity; monthly totals rescaled to S1 normals × U(0.85, 1.15); 60 % shared NCR synoptic factor                                                                                                                                                                                                                    |
-| Water level      | Rainfall routed through two stores — `quick_t = 0.80·quick + Rain`, `slow_t = 0.97·slow + 0.06·Rain`, `index = 0.012·quick + 0.030·slow` — then mapped onto the river's alarms: `p98(index)` → Alarm 1, dry-season floor `Alarm 1 − 2.0 m`, cap `Alarm 3`, noise `N(0, 0.05)`. Rises after a storm and recedes over days; Alarm 1 on ~2 % of days |
-| Soil moisture    | Bucket: `SM += Rain − ET0 − 0.08·SM`, clamped 5–95                                                                                                                                                                                                                                                                                                |
-| Flood label      | `WL ≥ Alarm1 OR (Rain ≥ 100 & Ant7 ≥ 150) OR Ant3 ≥ 250`                                                                                                                                                                                                                                                                                          |
-| Units / timezone | mm/day, m, %, °C · Asia/Manila local days                                                                                                                                                                                                                                                                                                         |
-| Licence          | Generated in-repo; no third-party data redistributed                                                                                                                                                                                                                                                                                              |
-| Limitation       | **Not observations.** Water level is a formula over rainfall, so any model trained on it partly relearns that formula.                                                                                                                                                                                                                            |
-
-### S7 — Open-Meteo historical forecast archive
-
-| Field        | Value                                                                                                                                                                                                                                                                                                          |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Provider     | Open-Meteo (archived runs of ECMWF IFS, GFS, ICON and others)                                                                                                                                                                                                                                                  |
-| Endpoint     | `historical-forecast-api.open-meteo.com/v1/forecast`                                                                                                                                                                                                                                                           |
-| Variables    | `precipitation_sum`, `temperature_2m_max/min`, `et0_fao_evapotranspiration` (daily); `soil_moisture_0_to_7cm` (hourly, averaged per local day with a 6-sample minimum)                                                                                                                                         |
-| Coordinates  | The same four as S4 — Marikina 14.65/121.10 · Quezon City 14.6509/121.0486 · Manila 14.587/120.979 · Pasig 14.59/121.07                                                                                                                                                                                        |
-| Coverage     | 2021-01-01 → present. One backfill run is capped at 365 days, and nothing beyond today in Manila                                                                                                                                                                                                               |
-| Timezone     | Asia/Manila (`timezone=Asia/Manila`)                                                                                                                                                                                                                                                                           |
-| Requested by | `scripts/backfill_observed_weather.mjs` (`npm run data:backfill`) — on demand only; never called at run time                                                                                                                                                                                                   |
-| Written to   | The observation store (`observedWeather`, or `.data/observations.json` with no deployment), `provider = open-meteo-historical-forecast`                                                                                                                                                                        |
-| Licence      | Open-Meteo, CC-BY-4.0; the free tier is for non-commercial use                                                                                                                                                                                                                                                 |
-| Limitation   | **Model output, not a gauge** — and not the forecast as it was issued either: the archive keeps each update's initial hours, so a day's value is a near-analysis. For fixed-lead forecasts use Open-Meteo's Previous Runs API (from 2024); there is no issue-time archive for pre-2021 events such as Ulysses. |
-
-This is the source that closes, for recent days, the gap listed in §3. It never touches
-`data/daily_observations.csv`: the dataset stays a generated snapshot, and the archive only fills the live
-store that extends it.
+| Field            | Value                                                                                                                                                 |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File             | `data/generate_dataset.py` (seed 42, deterministic)                                                                                                   |
+| Rainfall         | Markov wet/dry state + Gamma intensity; monthly totals rescaled to S1 normals × U(0.85, 1.15); 60 % shared NCR synoptic factor                        |
+| Water level      | `WL = base + 0.006·Ant7 + 0.018·Rain + 0.004·Ant3 + ((Alarm3−Alarm1)/40000)·Rain² + N(0, 0.10)`; datum calibrated so Alarm 1 is exceeded ~2 % of days |
+| Soil moisture    | Bucket: `SM += Rain − ET0 − 0.08·SM`, clamped 5–95                                                                                                    |
+| Flood label      | `WL ≥ Alarm1 OR (Rain ≥ 100 & Ant7 ≥ 150) OR Ant3 ≥ 250`                                                                                              |
+| Units / timezone | mm/day, m, %, °C · Asia/Manila local days                                                                                                             |
+| Licence          | Generated in-repo; no third-party data redistributed                                                                                                  |
+| Limitation       | **Not observations.** Water level is a formula over rainfall, so any model trained on it partly relearns that formula.                                |
 
 ---
 
 ## 3. What is still missing (Phase 1 remainder)
 
-| Gap                                                | Why it matters                              | Where to request                                                                                                                                               |
-| -------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PAGASA AWS / EFCOS rainfall series                 | Real rainfall at station resolution, hourly | PAGASA-HMD; DOST-ASTI PhilSensors                                                                                                                              |
-| PAGASA FFWS / EFCOS water-level telemetry          | Only real data can satisfy the Model A gate | PAGASA FFWS; Marikina MDRRMO                                                                                                                                   |
-| LGU-verified flood events with dates and locations | Label quality for Model B                   | CDRRMO of QC, Marikina, Manila, Pasig; NDRRMC                                                                                                                  |
-| NCR / barangay boundaries, rivers, catchments      | Map layers                                  | PSA; Project NOAH; OSM (with licence checks)                                                                                                                   |
-| DEM/DTM, land cover, soils                         | Terrain features                            | DOST-ASTI; PhilGIS                                                                                                                                             |
-| Issue-time forecast snapshots before 2021          | Reproduce what was known at issue time      | Partly closed for recent days by S7 (archive 2021→now, fixed 1–7 day leads via Previous Runs from 2024); still missing for earlier events such as Ulysses 2020 |
+| Gap                                                | Why it matters                              | Where to request                                   |
+| -------------------------------------------------- | ------------------------------------------- | -------------------------------------------------- |
+| PAGASA AWS / EFCOS rainfall series                 | Real rainfall at station resolution, hourly | PAGASA-HMD; DOST-ASTI PhilSensors                  |
+| PAGASA FFWS / EFCOS water-level telemetry          | Only real data can satisfy the Model A gate | PAGASA FFWS; Marikina MDRRMO                       |
+| LGU-verified flood events with dates and locations | Label quality for Model B                   | CDRRMO of QC, Marikina, Manila, Pasig; NDRRMC      |
+| NCR / barangay boundaries, rivers, catchments      | Map layers                                  | PSA; Project NOAH; OSM (with licence checks)       |
+| DEM/DTM, land cover, soils                         | Terrain features                            | DOST-ASTI; PhilGIS                                 |
+| Historical forecast snapshots                      | Reproduce what was known at issue time      | Provider archives (Open-Meteo/ECMWF), if available |
 
 ---
 
