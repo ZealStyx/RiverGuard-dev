@@ -15,6 +15,7 @@ import type * as forecasts from "../forecasts.js";
 import type * as hazardLayers from "../hazardLayers.js";
 import type * as historical from "../historical.js";
 import type * as lgu from "../lgu.js";
+import type * as observations from "../observations.js";
 import type * as predictions from "../predictions.js";
 import type * as reviews from "../reviews.js";
 import type * as riskAssessments from "../riskAssessments.js";
@@ -38,6 +39,7 @@ const fullApi: ApiFromModules<{
   hazardLayers: typeof hazardLayers;
   historical: typeof historical;
   lgu: typeof lgu;
+  observations: typeof observations;
   predictions: typeof predictions;
   reviews: typeof reviews;
   riskAssessments: typeof riskAssessments;
