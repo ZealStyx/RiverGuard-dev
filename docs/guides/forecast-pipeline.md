@@ -78,17 +78,11 @@ Convex subscription, so a reload does not spend another weather call.
    charts and the dataset banner — so the chain cannot start days in the past. The response reports
    the input in `observedState` (`asOfDate` = last day of that window, `rainSource`, `qualityStatus`)
    and names the source rows in `weather.notes`.
-5. **The observed window is kept before the model is asked anything.** `lib/observation-store.ts`
-   writes those days to the Convex deployment (`observedWeather`) or, without a deployment, to
-   `.data/observations.json`. It runs here, not after step 7, so a stopped ML service cannot throw
-   away weather that was retrieved successfully — which is exactly what used to happen. The days are
-   what the history chart draws after `data/daily_observations.csv` ends; the derivation and its
-   rules are in `docs/data-sources.md` §1.2. Refused for the fixture and for degraded runs.
-6. `POST {ML_API_BASE_URL}/v1/forecast/daily` with that input state and the seven days.
-7. The ML service chains them: predict day _d_, fold its rain into the antecedent sums and the soil
+5. `POST {ML_API_BASE_URL}/v1/forecast/daily` with that input state and the seven days.
+6. The ML service chains them: predict day _d_, fold its rain into the antecedent sums and the soil
    bucket, predict day _d+1_. Each day comes back with probability, water level, risk level, alarm
    crossing, and a one-sentence reason.
-8. The route stores the run, in one of two places:
+7. The route stores the run, in one of two places:
    - **Convex** (`NEXT_PUBLIC_CONVEX_URL` set) — `forecasts:recordOutlook` writes one `forecastRuns`
      row, seven `forecasts`, seven `riskAssessments`, a `modelVersions` row if it is new, and an alert
      for every `elevated` day, then resolves alerts superseded by this run.
@@ -96,58 +90,14 @@ Convex subscription, so a reload does not spend another weather call.
      `.data/runs.json` (gitignored, newest first, capped at 200 runs, written atomically). Without
      this, a run existed only in the response that produced it and run history, run detail and the
      comparison screen had nothing to read.
-9. The dashboard renders the response immediately and the Convex subscription delivers the same run
-   on the next page load. A finished run also announces itself on the client
-   (`lib/observation-refresh.ts`), so the observed-history panel refetches instead of keeping the
-   snapshot it took when it mounted.
-
-### What else is written locally
-
-Two files live beside the runs. Both are gitignored, both are written atomically with a
-temp-file rename, and both are capped so they cannot grow without bound:
-
-- `.data/reviews.json` — LGU review decisions recorded through `POST /api/reviews`, newest first,
-  capped at 500. A review is only accepted when the run it refers to exists in the active store.
-- `.data/audit.json` — audit events for a stored run or a recorded review, read back through
-  `GET /api/audit` (filtered on the server), capped at 500. There is no sign-in, so every actor is
-  `Local operator (unauthenticated)`; the screen says so rather than implying a real trail.
-
-`REVIEW_STORE_PATH` and `AUDIT_STORE_PATH` override the locations, as `RUN_STORE_PATH` does for the
-run store.
-
-### Observed inputs: gauge, soil moisture, river context
-
-Three additions sit around step 1, and all three are reported rather than assumed:
-
-- **Soil moisture is now requested, not reconstructed.** The adapter asks for hourly
-  `soil_moisture_0_to_7cm` and averages it onto each day (Open-Meteo returns m³/m³; the
-  pipeline stores percent). When the model returns no soil variable the request is retried
-  without the hourly block and the water-balance bucket stands in — `observed.soilMoistureSource`
-  records which happened, and the provider screen shows the same fact.
-- **An optional local gauge file replaces reanalysis rainfall.** `data/gauge/daily_rainfall.csv`
-  (or `GAUGE_CSV_PATH`) holds `date,location,rainfall_mm` rows. Every date it covers replaces
-  that day's provider value; the antecedent sums and the soil bucket are then recomputed from
-  the blended window, so a gauge day is not averaged with the estimate it corrects.
-  `observed.rainfallSource`, `observed.gaugeDays` and the run's input summary state the coverage
-  ("12 of 31 observed days replaced by a local rain gauge"). No file ships with the repository:
-  an absent file means the provider's history is used, and an unreadable one is reported as a
-  warning on the run. Format and provenance notes: `data/gauge/README.md`.
-- **GloFAS river discharge is context only.** `lib/flood.ts` asks the Open-Meteo Flood API for
-  daily `river_discharge` at the city's point and returns it as `riverContext` in the
-  `POST /api/forecast` response; the outlook panel prints the value for the selected day next to
-  the model's water level. It is a different quantity (m³/s of modelled river flow at ~5 km
-  resolution) and is never a feature, never stored with the run, and never drawn as a RiverGuard
-  prediction. When GloFAS has no reach there, the response carries `riverContextError` and the
-  forecast is unaffected.
-
-All three are best-effort: a soil variable, a gauge file or a Flood API call failing cannot fail
-a forecast.
+8. The dashboard renders the response immediately and the Convex subscription delivers the same run
+   on the next page load.
 
 ## 5. Failure modes
 
 | Symptom                                                                     | Cause                                                                                          | Behaviour                                                                                                                                                                                                                                                     |
 | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 503 `The local ML service did not produce a forecast`                       | uvicorn not running, or wrong `ML_API_BASE_URL`                                                | Weather result is still returned in `weather`, and the observed window is still kept for the history chart (step 5); the _run_ is not stored, and `observations` says what was written                                                                        |
+| 503 `The local ML service did not produce a forecast`                       | uvicorn not running, or wrong `ML_API_BASE_URL`                                                | Weather result is still returned in `weather`; nothing is stored                                                                                                                                                                                              |
 | 502 `Weather provider failed and the offline forecast fallback is disabled` | Open-Meteo unreachable and `WEATHER_ALLOW_FIXTURE=false`                                       | Explicit failure instead of invented numbers; no input state exists, so nothing is scored or stored                                                                                                                                                           |
 | `weather.degraded: true`                                                    | Provider failed and the fixture was allowed                                                    | Runs end to end on the labelled fixture — which is now also its input — and the outlook panel renders a warning banner plus every warning, so illustrative rainfall is never presented as a forecast                                                          |
 | `observedState.qualityStatus: "degraded"`                                   | The input came from the offline fixture                                                        | Same as `weather.degraded`; the run is shown with a warning, never as a live forecast                                                                                                                                                                         |

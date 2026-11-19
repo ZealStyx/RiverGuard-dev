@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Desk · Baha",
+      "hasCanvas": false,
+      "bodyTextLen": 1215,
+      "bodyTextHash": "3e0cd780d414f95d26c6f96b4e1ed30bf088a7eb3d53e73fb6ed260be20b2496",
+      "bodyTextPrefix": "Skip to content Baha Laguna flood desk Desk Forecast Prediction ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Desk · Baha",
+      "hasCanvas": false,
+      "bodyTextLen": 1215,
+      "bodyTextHash": "3e0cd780d414f95d26c6f96b4e1ed30bf088a7eb3d53e73fb6ed260be20b2496",
+      "bodyTextPrefix": "Skip to content Baha Laguna flood desk Desk Forecast Prediction ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}

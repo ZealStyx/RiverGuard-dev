@@ -15,6 +15,9 @@ export function WorkspaceGate({
   role: ProductRole;
   children: React.ReactNode;
 }) {
+  const devBypassAuth =
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
   const router = useRouter();
   const { user, loading: firebaseLoading } = useFirebaseAuth();
   const { isAuthenticated: convexAuthenticated, isLoading: convexLoading } =
@@ -25,6 +28,7 @@ export function WorkspaceGate({
   );
 
   useEffect(() => {
+    if (devBypassAuth) return;
     if (!firebaseLoading && user === null) {
       router.replace(`/auth/login?return=/${role}`);
       return;
@@ -32,7 +36,11 @@ export function WorkspaceGate({
     if (currentUser && currentUser.role !== role) {
       router.replace(`/${currentUser.role}`);
     }
-  }, [currentUser, firebaseLoading, role, router, user]);
+  }, [currentUser, devBypassAuth, firebaseLoading, role, router, user]);
+
+  // Local design/content preview only. The NODE_ENV check prevents this flag
+  // from weakening access control in a production build.
+  if (devBypassAuth) return children;
 
   if (
     firebaseLoading ||

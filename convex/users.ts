@@ -4,6 +4,8 @@ import {
 } from "convex/server";
 import { v } from "convex/values";
 
+import { userRoleProfileValidator, userRoleValidator } from "./validators";
+
 export const getCurrent = query({
   args: {},
   returns: v.any(),
@@ -24,13 +26,16 @@ export const getCurrent = query({
 });
 
 export const ensureCurrent = mutation({
-  args: {},
+  args: {
+    requestedRole: v.optional(userRoleValidator),
+    roleProfile: v.optional(userRoleProfileValidator),
+  },
   returns: v.object({
     userId: v.string(),
     role: v.string(),
     status: v.string(),
   }),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
 
     if (identity === null) {
@@ -51,6 +56,7 @@ export const ensureCurrent = mutation({
         email: identity.email ?? existing.email,
         displayName: identity.name ?? existing.displayName,
         updatedAt: now,
+        ...(args.roleProfile ? { roleProfile: args.roleProfile } : {}),
       });
       return {
         userId: existing._id,
@@ -63,12 +69,20 @@ export const ensureCurrent = mutation({
       externalId,
       email: identity.email ?? `${externalId}@unknown.invalid`,
       displayName: identity.name ?? identity.email ?? "RiverGuard user",
-      role: "resident",
-      status: "active",
+      role: args.requestedRole ?? "resident",
+      status:
+        args.requestedRole === "lgu" || args.requestedRole === "researcher"
+          ? "pending"
+          : "active",
+      ...(args.roleProfile ? { roleProfile: args.roleProfile } : {}),
       createdAt: now,
       updatedAt: now,
     });
 
-    return { userId, role: "resident", status: "active" };
+    return {
+      userId,
+      role: args.requestedRole ?? "resident",
+      status: "active",
+    };
   },
 });

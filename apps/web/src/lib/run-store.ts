@@ -129,12 +129,6 @@ export async function listLocalRuns(limit = 25): Promise<StoredRun[]> {
     .map((run) => ({ ...run, source: "local" as const }));
 }
 
-/** How many runs the local store holds, for the system status panel. */
-export async function countLocalRuns(): Promise<number> {
-  const store = await readStore();
-  return store.runs.length;
-}
-
 export async function getLocalRun(runId: string): Promise<StoredRun | null> {
   const store = await readStore();
   const run = store.runs.find((row) => row.runId === runId);

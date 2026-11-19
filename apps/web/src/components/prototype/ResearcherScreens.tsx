@@ -13,27 +13,16 @@ import { useEffect, useRef, useState } from "react";
 
 import { RainfallChart } from "@/components/charts/RainfallChart";
 import { MonthlyRainfallChart } from "@/components/charts/MonthlyRainfallChart";
-import {
-  TremorHistoricalCharts,
-  TremorMonthlyRainfallChart,
-} from "@/components/charts/TremorHistoricalCharts";
-import { ModelContributionPanel } from "@/components/dashboard/ModelContributionPanel";
-import {
-  convexConfigured,
-  OutlookBridge,
-} from "@/components/dashboard/OutlookBridge";
+import { ObservedHistoryChart } from "@/components/charts/ObservedHistoryChart";
+import { convexConfigured } from "@/components/dashboard/OutlookBridge";
 import { RiskSummary } from "@/components/dashboard/RiskSummary";
-import {
-  DEFAULT_LOCATION,
-  LOCATIONS,
-  locationCodeForName,
-} from "@/lib/locations";
+import { LOCATIONS, locationCodeForName } from "@/lib/locations";
 import { describePersistence } from "@/lib/persistence";
 import { convexErrorHint } from "@/lib/convex-functions";
 import { useConvexQueryResult } from "@/lib/convex-query";
 import { useOutlookFeed } from "@/lib/outlook";
 import { RiverMap } from "@/components/map/RiverMap";
-import { StationDetails } from "@/components/stations/StationDetails";
+import { ResearcherWorkspaceDashboard } from "@/components/researcher/ResearcherWorkspaceDashboard";
 import { Button } from "@/components/ui";
 import {
   dataSourceRows,
@@ -75,85 +64,7 @@ import {
 } from "./Primitives";
 
 function DashboardOverview() {
-  const [activeLayer, setActiveLayer] = useState<MapLayerId>("base");
-  const [selectedDay, setSelectedDay] = useState(0);
-  const outlook = useOutlookFeed(DEFAULT_LOCATION);
-  const refreshing = outlook.isRunning;
-  const refreshNote = outlook.error
-    ? `Forecast failed: ${outlook.error}`
-    : outlook.snapshot
-      ? `Updated ${new Date(outlook.snapshot.updatedAt).toLocaleTimeString(
-          "en-PH",
-          {
-            hour: "2-digit",
-            minute: "2-digit",
-            timeZone: "Asia/Manila",
-          },
-        )} PHT · ${outlook.snapshot.provider} · model ${outlook.snapshot.modelVersion ?? "unknown"}`
-      : "No run yet · press Refresh to fetch weather, run the model, and store the result";
-
-  function refreshPreview() {
-    void outlook.run();
-  }
-
-  return (
-    <>
-      {convexConfigured ? (
-        <OutlookBridge
-          locationCode={DEFAULT_LOCATION}
-          onSnapshot={outlook.adopt}
-        />
-      ) : null}
-      <PageHeading
-        title="Research workspace"
-        eyebrow="Administrator tools"
-        description={`NCR experimental flood-risk workspace · ${refreshNote}`}
-        actions={
-          <>
-            <ActionLink href="/admin/research/forecast/new">
-              <Play size={14} weight="fill" /> Run forecast
-            </ActionLink>
-            <Button
-              variant="quiet"
-              size="small"
-              loading={refreshing}
-              loadingLabel="Refreshing"
-              onClick={refreshPreview}
-            >
-              <ArrowClockwise size={15} /> Refresh
-            </Button>
-          </>
-        }
-      />
-
-      <div className="grid gap-3 min-[1180px]:grid-cols-[minmax(0,1.38fr)_minmax(390px,1fr)]">
-        {/* Same tall-column problem as the admin dashboard: the map stays a
-            fixed panel and follows the scroll instead of stretching. */}
-        <RiverMap
-          activeLayer={activeLayer}
-          onLayerChange={setActiveLayer}
-          className="min-[1180px]:sticky min-[1180px]:top-4 z-0"
-          cooperativeGestures
-        />
-        <div className="grid content-start gap-3">
-          <RiskSummary
-            selectedDay={selectedDay}
-            onDayChange={setSelectedDay}
-            days={outlook.snapshot?.days}
-            source={outlook.snapshot?.source}
-            note={
-              outlook.snapshot?.observed
-                ? `Model input: ${outlook.snapshot.provider}, rain through ${outlook.snapshot.observed.asOfDate}`
-                : outlook.snapshot?.warnings[0]
-            }
-          />
-          <RainfallChart />
-          <ModelContributionPanel />
-          <StationDetails />
-        </div>
-      </div>
-    </>
-  );
+  return <ResearcherWorkspaceDashboard />;
 }
 
 function MapWorkspace() {
@@ -238,10 +149,10 @@ export function LocationDetails() {
         description="City-level experimental evidence, historical sample readings, and source limitations."
         actions={
           <>
-            <ActionLink href="/admin/research/forecast/new">
+            <ActionLink href="/researcher/forecast/new">
               Run forecast
             </ActionLink>
-            <ActionLink href="/admin/research/map" variant="quiet">
+            <ActionLink href="/researcher/map" variant="quiet">
               Back to map
             </ActionLink>
           </>
@@ -307,9 +218,6 @@ export function LocationDetails() {
 
 function HistoricalData() {
   const [applied, setApplied] = useState(false);
-  const [chartMode, setChartMode] = useState<"riverguard" | "tremor">(
-    "riverguard",
-  );
   const [filters, setFilters] = useState({
     location: "Marikina",
     startDate: "2026-11-05",
@@ -439,45 +347,14 @@ function HistoricalData() {
           </p>
         ) : null}
       </Surface>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-section">Visualization comparison</h2>
-          <p className="text-metadata mt-0.5 text-muted">
-            Compare the current RiverGuard chart with the Tremor Raw-style
-            experiment.
-          </p>
-        </div>
-        <div className="flex gap-1 rounded-control border border-line bg-canvas-soft p-1">
-          <Button
-            size="small"
-            variant={chartMode === "riverguard" ? "secondary" : "quiet"}
-            onClick={() => setChartMode("riverguard")}
-          >
-            RiverGuard
-          </Button>
-          <Button
-            size="small"
-            variant={chartMode === "tremor" ? "secondary" : "quiet"}
-            onClick={() => setChartMode("tremor")}
-          >
-            Tremor trial
-          </Button>
-        </div>
-      </div>
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
-        {chartMode === "tremor" ? (
-          <TremorHistoricalCharts
-            location={appliedFilters.location}
-            startDate={appliedFilters.startDate}
-            endDate={appliedFilters.endDate}
-          />
-        ) : (
-          <RainfallChart
-            location={appliedFilters.location}
-            startDate={appliedFilters.startDate}
-            endDate={appliedFilters.endDate}
-          />
-        )}
+      <ObservedHistoryChart
+        eyebrow="Observed records"
+        location={appliedFilters.location}
+        startDate={appliedFilters.startDate}
+        endDate={appliedFilters.endDate}
+        limit={14}
+      />
+      <div className="mt-3">
         <Surface title={`Displayed data · ${appliedFilters.location}`}>
           <DataTable
             columns={[
@@ -504,26 +381,41 @@ function HistoricalData() {
         </Surface>
       </div>
       <div className="mt-3">
-        {chartMode === "tremor" ? (
-          <TremorMonthlyRainfallChart location={appliedFilters.location} />
-        ) : (
-          <MonthlyRainfallChart location={appliedFilters.location} />
-        )}
+        <MonthlyRainfallChart location={appliedFilters.location} />
       </div>
     </>
   );
 }
 
+type ForecastHorizonDays = 3 | 7;
+
+function parseForecastHorizon(value: string | null): ForecastHorizonDays {
+  return value === "3" ? 3 : 7;
+}
+
+function horizonLabel(days: ForecastHorizonDays): string {
+  return days === 3 ? "Three days" : "Seven days";
+}
+
 function ForecastForm() {
   const router = useRouter();
-  const [location, setLocation] = useState("Marikina");
-  const [includeExplanation, setIncludeExplanation] = useState(true);
+  const searchParams = useSearchParams();
+  const requestedLocation = locationCodeForName(
+    searchParams.get("location") ?? "Marikina",
+  );
+  const [location, setLocation] = useState(LOCATIONS[requestedLocation].name);
+  const [horizonDays, setHorizonDays] = useState<ForecastHorizonDays>(() =>
+    parseForecastHorizon(searchParams.get("horizonDays")),
+  );
+  const [includeExplanation, setIncludeExplanation] = useState(
+    searchParams.get("explain") !== "false",
+  );
   return (
     <>
       <PageHeading
         title="Run experimental forecast"
         eyebrow="Step 1 of 3"
-        description="Configure a manual seven-day forecast for supported locations."
+        description="Choose a supported location and a three- or seven-day model horizon."
       />
       <Surface
         className="mx-auto max-w-4xl"
@@ -545,10 +437,13 @@ function ForecastForm() {
           <SelectControl
             id="forecast-horizon"
             label="Horizon"
-            defaultValue="Seven days"
+            value={String(horizonDays)}
+            onChange={(event) =>
+              setHorizonDays(parseForecastHorizon(event.target.value))
+            }
           >
-            <option>Three days</option>
-            <option>Seven days</option>
+            <option value="3">Three days</option>
+            <option value="7">Seven days</option>
           </SelectControl>
           <TextField
             id="issue-period"
@@ -559,7 +454,7 @@ function ForecastForm() {
           <TextField
             id="weather-provider"
             label="Model input"
-            value="Open-Meteo forecast API (30 past days + 7 forecast days)"
+            value="Open-Meteo forecast API (30 past days + up to 7 future days)"
             readOnly
           />
           <TextField
@@ -587,17 +482,19 @@ function ForecastForm() {
         <Notice title="Review before running" tone="info" className="mt-3">
           Confirm the selected location and horizon. The model input is the
           weather provider&apos;s own window: today&apos;s rain, the antecedent
-          3/7/30-day sums and soil moisture, followed by its seven-day forecast.
+          3/7/30-day sums and soil moisture. RiverGuard will score the selected
+          {` ${horizonLabel(horizonDays).toLowerCase()} `}
+          from the provider&apos;s future window.
         </Notice>
         <div className="mt-4 flex justify-end gap-2">
-          <ActionLink href="/admin/research" variant="quiet">
+          <ActionLink href="/researcher" variant="quiet">
             Cancel
           </ActionLink>
           <Button
             size="small"
             onClick={() =>
               router.push(
-                `/admin/research/forecast/review?location=${encodeURIComponent(location)}&explain=${includeExplanation}`,
+                `/researcher/forecast/review?location=${encodeURIComponent(location)}&horizonDays=${horizonDays}&explain=${includeExplanation}`,
               )
             }
           >
@@ -613,6 +510,8 @@ function ForecastReview() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const requested = searchParams.get("location") ?? "Marikina";
+  const horizonDays = parseForecastHorizon(searchParams.get("horizonDays"));
+  const includeExplanation = searchParams.get("explain") !== "false";
   const locationCode = locationCodeForName(requested);
   const locationName = LOCATIONS[locationCode].name;
   const { dataset } = useDatasetMeta();
@@ -629,7 +528,7 @@ function ForecastReview() {
         <dl className="grid gap-3 sm:grid-cols-2">
           {[
             ["Location", locationName],
-            ["Horizon", "Seven days"],
+            ["Horizon", horizonLabel(horizonDays)],
             ["Issue date", "Set at run time (Asia/Manila)"],
             [
               "Observed state",
@@ -643,7 +542,12 @@ function ForecastReview() {
                 ? `${model.name} ${model.version}`
                 : "Artifacts unavailable",
             ],
-            ["Explanation", "Sensitivity sweep included"],
+            [
+              "Explanation",
+              includeExplanation
+                ? "Sensitivity sweep included"
+                : "Not requested",
+            ],
           ].map(([label, value]) => (
             <div key={label} className="rounded-control bg-canvas-soft p-3">
               <dt className="text-metadata text-muted">{label}</dt>
@@ -651,13 +555,17 @@ function ForecastReview() {
             </div>
           ))}
         </dl>
-        <Notice title="Responsible-use confirmation" tone="warning">
+        <Notice
+          title="Responsible-use confirmation"
+          tone="warning"
+          className="mt-4"
+        >
           The output will be experimental, city-level, and unsuitable as an
           official warning.
         </Notice>
         <div className="mt-4 flex justify-between gap-2">
           <ActionLink
-            href={`/admin/research/forecast/new?location=${locationCode}`}
+            href={`/researcher/forecast/new?location=${locationCode}&horizonDays=${horizonDays}&explain=${includeExplanation}`}
             variant="quiet"
           >
             Edit inputs
@@ -666,7 +574,7 @@ function ForecastReview() {
             size="small"
             onClick={() =>
               router.push(
-                `/admin/research/forecast/progress?location=${locationCode}`,
+                `/researcher/forecast/progress?location=${locationCode}&horizonDays=${horizonDays}&explain=${includeExplanation}`,
               )
             }
           >
@@ -690,13 +598,14 @@ function ForecastProgress() {
   const locationCode = locationCodeForName(
     searchParams.get("location") ?? "Marikina",
   );
-  const feed = useOutlookFeed(locationCode);
+  const horizonDays = parseForecastHorizon(searchParams.get("horizonDays"));
+  const feed = useOutlookFeed(locationCode, horizonDays);
   const started = useRef(false);
   const { run } = feed;
 
   const stages = [
     "Fetching the weather window",
-    "Scoring seven days",
+    `Scoring ${horizonDays} days`,
     "Storing the run",
   ];
 
@@ -735,11 +644,11 @@ function ForecastProgress() {
           feed.error
             ? "The pipeline stopped before it produced an outlook."
             : snapshot
-              ? "Seven days scored. Pick a day below to read its numbers."
+              ? `${horizonDays} days scored. Pick a day below to read its numbers.`
               : "Running the weather → model → storage pipeline."
         }
         actions={
-          <ActionLink href="/admin/research/runs" variant="quiet">
+          <ActionLink href="/researcher/runs" variant="quiet">
             Run history
           </ActionLink>
         }
@@ -753,7 +662,7 @@ function ForecastProgress() {
               ? "Run complete"
               : (stages[stageIndex] ?? "Starting")
         }
-        description={`${LOCATIONS[locationCode].name} · seven-day horizon`}
+        description={`${LOCATIONS[locationCode].name} · ${horizonLabel(horizonDays).toLowerCase()} horizon`}
       >
         <Stepper steps={stages} current={stageIndex} />
 
@@ -771,7 +680,10 @@ function ForecastProgress() {
               <Button size="small" onClick={() => void run()}>
                 <ArrowClockwise size={14} /> Try again
               </Button>
-              <ActionLink href="/admin/research/forecast/new" variant="quiet">
+              <ActionLink
+                href={`/researcher/forecast/new?location=${locationCode}&horizonDays=${horizonDays}`}
+                variant="quiet"
+              >
                 Edit inputs
               </ActionLink>
             </div>
@@ -870,8 +782,8 @@ function RunHistoryTable({ runs }: { runs: StoredRunSummary[] }) {
       ]}
       rows={rows}
       actions={(row) => (
-        <ActionLink href={`/admin/research/runs/${row.run}`} variant="quiet">
-          View
+        <ActionLink href={`/researcher/runs/${row.run}`} variant="secondary">
+          Inspect
         </ActionLink>
       )}
     />
@@ -1012,17 +924,12 @@ function RunHistory() {
         eyebrow="Research history"
         description="Filter, inspect, and compare forecast runs without hiding partial or failed results."
         actions={
-          <ActionLink href="/admin/research/forecast/new">
-            <Plus size={14} /> New forecast
+          <ActionLink href="/researcher/compare" variant="secondary">
+            Compare two runs
           </ActionLink>
         }
       />
       {convexConfigured ? <ConvexRunHistory /> : <LocalRunHistory />}
-      <div className="mt-3 flex justify-end">
-        <ActionLink href="/admin/research/compare" variant="secondary">
-          Compare two runs
-        </ActionLink>
-      </div>
     </>
   );
 }
@@ -1045,7 +952,7 @@ function RunDetailNotFound({ runId }: { runId: string }) {
       <EmptyPanel
         title={`No run “${runId}”`}
         description="A run exists only after someone presses Run forecast. It is read from the Convex deployment when one is configured, and from this machine’s .data/runs.json otherwise."
-        actionHref="/admin/research/runs"
+        actionHref="/researcher/runs"
         actionLabel="Back to run history"
       />
     </>
@@ -1068,7 +975,7 @@ function RunUnreadable({ runId, reason }: { runId: string; reason: string }) {
         eyebrow="Forecast runs"
         description={`Run ${runId}`}
         actions={
-          <ActionLink href="/admin/research/runs" variant="quiet">
+          <ActionLink href="/researcher/runs" variant="quiet">
             Back to run history
           </ActionLink>
         }
@@ -1099,7 +1006,7 @@ function RunDetailView({ run }: { run: StoredRun }) {
         eyebrow="Forecast runs"
         description={`Stored in the ${RUN_SOURCE_LABEL[run.source]}. Every number below is what the model wrote, including its caveats.`}
         actions={
-          <ActionLink href="/admin/research/runs" variant="quiet">
+          <ActionLink href="/researcher/runs" variant="quiet">
             Back to run history
           </ActionLink>
         }
@@ -1272,7 +1179,7 @@ function ComparePickers({
   function choose(key: "a" | "b", value: string) {
     const next = new URLSearchParams(searchParams.toString());
     next.set(key, value);
-    router.replace(`/admin/research/compare?${next.toString()}`);
+    router.replace(`/researcher/compare?${next.toString()}`);
   }
 
   return (
@@ -1510,7 +1417,7 @@ function CompareContent({
           eyebrow="Model comparison"
           description="Side-by-side comparison of stored runs."
           actions={
-            <ActionLink href="/admin/research/forecast/new">
+            <ActionLink href="/researcher/forecast/new">
               <Plus size={14} /> New forecast
             </ActionLink>
           }
@@ -1518,7 +1425,7 @@ function CompareContent({
         <EmptyPanel
           title="Nothing to compare"
           description={`Comparison needs at least two stored runs; this store has ${runs.length}. This page previously showed two invented runs and called the difference a model comparison.`}
-          actionHref="/admin/research/runs"
+          actionHref="/researcher/runs"
           actionLabel="Back to run history"
         />
       </>
@@ -1543,7 +1450,7 @@ function CompareContent({
         eyebrow="Model comparison"
         description="Two stored runs side by side, exactly as the model wrote them."
         actions={
-          <ActionLink href="/admin/research/runs" variant="quiet">
+          <ActionLink href="/researcher/runs" variant="quiet">
             Run history
           </ActionLink>
         }
@@ -1874,13 +1781,23 @@ function ModelsInner({
   basePath?: string;
 }) {
   const artifacts = useModelArtifacts();
+  const dataset = useDatasetMeta();
+  const researcherView = basePath.startsWith("/researcher");
+  const modelRows = modelVersionRows(artifacts.model, artifacts.metrics);
+  const primaryModel = modelRows[0];
   if (detail) return <ModelDetail basePath={basePath} />;
   return (
     <>
       <PageHeading
-        title="Models and evaluation"
-        eyebrow="Experimental methodology"
-        description="Review responsibility, supported coverage, evaluation status, and readiness before selecting a model."
+        title={researcherView ? "Model & data" : "Models and evaluation"}
+        eyebrow={
+          researcherView ? "Research reference" : "Experimental methodology"
+        }
+        description={
+          researcherView
+            ? "Read how RiverGuard turns weather data into a city-level flood-risk outlook."
+            : "Review responsibility, supported coverage, evaluation status, and readiness before selecting a model."
+        }
       />
       {artifacts.loading ? (
         <p className="text-body text-muted">Reading model artifacts…</p>
@@ -1888,11 +1805,160 @@ function ModelsInner({
         <Notice title="Model artifacts unavailable" tone="warning">
           {artifacts.error}
         </Notice>
+      ) : researcherView && primaryModel ? (
+        <div className="grid items-stretch gap-3 lg:grid-cols-2">
+          <Surface
+            className="flex h-full flex-col"
+            title="Model reference"
+            description="The active model, its operating thresholds, and the limitation that governs interpretation."
+            action={
+              primaryModel ? (
+                <ActionLink
+                  href={`${basePath}/${primaryModel.id}?view=research`}
+                  variant="quiet"
+                >
+                  View model card
+                </ActionLink>
+              ) : null
+            }
+          >
+            <div className="flex flex-1 flex-col divide-y divide-line">
+              {modelRows.map((model, index) => (
+                <section
+                  key={model.id}
+                  className={`flex flex-1 flex-col justify-center ${
+                    index === 0 ? "pb-4" : "py-4"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-body font-semibold">{model.name}</h3>
+                      <p className="text-metadata mt-1 text-muted">
+                        {model.responsibility}
+                      </p>
+                    </div>
+                    <StatusBadge
+                      tone={
+                        model.status === "Experimental"
+                          ? "info"
+                          : model.status === "Research use only"
+                            ? "warning"
+                            : "neutral"
+                      }
+                    >
+                      {model.status}
+                    </StatusBadge>
+                  </div>
+                  <dl className="mt-3 text-body">
+                    <dt className="text-metadata text-muted">Validation</dt>
+                    <dd className="mt-0.5">{model.validation}</dd>
+                  </dl>
+                </section>
+              ))}
+            </div>
+          </Surface>
+
+          <div className="grid h-full gap-3 lg:grid-rows-2">
+            <Surface
+              className="h-full"
+              title="Dataset provenance"
+              description="The training and historical dataset is separate from live forecast input."
+            >
+              {dataset.loading ? (
+                <p className="text-body text-muted">
+                  Reading dataset metadata…
+                </p>
+              ) : dataset.error || !dataset.dataset ? (
+                <Notice title="Dataset metadata unavailable" tone="warning">
+                  {dataset.error ?? "The dataset metadata could not be read."}
+                </Notice>
+              ) : (
+                <dl className="grid gap-3 text-body sm:grid-cols-2">
+                  <div>
+                    <dt className="text-metadata text-muted">Dataset</dt>
+                    <dd>{dataset.dataset.label}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-metadata text-muted">Rows</dt>
+                    <dd>{dataset.dataset.rows.toLocaleString()}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-metadata text-muted">Coverage</dt>
+                    <dd>
+                      {dataset.dataset.dateMin} → {dataset.dataset.dateMax}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-metadata text-muted">Resolution</dt>
+                    <dd>City-level daily</dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-metadata text-muted">
+                      Runtime distinction
+                    </dt>
+                    <dd className="text-muted">
+                      This dataset supports training and historical charts. A
+                      live forecast uses the weather provider&apos;s current
+                      window instead.
+                    </dd>
+                  </div>
+                </dl>
+              )}
+            </Surface>
+
+            <Surface
+              className="h-full"
+              title="How a forecast is produced"
+              description="Four traceable stages turn weather inputs into a stored research outlook."
+            >
+              <ol className="grid gap-2 text-body sm:grid-cols-2">
+                {[
+                  [
+                    "01",
+                    "Weather window",
+                    "Open-Meteo supplies current, antecedent, and future rainfall values.",
+                  ],
+                  [
+                    "02",
+                    "Feature calculation",
+                    "RiverGuard derives rainfall totals, soil moisture, temperature, month, and elevation.",
+                  ],
+                  [
+                    "03",
+                    "Model scoring",
+                    "The classifier and regressor estimate probability and a water-level proxy.",
+                  ],
+                  [
+                    "04",
+                    "Research outlook",
+                    "The result is stored with provider, model version, quality status, and limitations.",
+                  ],
+                ].map(([step, title, description]) => (
+                  <li
+                    key={step}
+                    className="flex gap-3 rounded-control bg-canvas-soft p-3"
+                  >
+                    <span className="text-metadata font-semibold text-accent">
+                      {step}
+                    </span>
+                    <span>
+                      <strong className="font-medium">{title}</strong>
+                      <span className="mt-0.5 block text-muted">
+                        {description}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </Surface>
+          </div>
+        </div>
       ) : (
-        <div className="grid gap-3 lg:grid-cols-3">
-          {modelVersionRows(artifacts.model, artifacts.metrics).map((model) => (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {modelRows.map((model) => (
             <Surface
               key={model.id}
+              className="flex h-full flex-col"
               title={model.name}
               description={model.responsibility}
             >
@@ -1921,7 +1987,7 @@ function ModelsInner({
               <ActionLink
                 href={`${basePath}/${model.id}?view=research`}
                 variant="quiet"
-                className="mt-4 w-full"
+                className="mt-auto w-full"
               >
                 View model card
               </ActionLink>
@@ -2050,6 +2116,7 @@ export function ResearcherScreen({ segments }: { segments: string[] }) {
   if (first === "runs" && second) return <RunDetail runId={second} />;
   if (first === "compare") return <CompareRuns />;
   if (first === "data-sources") return <DataSourceCatalog detail={second} />;
-  if (first === "models") return <Models detail={second} />;
+  if (first === "models")
+    return <Models detail={second} basePath="/researcher/models" />;
   return <DashboardOverview />;
 }
