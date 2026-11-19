@@ -166,8 +166,12 @@ provider window.
 
 The CSV ends on a fixed date (2026-11-14 in dataset v2), so a chart read straight from it could never
 be current. `GET /api/historical` now asks Open-Meteo for the requested window, writes whatever it
-returns to the `observedWeather` table in Convex, and serves the merged range; days already stored are
-not fetched again, and a revisit costs no network call. Two details are deliberate:
+returns to the `observedWeather` table in Convex, and serves the merged range. The store supplies the
+past — a day it already holds is drawn as recorded, never re-fetched — and the provider supplies the
+present: the gaps, plus today and yesterday, which are still accumulating or still open to revision.
+A revisit inside the stored window therefore costs no provider call for the days it covers.
+
+Two details are deliberate:
 
 - **The archive lags.** `archive-api.open-meteo.com` publishes several days behind, so the route takes
   recent days from the forecast endpoint (which accepts up to 92 past days) and anything older from the

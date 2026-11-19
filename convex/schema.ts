@@ -217,23 +217,52 @@ export default defineSchema({
     .index("by_dataset_event", ["datasetId", "eventDate"]),
 
   /**
-   * Daily observed weather pulled from Open-Meteo and kept so the history chart
-   * can be current instead of stopping at the last dataset row.
+   * The observed weather a location actually had, one row per location and day.
+   *
+   * This is the table the deployment already holds: it was created by the
+   * observed-window work that `POST /api/forecast` wrote through
+   * `observations:recordWindow`, and a schema push validates those existing
+   * documents, so the shape below is theirs, not a new one. `date` is the key
+   * (an Asia/Manila calendar day) and `observedAt` mirrors `sensorReadings` for
+   * time-range queries.
+   *
+   * `/api/historical` reads the days that are already here and asks Open-Meteo
+   * only for the gaps and for today/yesterday, then writes those back through
+   * `observedWeather:upsertDays` — so the chart is the stored past plus the
+   * present, and a revisit costs no provider calls.
    *
    * Rainfall is the provider's value; nothing here is modelled. Water level is
-   * deliberately absent — the dataset's level is a rainfall-derived proxy, and
-   * extrapolating it would invent a number.
+   * deliberately absent: the dataset's level is a rainfall-derived proxy, and
+   * extrapolating it would present an invented number as a gauge reading.
    */
   observedWeather: defineTable({
-    cityCode: v.string(),
-    isoDate: v.string(),
+    locationCode: v.string(),
+    locationName: v.string(),
+    date: v.string(),
+    observedAt: v.number(),
     rainfallMm: v.number(),
     tmaxC: v.optional(v.number()),
     tminC: v.optional(v.number()),
     et0Mm: v.optional(v.number()),
-    source: v.string(),
-    fetchedAt: v.number(),
-  }).index("by_city_date", ["cityCode", "isoDate"]),
+    soilMoisturePercent: v.optional(v.number()),
+    soilMoistureSource: v.optional(v.string()),
+    /** `gauge` when a local gauge file supplied that day's rainfall. */
+    rainfallSource: v.optional(v.string()),
+    /** Which provider the numbers came from, e.g. `open-meteo`. */
+    provider: v.string(),
+    /**
+     * Human label for the surface behind `provider`, e.g.
+     * "Open-Meteo (ERA5 / IFS)". Optional: rows written before this field
+     * existed fall back to `provider` when the UI names the source.
+     */
+    sourceLabel: v.optional(v.string()),
+    /** When the provider was queried, epoch milliseconds. */
+    retrievedAt: v.number(),
+    /** When this row was written, epoch milliseconds. */
+    recordedAt: v.number(),
+  })
+    .index("by_location_date", ["locationCode", "date"])
+    .index("by_date", ["date"]),
 
   historicalImports: defineTable({
     datasetId: v.string(),
