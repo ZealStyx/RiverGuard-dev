@@ -6,6 +6,10 @@
  * deployment is absent or unhappy, so a storage problem degrades the chart
  * instead of failing it.
  *
+ * The table's shape is the deployment's, not ours — `locationCode`/`date`/`provider`
+ * rather than the shorter names the route thinks in — so the translation lives
+ * here, in one place, and the route never sees a field name it does not use.
+ *
  * The deployment caps a single mutation around 8 MB, so writes are batched by
  * day count rather than sent as one range.
  */
@@ -23,6 +27,10 @@ import type { ObservedDay } from "./weather/observed";
 /** Days per mutation. A day row is a few hundred bytes, so this stays well clear. */
 const WRITE_BATCH = 400;
 
+/** Which provider row `convex/observedWeather.ts` should record. */
+const PROVIDER_CODE = "open-meteo";
+const RAINFALL_SOURCE = "provider";
+
 export function observationStoreEnabled(): boolean {
   return Boolean(convexUrl);
 }
@@ -34,14 +42,14 @@ function client(): ConvexHttpClient {
 
 /** Stored days for the window, or `null` when the store could not be read. */
 export async function readStoredObservedDays(
-  cityCode: string,
+  locationCode: string,
   start: string,
   end: string,
 ): Promise<StoredObservedDay[] | null> {
   if (!convexUrl) return null;
   try {
     return await client().query(convexFunctions.observedRange, {
-      cityCode,
+      locationCode,
       start,
       end,
     });
@@ -50,27 +58,56 @@ export async function readStoredObservedDays(
   }
 }
 
+/**
+ * A stored row in the shape the rest of the app uses. The label falls back to
+ * the provider code for rows the older pipeline wrote, which predate
+ * `sourceLabel`.
+ */
+export function storedToObservedDay(row: StoredObservedDay): ObservedDay {
+  return {
+    isoDate: row.date,
+    rainfallMm: row.rainfallMm,
+    tmaxC: row.tmaxC,
+    tminC: row.tminC,
+    et0Mm: row.et0Mm,
+    source: row.sourceLabel ?? row.provider,
+  };
+}
+
 export interface StoreWriteResult {
   stored: number;
   error?: string;
 }
 
 /**
- * Write days the store does not already have. Returns the number written, which
- * is also the number the caller may now treat as persisted.
+ * Write days to the store. Returns the number written, which is also the number
+ * the caller may now treat as persisted.
  */
 export async function saveObservedDays(
-  cityCode: string,
+  locationCode: string,
+  locationName: string,
   days: ObservedDay[],
 ): Promise<StoreWriteResult> {
   if (!convexUrl || days.length === 0) return { stored: 0 };
+  const retrievedAt = Date.now();
   let stored = 0;
   try {
     const deployment = client();
     for (let index = 0; index < days.length; index += WRITE_BATCH) {
-      const batch = days.slice(index, index + WRITE_BATCH);
+      const batch = days.slice(index, index + WRITE_BATCH).map((day) => ({
+        date: day.isoDate,
+        rainfallMm: day.rainfallMm,
+        tmaxC: day.tmaxC,
+        tminC: day.tminC,
+        et0Mm: day.et0Mm,
+        provider: PROVIDER_CODE,
+        rainfallSource: RAINFALL_SOURCE,
+        sourceLabel: day.source,
+        retrievedAt,
+      }));
       await deployment.mutation(convexFunctions.saveObservedDays, {
-        cityCode,
+        locationCode,
+        locationName,
         days: batch,
       });
       stored += batch.length;
@@ -85,14 +122,4 @@ export async function saveObservedDays(
           : "unknown Convex error",
     };
   }
-}
-
-/** Which of `dates` the stored rows do not cover. */
-export function missingDates(
-  dates: string[],
-  stored: StoredObservedDay[] | null,
-): string[] {
-  if (!stored) return [];
-  const have = new Set(stored.map((row) => row.isoDate));
-  return dates.filter((date) => !have.has(date));
 }

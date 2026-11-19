@@ -38,49 +38,50 @@ input a forecast is scored from. Anything that presents CSV rows as the input to
 
 ## 1.2 Observed days after the dataset ends
 
-The CSV is a snapshot: it ends on its generated `END_DATE` (currently 2026-11-14). Every forecast run
-already retrieves a live ~31-day window from Open-Meteo, so those observed days are now kept instead
-of being discarded with the HTTP response.
+The CSV is a snapshot: it ends on its generated `END_DATE` (currently 2026-11-14). `GET /api/historical`
+therefore asks the deployment for the requested window first, tops up what is missing (including today
+and yesterday) from Open-Meteo, writes those days back, and serves the merged range. The store is what
+makes the chart current: a day recorded once is drawn as recorded, and a revisit costs no provider call.
 
-| Code | `apps/web/src/lib/observation-store.ts` (read/write), `convex/observations.ts` (database side) |
+| Code | `apps/web/src/lib/observation-store.ts` (read/write), `convex/observedWeather.ts` (database side) |
 | Storage | **Convex deployment**, table `observedWeather`, when `NEXT_PUBLIC_CONVEX_URL` is set — the normal case |
-| Fallback | `<repo>/.data/observations.json` (gitignored; `OBSERVATION_STORE_PATH` overrides) when there is no deployment |
-| Written by | `POST /api/forecast`, after the run is stored — one row per `locationCode:date`, upserted |
-| Refused | degraded bundles, the offline fixture, and empty windows: illustrative numbers must never become history |
-| Read by | `GET /api/historical` (days strictly after the CSV's last row) and `GET /api/system` |
-| Caps | file store: 120 days per city, 480 in total. The deployment keeps every day it is given |
+| Fallback | none at the storage layer: with no deployment the chart falls back to the CSV and says so in `notes` |
+| Written by | `GET /api/historical` on load — the gaps in the window, plus today and yesterday, batched (400 days per mutation) |
+| Read by | `GET /api/historical` |
+| Caps | none imposed by the app; the deployment accepts every day it is given |
 
-Which backend is used follows run persistence exactly (`lib/forecast-persistence.ts`): with a deployment
-configured, nothing is written to the JSON file — one source of truth at a time — and a Convex failure is
-reported in the run's `warnings` rather than silently falling back. With no deployment the file is used, so
-the local prototype keeps working offline. The table needs the schema pushed once: `npm run convex:dev`
-(or `npx convex deploy`) with the current `convex/` directory.
+The table shape is the deployment's own: `locationCode`, `date` (Asia/Manila calendar day), `observedAt`,
+`rainfallMm`, the temperatures, `provider`, `retrievedAt`, `recordedAt`, and optional soil moisture and
+`rainfallSource`. It predates this route — the observed-window work wrote it through
+`observations:recordWindow` — so the push validates those rows rather than replacing them, and `sourceLabel`
+is the only field added since (optional, so older rows still validate).
 
-**What is stored** is only what the provider reported: rainfall, temperatures, ET0, soil moisture and the
-per-day rainfall source. No water level is written, because the proxy below is derived at read time — the
-table stays a faithful copy of the provider window instead of a second, drifting version of the dataset.
+**Precedence, in one sentence:** the stored past, then the provider's present. A day the store already
+holds keeps its recorded value; the provider is asked only for days the store lacks and for today and
+yesterday, which are still accumulating or still open to revision. The provider answers for the whole
+range it was asked about, so its version of an older day is discarded rather than written over a day that
+was recorded at the time.
 
-**Water level on those days** is the dataset generator's own derivation
-(`data/generate_dataset.py`): rainfall routed through a fast store (`0.80/day`) and a slow baseflow store
-(`0.97/day`), with the resulting index mapped onto that river's alarm band — `p98(index)` at Alarm 1, the
-dry-season floor at `Alarm1 − 2.0 m`, and Alarm 3 as the cap. The chart replays the CSV's rainfall from
-its first row to recover the reservoir state at the dataset's end, then continues with the stored days,
-so the seam is continuous. The generator's `N(0, 0.05)` m noise is **not** reproduced: a derived proxy
-should not jitter because of a random number generator in another process. Against the CSV's own
-`WaterLevel_m` column the derivation agrees to within that noise (0.13 m worst case over four cities and
-40 days).
+**What is stored** is only what the provider reported: rainfall, temperatures, ET0 and the rainfall source.
+No water level is written, because the level below is the dataset's proxy and deriving it at read time is
+what keeps the table a copy of the provider window instead of a second, drifting version of the dataset.
+
+**Water level on those days** comes from the CSV where the CSV covers the date. Past its last row the
+level is `null` and the panel says why: the column is a rainfall-derived proxy, and extrapolating it would
+present a guess as a gauge reading. Antecedent sums do continue, because they are sums of observed days.
 
 **Rules that keep the chart honest**
 
-- A day the CSV already covers is never replaced. The CSV wins its dates; the store only extends the series.
-- Rain and antecedent windows come from the merged series. A window with a hole yields `null` rather than
-  a smaller number, so a level is withheld until its 3- and 7-day windows are complete.
-- The 24-hour change is only computed between consecutive calendar days. Across a gap the row shows no
-  change instead of reporting several days as one.
-- A location never covered by a run simply ends where the CSV does; the chart says so and shows no live days.
+- Missing days are reported in `notes` ("N days after <date> are not published by Open-Meteo yet") and
+  left out of the series — never drawn as zero.
+- Days after the dataset's last row carry `waterLevel: null`; the panel states that live days are rainfall
+  only. Rows are still labelled `observed-live` so nothing reads them as gauge telemetry.
+- A failed read or write is reported in `notes` rather than swallowed: "the Convex store could not be
+  read", "these days were not stored".
+- With no deployment, or with Open-Meteo unreachable, the response falls back to the CSV and names the
+  failure that caused it.
 
-To start over, delete that city's `observedWeather` rows — or `.data/observations.json` when no deployment
-is configured — and the chart returns to the CSV's last row.
+To start over, delete that city's `observedWeather` rows and the chart returns to the CSV's last row.
 
 ---
 

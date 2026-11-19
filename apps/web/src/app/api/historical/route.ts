@@ -37,6 +37,7 @@ import {
   observationStoreEnabled,
   readStoredObservedDays,
   saveObservedDays,
+  storedToObservedDay,
 } from "@/lib/observation-store";
 import type { HistoricalReading } from "@/types";
 import {
@@ -142,26 +143,29 @@ async function buildLiveWindow({
   const stored = await readStoredObservedDays(location.code, start, end);
   let storeError: string | undefined =
     stored === null
-      ? "the Convex store could not be read (check NEXT_PUBLIC_CONVEX_URL and that `npm run convex:dev` has pushed the current convex/ directory)"
+      ? "the Convex store could not be read (check NEXT_PUBLIC_CONVEX_URL and that `npx convex deploy` has pushed the current convex/ directory)"
       : undefined;
 
+  // The past comes from the store: every day already recorded is drawn as it was
+  // recorded, and is not asked for again.
   const days = new Map<string, ObservedDay>();
+  // Soil moisture has no home on the route's day shape; keep the stored values so
+  // a day past the dataset's last row can still show what was recorded for it.
+  const storedSoilMoisture = new Map<string, number>();
   for (const row of stored ?? []) {
-    days.set(row.isoDate, {
-      isoDate: row.isoDate,
-      rainfallMm: row.rainfallMm,
-      tmaxC: row.tmaxC,
-      tminC: row.tminC,
-      et0Mm: row.et0Mm,
-      source: row.source,
-    });
+    days.set(row.date, storedToObservedDay(row));
+    if (typeof row.soilMoisturePercent === "number") {
+      storedSoilMoisture.set(row.date, row.soilMoisturePercent);
+    }
   }
+  const storedDays = days.size;
 
   let providerError: string | undefined;
 
   // Nothing has been observed in the future; asking for it wastes a round trip.
   const wanted = eachDate(start, end > today ? today : end);
   const missing = wanted.filter((date) => !days.has(date));
+  const settled = new Set([...days.keys()]);
 
   // Today's total is still accumulating and yesterday's can be revised, so both
   // are re-read even when the store already has them. Everything older is kept:
@@ -170,6 +174,7 @@ async function buildLiveWindow({
     (date) => date >= start && date <= (end > today ? today : end),
   );
 
+  const revised = new Set(stale);
   const toFetch = [...new Set([...missing, ...stale])].sort();
 
   if (toFetch.length > 0) {
@@ -181,9 +186,21 @@ async function buildLiveWindow({
         start: toFetch[0],
         today,
       });
-      for (const day of fetched) days.set(day.isoDate, day);
-      if (fetched.length > 0) {
-        const write = await saveObservedDays(location.code, fetched);
+      // The present: the provider fills the gaps and refreshes today and
+      // yesterday, which are still accumulating or still open to revision. A
+      // settled day the store already has keeps its stored value — the provider
+      // answers for the whole range it was asked about, and taking its version
+      // of an older day would quietly overwrite what was recorded at the time.
+      const accepted = fetched.filter(
+        (day) => !settled.has(day.isoDate) || revised.has(day.isoDate),
+      );
+      for (const day of accepted) days.set(day.isoDate, day);
+      if (accepted.length > 0) {
+        const write = await saveObservedDays(
+          location.code,
+          location.name,
+          accepted,
+        );
         storeError = write.error ?? storeError;
       }
     } catch (error) {
@@ -197,7 +214,7 @@ async function buildLiveWindow({
       readings: [],
       pending: [],
       partialLevels: false,
-      stored: stored?.length ?? 0,
+      stored: storedDays,
       storeError,
       providerError,
     };
@@ -225,7 +242,8 @@ async function buildLiveWindow({
       rainfall: day.rainfallMm,
       waterLevel: known?.waterLevelM ?? null,
       waterLevelChange24h: known?.waterLevelChange24hM ?? null,
-      soilMoisture: known?.soilMoisturePct ?? null,
+      soilMoisture:
+        known?.soilMoisturePct ?? storedSoilMoisture.get(day.isoDate) ?? null,
       antecedent3d: known?.antecedentRain3dMm ?? rollingSum(ordered, index, 3),
       antecedent7d: known?.antecedentRain7dMm ?? rollingSum(ordered, index, 7),
       antecedent30d:

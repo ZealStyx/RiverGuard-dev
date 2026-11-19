@@ -124,13 +124,19 @@ export interface RemoteRun {
 
 /** A stored observation, as `observedWeather:listRange` returns it. */
 export interface StoredObservedDay {
-  isoDate: string;
+  date: string;
+  observedAt: number;
   rainfallMm: number;
   tmaxC?: number;
   tminC?: number;
   et0Mm?: number;
-  source: string;
-  fetchedAt: number;
+  soilMoisturePercent?: number;
+  provider: string;
+  rainfallSource?: string;
+  /** Absent on rows the older pipeline wrote; fall back to `provider`. */
+  sourceLabel?: string;
+  retrievedAt: number;
+  recordedAt: number;
 }
 
 export const convexFunctions = {
@@ -177,20 +183,24 @@ export const convexFunctions = {
   >("alerts:listOpenForLocation"),
   observedRange: makeFunctionReference<
     "query",
-    { cityCode: string; start: string; end: string },
+    { locationCode: string; start: string; end: string },
     StoredObservedDay[]
   >("observedWeather:listRange"),
   saveObservedDays: makeFunctionReference<
     "mutation",
     {
-      cityCode: string;
+      locationCode: string;
+      locationName: string;
       days: Array<{
-        isoDate: string;
+        date: string;
         rainfallMm: number;
         tmaxC?: number;
         tminC?: number;
         et0Mm?: number;
-        source: string;
+        provider: string;
+        rainfallSource?: string;
+        sourceLabel?: string;
+        retrievedAt: number;
       }>;
     },
     { inserted: number; updated: number }
