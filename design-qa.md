@@ -1,135 +1,64 @@
-# RiverGuard Complete Frontend — Design QA
+# Researcher Workspace Design QA
 
-## Comparison target
+## Evidence
 
-- Dashboard density reference: `C:\Users\ta1yi\AppData\Local\Temp\codex-clipboard-46c5becd-727e-489c-85f7-aeb151144561.png`
-- Settings and sidebar structure reference: `C:\Users\ta1yi\Downloads\original-62f9a1c33cd80ebda33507ec847ccddb.webp`
-- Source state: administrator research workspace shown at 80% browser zoom; settings image used as structural inspiration with its outer presentation frame excluded
-- Source pixels: 1885 × 990
-- Implementation: `http://localhost:3000/`
-- Implementation screenshot: Codex in-app browser capture of the administrator research workspace at a 1885 × 990 viewport override
-- Implementation CSS viewport after scrollbar normalization: 1870 × 975
-- Density normalization: the source’s apparent 80% scale was implemented through compact typography, spacing, control-height, radius, panel, and shell tokens; CSS `zoom` and transform scaling were not used
-- Theme: light
-- Date checked: November 13, 2026
+- Source visual truth: `C:\Users\ta1yi\Downloads\e398e58e6812bf2ea3d26841edc7460b.jpg`
+- Source pixels: 1000 × 667 JPEG.
+- Desktop implementation: `C:\Users\ta1yi\.codex\visualizations\2026\11\17\01a1ea25-e738-7662-b3a1-1b98832353bd\researcher-qa\design-qa-researcher-desktop.png`
+- Compact implementation: `C:\Users\ta1yi\.codex\visualizations\2026\11\17\01a1ea25-e738-7662-b3a1-1b98832353bd\researcher-qa\design-qa-researcher-compact.png`
+- Mobile implementation: `C:\Users\ta1yi\.codex\visualizations\2026\11\17\01a1ea25-e738-7662-b3a1-1b98832353bd\researcher-qa\design-qa-researcher-mobile.png`
+- Combined comparison: `C:\Users\ta1yi\.codex\visualizations\2026\11\17\01a1ea25-e738-7662-b3a1-1b98832353bd\researcher-qa\design-qa-comparison.png`
+- Browser: Chrome, device scale factor 1.
+- Viewports: 1536 × 864 desktop, 974 × 814 compact desktop, and 378 × 686 responsive emulation (378 × 660 content capture).
+- State: authenticated administrator viewing the shared research workspace at `/admin/research`, empty forecast state. The same dashboard component is mounted at the role-protected `/researcher` route.
 
-## Full-view comparison evidence
+The combined comparison normalized both source and desktop implementation to 864 px high. The source became 1295 × 864 and the implementation remained 1536 × 864; no device-frame equivalence was assumed.
 
-The sources and implementation were inspected at desktop and mobile sizes. The implementation preserves the approved compact dashboard density while adopting the settings reference’s clearer hierarchy: a full-width settings surface, grouped form sections, restrained dividers, and a gear-triggered settings popover.
+## Full-view Comparison
 
-Intentional product differences:
+The implementation preserves the useful visual language of the reference: narrow navigation rail, pale environmental surface, oversized hero, central high-quality isometric asset, compact KPI strip, rounded analytical cards, deep green accents, and restrained shadows. It intentionally excludes the reference's tablet bezel, generic eco copy, lime accent, and exact card arrangement.
 
-- The desktop top navigation, demo workspace selector, and prototype status strip were removed.
-- Primary navigation now uses a 56 px icon rail that expands to 224 px on hover or keyboard focus without shifting the page.
-- The settings reference’s information structure was retained without copying its outer frame, brand, or unrelated product categories.
-- Dark-theme controls remain deferred while the complete light-theme frontend is stabilized.
+The RiverGuard information hierarchy remains product-specific: forecast controls, selected location, conceptual watershed, current result, KPI summary, seven-day evidence, real map, model inputs, model sensitivity, provenance, observed history, and limitations.
 
-These differences support the approved multi-role frontend plan and do not change the selected visual language.
+## Focused-region Comparison
 
-## Focused-region evidence
+- Hero: the generated 1672 × 941 watershed asset is sharp, correctly cropped, and visually integrated with the sage surface. It is explicitly labelled conceptual in the page copy.
+- KPI strip: spacing, icon containers, value hierarchy, and equal edges match the reference's compact analytical rhythm without inventing values.
+- Analytics: chart and map cards use the same radius and spacing system; empty states remain deliberate rather than appearing broken.
+- Mobile: at 378 px the navigation becomes the existing mobile header, controls stack, the hero becomes a single column, and no horizontal overflow is visible.
 
-- **Navigation and actions:** compact 28–36 px controls, 12 px navigation text, clear active states, and Phosphor icons match the target’s visual density. Sidebar search opens a functional page finder and the folded rail exposes labels on hover/focus.
-- **Map controls:** layer card, city markers, legend, coverage note, and availability strip retain the target hierarchy while using smaller padding and type.
-- **Evidence panels:** seven-day selector, chart, contribution bars, provenance rows, status labels, and evidence action use the approved white surfaces and compact rhythm.
-- **Forms and tables:** forecast, review, catalogue, role, and configuration screens reuse the same control heights, border treatment, and type hierarchy.
-- **Settings:** the former sparse layout was replaced with a full-width settings surface; Profile, Notifications, Accessibility, Security, Password, and Account access are opened from the sidebar gear popover.
-- **Authentication:** every password field includes an accessible show/hide control.
-- **Mobile:** 390 × 844 validation showed a working header menu, readable settings flow, stacked content, and no visible horizontal overflow.
+## Required Fidelity Surfaces
 
-## Required fidelity surfaces
+- Typography: strong display hierarchy, compact uppercase eyebrow, readable body measure, and appropriate small-data weights. No clipped or truncated labels were observed.
+- Spacing/layout: consistent 24 px-class card rhythm, aligned edges, single sidebar, and responsive stacking. The tablet frame was intentionally omitted.
+- Colors/tokens: premium sage, warm white, charcoal, and deep river green are coherent and meet the source's quiet environmental tone.
+- Image quality: original raster hero is high resolution and materially matches the source's realistic isometric direction; no emoji, CSS illustration, or copied source asset is used.
+- Copy/content: all visible claims are RiverGuard-specific and distinguish predictions, proxies, conceptual imagery, and official warnings.
 
-### Fonts and typography
+## Findings
 
-- Geist remains the single application family.
-- Page title was normalized from 28 px to 22 px; major status to 18 px; section labels to 14 px; navigation/body/button text to 12 px; metadata to 10 px.
-- Weight and line-height remain differentiated at compact sizes, with no observed truncation in the tested desktop and mobile routes.
+- No actionable P0, P1, or P2 visual mismatches remain.
+- [P3, fixed] Chrome reported that the location form control lacked an `id` or `name`. Added `id="researcher-location"` and `name="location"`.
 
-### Spacing and layout rhythm
+## Interaction and Runtime Checks
 
-- Sidebar, page padding, card padding, control height, chart height, map overlays, and radii were reduced through reusable tokens/components.
-- Wide dashboard retains a map/evidence split; narrower screens stack the evidence below the map.
-- Browser checks found no horizontal overflow after the tooltip fix.
+- Confirmed authenticated route rendering and role redirect behavior.
+- Confirmed real OpenStreetMap tiles and map controls render.
+- Confirmed desktop, compact desktop, and 378 px responsive layouts.
+- Console: zero page errors and zero breaking changes; only React development/HMR informational messages.
+- The `Run forecast` button was not clicked during visual QA because it writes a forecast run to the configured production-backed workflow.
 
-### Colors and visual tokens
+## Comparison History
 
-- Brand primary: `#284B63`
-- Brand secondary: `#3C6E71`
-- Canvas: `#FFFFFF`
-- Line/disabled: `#D9D9D9`
-- Ink/stage: `#353535`
-- Amber and red remain semantic warning/risk colors rather than brand colors.
+No P0/P1/P2 iteration was required. The first browser comparison passed the major composition and responsive checks. The single P3 form metadata issue was fixed before handoff.
 
-### Image quality and asset fidelity
+## Implementation Checklist
 
-- The supplied local NCR illustrative raster remains the map asset.
-- It retains its crop, city highlights, waterways, and boundary treatment.
-- No placeholder drawings, handcrafted SVG illustrations, emoji, or CSS-generated map assets were introduced.
-- Phosphor remains the shared UI icon family.
-
-### Copy and content
-
-- Development-only notes, demo-workspace language, and prototype status strips were removed from product-facing screens.
-- Scientific and safety qualifiers remain only where they prevent experimental forecasts or unverified evidence from being mistaken for official warnings.
-- Forecast results do not claim exact probability, real-time monitoring, barangay resolution, or official warning status.
-- Resident and LGU pages include official-source reminders and escalation language.
-- Administrative actions use clear product language without exposing implementation scaffolding.
-
-## Interaction and route checks
-
-- Dashboard refresh state
-- Collapsible desktop sidebar and mobile navigation drawer
-- Search dialog filtering and navigation, including settings/password results
-- Password show/hide controls across login, signup, reset, invitation, and settings forms
-- Map layer selection and location alternatives
-- Forecast configuration → review → progress → results
-- Result day detail, history, comparison, source metadata, and model card routes
-- Resident outlook and mobile navigation
-- LGU review and draft-alert paths
-- Administrator requests, users, configuration, audit, and settings paths
-- Login, verification, pending, recovery, MFA, invitation, account-state, logout, and onboarding paths
-- Shared profile, notification, accessibility, security, password, and account-lifecycle paths
-- Browser console errors checked: none
-
-## Comparison history
-
-### Pass 1
-
-- **[P2] Right-edge tooltip caused desktop horizontal overflow.** The centered `Profile and settings` tooltip extended beyond the viewport, increasing `scrollWidth` from 1870 px to 1889 px.
-- Fix: changed the rightmost tooltip placement from below/centered to left-aligned beside its trigger.
-
-### Pass 2
-
-- Post-fix evidence: desktop `clientWidth` and `scrollWidth` both measured 1870 px at the wide comparison viewport.
-- Mobile evidence: `clientWidth` and `scrollWidth` both measured 375 px at the 390 × 844 browser viewport.
-- No actionable P0, P1, or P2 differences remained.
-
-### Pass 3
-
-- Replaced the top navigation with a folding desktop sidebar and verified its expanded keyboard-focus state at 1200 × 900.
-- Rebuilt account settings from the supplied structural reference and verified desktop and 390 × 844 mobile layouts.
-- Verified the search dialog returns a connected password-settings route and every tested password form exposes an accessible visibility toggle.
-- Removed remaining product-facing prototype, demo, mock-state, and development-fixture language.
-
-### Pass 4
-
-- Consolidated LGU, Resident, and Administrator sidebar items into task-level groups while retaining every detailed route in Search.
-- Added grouped-route active states so child pages continue highlighting their correct sidebar section.
-- Added a single styled Back to public view action to shared information pages that temporarily leave the role shell.
-- Removed unauthenticated workspace shortcuts from the welcome page; role cards are now informational and protected roles show their access requirements.
-
-### Pass 5
-
-- Verified Administrator login → MFA → nine-step onboarding → research workspace.
-- Verified Resident signup → verification → four-step onboarding → resident outlook.
-- Verified LGU and Administrator MFA paths reach their distinct seven-step onboarding flows.
-- Verified settings gear popover opens all six settings destinations, closes after navigation, and removes the redundant inner settings sidebar.
-- Corrected guest, change-email, and public-information return destinations.
-
-## Follow-up polish
-
-- P3: Real geospatial assets may require map-height and label-position tuning when MapLibre replaces the illustrative raster.
-- P3: Final logo dimensions may require a small adjustment to the compact header lockup.
-
-## Final result
+- [x] Preserve one navigation system.
+- [x] Use original premium watershed imagery.
+- [x] Keep all analytical values connected to existing data or explicit empty states.
+- [x] Preserve forecast, map, model-sensitivity, provenance, and history components.
+- [x] Verify desktop and responsive behavior.
+- [x] Run typecheck, lint, and production build.
 
 final result: passed

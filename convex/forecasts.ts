@@ -18,6 +18,11 @@ import { v } from "convex/values";
 
 import { raiseAlertIfElevated, resolveSupersededAlerts } from "./alerts";
 import { requireCurrentUser, requireRole } from "./auth";
+import {
+  assertLocationAccess,
+  assignedLocationCodes,
+  normalizeLocationCode,
+} from "./lgu";
 
 const forecastDayValidator = v.object({
   date: v.string(),
@@ -97,7 +102,8 @@ export const recordOutlook = mutation({
     alerts: v.number(),
   }),
   handler: async (ctx, args) => {
-    const user = await requireCurrentUser(ctx);
+    const user = await requireRole(ctx, ["admin", "lgu", "researcher"]);
+    await assertLocationAccess(ctx, user, args.locationCode);
     if (args.days.length === 0) {
       throw new Error("recordOutlook requires at least one forecast day");
     }
@@ -201,7 +207,8 @@ export const latestOutlook = query({
   args: { locationCode: v.string() },
   returns: v.union(v.any(), v.null()),
   handler: async (ctx, args) => {
-    await requireCurrentUser(ctx);
+    const user = await requireCurrentUser(ctx);
+    await assertLocationAccess(ctx, user, args.locationCode);
     const run = await ctx.db
       .query("forecastRuns")
       .withIndex("by_requested_at", (index: any) => index)
@@ -285,7 +292,7 @@ export const latestOutlook = query({
 });
 
 /**
- * Recent runs, newest first, for the admin run-history screen.
+ * Recent runs, newest first, for researcher history and operational audit.
  *
  * The screen used to render four invented run IDs. Runs only exist once someone
  * presses "Run forecast", so an empty deployment returns an empty list.
@@ -303,17 +310,25 @@ export const recentRuns = query({
       days: v.number(),
       alerts: v.number(),
       modelVersion: v.union(v.string(), v.null()),
+      reviewStatus: v.union(
+        v.literal("pending"),
+        v.literal("reviewed"),
+        v.literal("escalated"),
+        v.literal("returned"),
+      ),
+      reviewerName: v.union(v.string(), v.null()),
     }),
   ),
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["admin", "lgu"]);
+    const user = await requireRole(ctx, ["admin", "lgu", "researcher"]);
+    const allowedLocations = await assignedLocationCodes(ctx, user);
     const runs = await ctx.db
       .query("forecastRuns")
       .withIndex("by_requested_at", (index: any) => index)
       .order("desc")
       .take(Math.min(args.limit ?? 20, 100));
 
-    return await Promise.all(
+    const results = await Promise.all(
       runs.map(async (run: any) => {
         const forecasts = await ctx.db
           .query("forecasts")
@@ -325,12 +340,36 @@ export const recentRuns = query({
           (row: any) => row.modelVersionId,
         )?.modelVersionId;
         const model = modelVersionId ? await ctx.db.get(modelVersionId) : null;
-        const assessments = await ctx.db
-          .query("riskAssessments")
-          .filter((row: any) =>
-            forecasts.some((forecast: any) => forecast._id === row.forecastId),
+        const assessments = (
+          await Promise.all(
+            forecasts.map((forecast: any) =>
+              ctx.db
+                .query("riskAssessments")
+                .withIndex("by_forecast", (index: any) =>
+                  index.eq("forecastId", forecast._id),
+                )
+                .first(),
+            ),
           )
-          .collect();
+        ).filter(Boolean);
+
+        const locations = [
+          ...new Set(forecasts.map((row: any) => String(row.locationCode))),
+        ];
+        if (
+          allowedLocations !== null &&
+          !locations.some((location) =>
+            allowedLocations.includes(normalizeLocationCode(location)),
+          )
+        ) {
+          return null;
+        }
+
+        const review = await ctx.db
+          .query("lguReviews")
+          .withIndex("by_run", (index: any) => index.eq("runId", run._id))
+          .first();
+        const reviewer = review ? await ctx.db.get(review.reviewerId) : null;
 
         return {
           runId: run.runId ?? String(run._id),
@@ -338,9 +377,7 @@ export const recentRuns = query({
           completedAt: run.completedAt ?? null,
           provider: run.provider ?? "",
           status: run.status ?? "unknown",
-          locations: [
-            ...new Set(forecasts.map((row: any) => String(row.locationCode))),
-          ],
+          locations,
           days: forecasts.length,
           alerts: assessments.filter(
             (row: any) =>
@@ -349,9 +386,16 @@ export const recentRuns = query({
           modelVersion: model
             ? String((model as any).version ?? (model as any).name ?? "")
             : null,
+          reviewStatus: review?.status ?? "pending",
+          reviewerName: reviewer?.displayName ?? null,
         };
       }),
     );
+    return results
+      .filter(
+        (result): result is Exclude<typeof result, null> => result !== null,
+      )
+      .slice(0, Math.min(args.limit ?? 20, 100));
   },
 });
 
@@ -366,6 +410,7 @@ export const getRun = query({
   args: { runId: v.string() },
   returns: v.union(v.any(), v.null()),
   handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["admin", "lgu", "researcher"]);
     const runId = ctx.db.normalizeId("forecastRuns", args.runId);
     if (!runId) return null;
 
@@ -377,6 +422,10 @@ export const getRun = query({
       .withIndex("by_run_valid_at", (index: any) => index.eq("runId", runId))
       .order("asc")
       .collect();
+
+    for (const forecast of forecasts) {
+      await assertLocationAccess(ctx, user, forecast.locationCode);
+    }
 
     const modelVersionId = forecasts.find(
       (row: any) => row.modelVersionId,

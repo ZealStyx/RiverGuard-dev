@@ -59,7 +59,7 @@ export function Toggle({
         <span
           aria-hidden="true"
           className={cx(
-            "absolute top-1/2 left-0 size-4 -translate-y-1/2 rounded-full bg-canvas shadow-sm transition-transform motion-reduce:transition-none",
+            "absolute top-1/2 left-0 size-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform motion-reduce:transition-none",
             isPressed ? "translate-x-5" : "translate-x-1",
           )}
         />

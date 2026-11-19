@@ -10,12 +10,7 @@
  * a wet spell tapering off. The values are illustrative, not observations.
  */
 
-import { buildObserved } from "./observed";
-import type {
-  DailyWeatherPoint,
-  WeatherBundle,
-  WeatherProvider,
-} from "./types";
+import type { WeatherBundle, WeatherProvider } from "./types";
 
 const FIXTURE_RAIN = [46, 5, 4, 6, 5, 3, 2];
 // Oldest first, today last. A wet November: ~296 mm over 31 days, with the
@@ -38,20 +33,19 @@ export function fixtureProvider(): WeatherProvider {
 
     async fetchBundle(location): Promise<WeatherBundle> {
       const today = FIXTURE_HISTORY.length - 1;
-      const asOf = isoDate(0);
-      // The window is carried explicitly (not just totals) so the gauge blend
-      // and the run detail can show which days the sums came from.
-      const history: DailyWeatherPoint[] = FIXTURE_HISTORY.map(
-        (rainfallMm, index) => ({
-          date: isoDate(index - today),
-          rainfallMm,
-          tmaxC: 31,
-          tminC: 25,
-          et0Mm: 3.8,
-          soilMoisturePercent: null,
-        }),
-      );
-      const observed = buildObserved(history, asOf);
+      const sum = (from: number, to: number) =>
+        FIXTURE_HISTORY.slice(Math.max(0, from), to + 1).reduce(
+          (a, b) => a + b,
+          0,
+        );
+      const antecedent3 = sum(today - 3, today - 1);
+      const antecedent7 = sum(today - 7, today - 1);
+      const antecedent30 = sum(today - 30, today - 1);
+
+      let soil = 55;
+      for (const rain of FIXTURE_HISTORY) {
+        soil = Math.min(95, Math.max(5, soil + rain - 3.8 - 0.08 * soil));
+      }
 
       return {
         provider: "fixture",
@@ -63,9 +57,14 @@ export function fixtureProvider(): WeatherProvider {
           latitude: location.latitude,
           longitude: location.longitude,
         },
-        asOf,
-        observed,
-        history,
+        asOf: isoDate(0),
+        observed: {
+          rainfallTodayMm: FIXTURE_HISTORY[today],
+          antecedentRain3dMm: antecedent3,
+          antecedentRain7dMm: Math.max(antecedent3, antecedent7),
+          antecedentRain30dMm: Math.max(antecedent7, antecedent30),
+          soilMoisturePercent: Math.round(soil * 10) / 10,
+        },
         days: FIXTURE_RAIN.map((rainfallMm, index) => ({
           date: isoDate(index + 1),
           rainfallMm,
@@ -73,7 +72,7 @@ export function fixtureProvider(): WeatherProvider {
           tminC: 25,
           et0Mm: 3.8,
         })),
-        historyDays: history.length,
+        historyDays: FIXTURE_HISTORY.length,
         degraded: true,
         degradationReason:
           "Offline fixture in use: these rainfall numbers are illustrative, not a forecast.",

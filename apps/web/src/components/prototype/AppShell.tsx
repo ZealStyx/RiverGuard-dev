@@ -3,120 +3,55 @@
 import {
   Brain,
   ChartLineUp,
-  CheckCircle,
   ClockCounterClockwise,
   Database,
-  EnvelopeSimple,
   GearSix,
   House,
   List,
-  MagnifyingGlass,
   MapTrifold,
   Play,
   Question,
   ShieldCheck,
   SignOut,
   SlidersHorizontal,
-  UserCircle,
+  SquaresFour,
   UsersThree,
-  WaveSine,
   X,
 } from "@phosphor-icons/react";
 import Link from "next/link";
+import Image from "next/image";
 
-import { BuildStamp } from "@/components/BuildStamp";
-import { SearchDialog } from "@/components/ui/SearchDialog";
 import { usePathname } from "next/navigation";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useState } from "react";
 
-import { convexConfigured } from "@/components/dashboard/OutlookBridge";
-import {
-  can,
-  supportedLocations,
-  type ProductRole,
-  roleDefinitions,
-} from "@/data/prototype";
-import { useAppliedPreferences } from "@/lib/preferences";
-import { formatRunTime } from "@/lib/runs";
-import { useLocalRuns } from "@/lib/use-runs";
+import { can, type ProductRole, roleDefinitions } from "@/data/prototype";
 import { cx } from "@/lib/classnames";
 
 interface AppShellProps {
   children: ReactNode;
   role: ProductRole;
+  variant?: "default" | "research" | "resident";
 }
-
-const supplementalSearchItems: Record<
-  ProductRole,
-  { href: string; label: string }[]
-> = {
-  lgu: [
-    { label: "Risk map", href: "/lgu/map" },
-    { label: "Assigned locations", href: "/lgu/locations" },
-    { label: "Forecast outlook", href: "/lgu/outlook" },
-    { label: "Review queue", href: "/lgu/reviews" },
-    { label: "Alerts and notes", href: "/lgu/alerts" },
-  ],
-  resident: [
-    { label: "Locations", href: "/resident/locations" },
-    { label: "Seven-day outlook", href: "/resident/outlook" },
-    { label: "Hazard context", href: "/resident/hazard-context" },
-    { label: "Resident preferences", href: "/resident/preferences" },
-  ],
-  admin: [
-    { label: "Run forecast", href: "/admin/research/forecast/new" },
-    { label: "Forecast runs", href: "/admin/research/runs" },
-    { label: "Map and locations", href: "/admin/research/map" },
-    { label: "Historical data", href: "/admin/research/history" },
-    { label: "User requests", href: "/admin/requests" },
-    { label: "Users and roles", href: "/admin/users" },
-    { label: "Supported locations", href: "/admin/locations" },
-    { label: "Data sources", href: "/admin/data-sources" },
-    { label: "Provider configuration", href: "/admin/provider" },
-    { label: "Model versions", href: "/admin/models" },
-    { label: "Hazard layers", href: "/admin/hazard-layers" },
-    { label: "System settings", href: "/admin/settings" },
-  ],
-};
-
-const settingsNavigation = [
-  {
-    href: "/settings/profile",
-    label: "Profile",
-    icon: <UserCircle size={16} />,
-  },
-  {
-    href: "/settings/notifications",
-    label: "Notifications",
-    icon: <EnvelopeSimple size={16} />,
-  },
-  {
-    href: "/settings/accessibility",
-    label: "Accessibility",
-    icon: <CheckCircle size={16} />,
-  },
-  {
-    href: "/settings/security",
-    label: "Security, password & access",
-    icon: <ShieldCheck size={16} />,
-  },
-];
 
 function isActive(pathname: string, href: string) {
   if (pathname === "/" && href === "/admin") return true;
   if (
-    href === "/admin/research" &&
-    (pathname === "/admin/research" ||
-      pathname.startsWith("/admin/research/map") ||
-      pathname.startsWith("/admin/research/locations") ||
-      pathname.startsWith("/admin/research/history"))
+    href === "/researcher" &&
+    [
+      "/researcher",
+      "/researcher/forecast",
+      "/researcher/map",
+      "/researcher/locations",
+      "/researcher/history",
+    ].some((route) =>
+      route === "/researcher" ? pathname === route : pathname.startsWith(route),
+    )
   )
     return true;
   if (
-    href === "/admin/research/runs" &&
-    (pathname.startsWith("/admin/research/runs") ||
-      pathname.startsWith("/admin/research/forecast") ||
-      pathname.startsWith("/admin/research/compare"))
+    href === "/researcher/runs" &&
+    (pathname.startsWith("/researcher/runs") ||
+      pathname.startsWith("/researcher/compare"))
   )
     return true;
   if (
@@ -161,19 +96,26 @@ function isActive(pathname: string, href: string) {
   return pathname.startsWith(href);
 }
 
+/**
+ * Sidebar glyphs.
+ *
+ * Order matters. "Forecast workspace" and "Forecast history" both contain
+ * "forecast", so the broad test used to give them the same clock glyph and the
+ * workspace entry was indistinguishable from run history. The specific words
+ * are matched first and the broad fallback comes last.
+ */
 function navigationIcon(label: string) {
   const normalized = label.toLowerCase();
+  if (normalized.includes("workspace")) return <SquaresFour size={18} />;
   if (normalized.includes("map") || normalized.includes("location"))
     return <MapTrifold size={18} />;
   if (normalized.includes("research")) return <Brain size={18} />;
   if (normalized.includes("overview") || normalized.includes("outlook"))
     return <House size={18} />;
   if (normalized === "run forecast") return <Play size={18} />;
-  if (
-    normalized.includes("forecast") ||
-    normalized.includes("run") ||
-    normalized.includes("history")
-  )
+  if (normalized.includes("history"))
+    return <ClockCounterClockwise size={18} />;
+  if (normalized.includes("forecast") || normalized.includes("run"))
     return <ClockCounterClockwise size={18} />;
   if (normalized.includes("data") || normalized.includes("source"))
     return <Database size={18} />;
@@ -187,108 +129,62 @@ function navigationIcon(label: string) {
   return <SlidersHorizontal size={18} />;
 }
 
-export function AppShell({ children, role }: AppShellProps) {
+function SidebarItemContent({
+  icon,
+  label,
+}: {
+  icon: ReactNode;
+  label: string;
+}) {
+  return (
+    <>
+      <span className="role-sidebar-icon" aria-hidden="true">
+        <span className="role-sidebar-icon-glyph">{icon}</span>
+      </span>
+      <span className="role-sidebar-label">{label}</span>
+    </>
+  );
+}
+
+export function AppShell({
+  children,
+  role,
+  variant = "default",
+}: AppShellProps) {
   const pathname = usePathname();
+  const researchShell = variant === "research";
+  const residentShell = variant === "resident";
+  const structuredShell = researchShell || residentShell;
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
-  const [settingsMenuPinned, setSettingsMenuPinned] = useState(false);
-  // Applies stored display preferences (theme, reduced motion) for every
-  // screen inside the shell, including the settings pages themselves.
-  useAppliedPreferences();
-  const { data: storedRuns } = useLocalRuns(20);
   const roleDefinition = roleDefinitions[role];
   const navigationItems = roleDefinition.navigation.filter(
     (item) => !item.capability || can(role, item.capability),
   );
 
-  const searchItems = useMemo(() => {
-    const items = [
-      ...navigationItems,
-      ...supplementalSearchItems[role],
-      { label: "Profile and account settings", href: "/settings/profile" },
-      { label: "Notification preferences", href: "/settings/notifications" },
-      { label: "Accessibility preferences", href: "/settings/accessibility" },
-      { label: "Security, password & access", href: "/settings/security" },
-      { label: "Methodology and limitations", href: "/methodology" },
-    ];
-    return Array.from(
-      new Map(
-        items.map((item) => [`${item.href}-${item.label}`, item]),
-      ).values(),
-    );
-  }, [navigationItems, role]);
-
-  /**
-   * Search covers more than page names.
-   *
-   * The dialog only matched navigation labels, so "Marikina" found nothing on a
-   * screen full of Marikina data. Supported cities and the runs this workspace
-   * has stored are searchable too, and each result navigates to the screen that
-   * shows it for the current role.
-   */
-  const searchResults = useMemo(() => {
-    const pages = searchItems.map((item) => ({
-      href: item.href,
-      label: item.label,
-      meta: item.href,
-    }));
-
-    const cityHref =
-      role === "lgu"
-        ? "/lgu/locations"
-        : role === "resident"
-          ? "/resident/locations"
-          : "/admin/locations";
-    const cities = supportedLocations.map((location) => ({
-      href: cityHref,
-      label: `${location.name} · city`,
-      meta: `${location.support} · ${location.status}`,
-    }));
-
-    const runs =
-      !convexConfigured && role !== "resident"
-        ? (storedRuns ?? []).slice(0, 8).map((run) => ({
-            href:
-              role === "admin"
-                ? `/admin/research/runs/${encodeURIComponent(run.runId)}`
-                : `/lgu/reviews/${encodeURIComponent(run.runId)}`,
-            label: `${run.locations.join(", ") || "Run"} · ${formatRunTime(run.requestedAt)}`,
-            meta: `Stored run ${run.runId}`,
-          }))
-        : [];
-
-    return [...pages, ...cities, ...runs];
-  }, [searchItems, role, storedRuns]);
-
-  const searchDialogItems = useMemo(
-    () =>
-      searchResults.map((item) => ({
-        ...item,
-        icon: navigationIcon(item.label),
-      })),
-    [searchResults],
-  );
-
-  function openSearch() {
-    setSearchOpen(true);
-    setMobileOpen(false);
-  }
-
   return (
-    <div className="min-h-screen bg-canvas text-ink">
-      <aside className="group/sidebar fixed inset-y-0 left-0 z-50 hidden w-14 overflow-hidden border-r border-line bg-canvas shadow-sm transition-[width] duration-200 hover:w-56 focus-within:w-56 md:flex md:flex-col">
+    <div
+      className={cx(
+        "app-shell workspace-shell min-h-screen bg-[#edf5f9] text-ink",
+        residentShell ? "resident-shell" : undefined,
+        structuredShell ? "structured-shell" : undefined,
+      )}
+    >
+      <aside className="group/sidebar fixed top-4 bottom-4 left-4 z-50 hidden w-[4.5rem] overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#092847] text-white shadow-[0_18px_50px_rgba(7,42,76,0.22)] transition-[width] duration-200 hover:w-[15rem] focus-within:w-[15rem] md:flex md:flex-col">
         <Link
           href={`/${role}`}
-          className="flex min-h-16 items-center gap-3 border-b border-line px-[17px]"
+          className="flex min-h-[4.5rem] items-center gap-3 border-b border-white/10 px-[10px]"
           aria-label="RiverGuard home"
         >
-          <WaveSine
-            aria-hidden="true"
-            size={24}
-            weight="bold"
-            className="shrink-0"
-          />
+          <span className="relative block size-11 shrink-0 overflow-hidden bg-white ring-1 ring-[#0b3358]/10">
+            <Image
+              src="/images/riverguard-sidebar.jpg"
+              alt=""
+              width={1024}
+              height={1024}
+              priority
+              className="h-full w-full object-contain p-1"
+            />
+          </span>
           <span className="text-section whitespace-nowrap opacity-0 transition-opacity group-hover/sidebar:opacity-100 group-focus-within/sidebar:opacity-100">
             RiverGuard
           </span>
@@ -298,16 +194,6 @@ export function AppShell({ children, role }: AppShellProps) {
           aria-label={`${roleDefinition.label} navigation`}
           className="flex-1 overflow-x-hidden overflow-y-auto px-2 py-3"
         >
-          <button
-            type="button"
-            onClick={openSearch}
-            className="text-navigation mb-2 flex min-h-9 w-full items-center gap-3 rounded-control px-3 text-muted hover:bg-canvas-soft hover:text-ink"
-          >
-            <MagnifyingGlass size={18} className="shrink-0" />
-            <span className="whitespace-nowrap opacity-0 transition-opacity group-hover/sidebar:opacity-100 group-focus-within/sidebar:opacity-100">
-              Search
-            </span>
-          </button>
           <div className="grid gap-1">
             {navigationItems.map((item) => {
               const active = isActive(pathname, item.href);
@@ -318,106 +204,59 @@ export function AppShell({ children, role }: AppShellProps) {
                   aria-current={active ? "page" : undefined}
                   title={item.label}
                   className={cx(
-                    "text-navigation flex min-h-9 items-center gap-3 rounded-control px-3 transition-colors",
+                    "role-sidebar-item text-navigation transition-colors",
+                    "unified-nav-item",
                     active
-                      ? "bg-brand-primary text-white"
-                      : "text-muted hover:bg-canvas-soft hover:text-ink",
+                      ? "bg-[#168191] text-white"
+                      : "text-white/65 hover:bg-white/10 hover:text-white",
                   )}
                 >
-                  <span aria-hidden="true" className="shrink-0">
-                    {navigationIcon(item.label)}
-                  </span>
-                  <span className="whitespace-nowrap opacity-0 transition-opacity group-hover/sidebar:opacity-100 group-focus-within/sidebar:opacity-100">
-                    {item.label}
-                  </span>
+                  <SidebarItemContent
+                    icon={navigationIcon(item.label)}
+                    label={item.label}
+                  />
                 </Link>
               );
             })}
           </div>
         </nav>
 
-        <div className="grid gap-1 border-t border-line p-2">
+        <div className="grid gap-1 border-t border-white/10 p-2">
           <Link
             href={`/methodology?from=/${role}`}
             title="Help and limitations"
-            className="text-navigation flex min-h-9 items-center gap-3 rounded-control px-3 text-muted hover:bg-canvas-soft hover:text-ink"
+            className={cx(
+              "role-sidebar-item text-navigation",
+              "text-white/65 hover:bg-white/10 hover:text-white",
+            )}
           >
-            <Question size={18} className="shrink-0" />
-            <span className="whitespace-nowrap opacity-0 transition-opacity group-hover/sidebar:opacity-100 group-focus-within/sidebar:opacity-100">
-              Help & limitations
-            </span>
+            <SidebarItemContent
+              icon={<Question size={18} />}
+              label="Help & limitations"
+            />
           </Link>
-          <div
-            className="relative"
-            onMouseEnter={() => setSettingsMenuOpen(true)}
-            onMouseLeave={() => {
-              if (!settingsMenuPinned) setSettingsMenuOpen(false);
-            }}
+          <Link
+            href={`/settings?from=/${role}`}
+            title="Settings"
+            aria-current={pathname.startsWith("/settings") ? "page" : undefined}
+            className={cx(
+              "role-sidebar-item text-navigation",
+              pathname.startsWith("/settings")
+                ? "bg-[#168191] text-white"
+                : "text-white/65 hover:bg-white/10 hover:text-white",
+            )}
           >
-            <button
-              type="button"
-              title="Settings"
-              aria-label="Open settings menu"
-              aria-expanded={settingsMenuOpen}
-              onClick={() => {
-                setSettingsMenuPinned((pinned) => !pinned);
-                setSettingsMenuOpen(true);
-              }}
-              className={cx(
-                "text-navigation flex min-h-10 w-full items-center gap-3 rounded-control px-3 hover:bg-canvas-soft",
-                pathname.startsWith("/settings")
-                  ? "bg-brand-secondary-soft text-brand-primary-ink"
-                  : "text-muted hover:text-ink",
-              )}
-            >
-              <GearSix size={19} className="shrink-0" />
-              <span className="whitespace-nowrap opacity-0 transition-opacity group-hover/sidebar:opacity-100 group-focus-within/sidebar:opacity-100">
-                Settings
-              </span>
-            </button>
-            {settingsMenuOpen ? (
-              <div
-                role="dialog"
-                aria-label="Settings menu"
-                className="fixed bottom-3 left-64 z-[80] w-64 rounded-panel border border-line bg-canvas p-2 shadow-xl"
-              >
-                <p className="text-metadata px-2 pb-2 font-semibold uppercase tracking-[0.12em] text-muted">
-                  Settings
-                </p>
-                <nav className="grid gap-1" aria-label="Settings menu items">
-                  {settingsNavigation.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      aria-current={pathname === item.href ? "page" : undefined}
-                      onClick={() => {
-                        setSettingsMenuOpen(false);
-                        setSettingsMenuPinned(false);
-                      }}
-                      className={cx(
-                        "text-navigation flex items-center gap-2.5 rounded-control px-2.5 py-2",
-                        pathname === item.href
-                          ? "bg-brand-primary text-white"
-                          : "text-muted hover:bg-canvas-soft hover:text-ink",
-                      )}
-                    >
-                      {item.icon}
-                      {item.label}
-                    </Link>
-                  ))}
-                </nav>
-              </div>
-            ) : null}
-          </div>
+            <SidebarItemContent icon={<GearSix size={19} />} label="Settings" />
+          </Link>
           <Link
             href="/auth/logout"
             title="Sign out"
-            className="text-navigation flex min-h-9 items-center gap-3 rounded-control px-3 text-muted hover:bg-canvas-soft hover:text-ink"
+            className={cx(
+              "role-sidebar-item text-navigation",
+              "text-white/65 hover:bg-white/10 hover:text-white",
+            )}
           >
-            <SignOut size={18} className="shrink-0" />
-            <span className="whitespace-nowrap opacity-0 transition-opacity group-hover/sidebar:opacity-100 group-focus-within/sidebar:opacity-100">
-              Sign out
-            </span>
+            <SidebarItemContent icon={<SignOut size={18} />} label="Sign out" />
           </Link>
         </div>
       </aside>
@@ -428,18 +267,19 @@ export function AppShell({ children, role }: AppShellProps) {
           aria-label="RiverGuard home"
           className="flex items-center gap-2"
         >
-          <WaveSine size={25} weight="bold" />
+          <span className="relative block size-9 overflow-hidden rounded-lg bg-white ring-1 ring-[#0b3358]/10">
+            <Image
+              src="/images/riverguard-logo.jpg"
+              alt=""
+              width={1024}
+              height={1024}
+              priority
+              className="absolute left-1/2 top-[68%] w-[68px] max-w-none -translate-x-1/2 -translate-y-1/2"
+            />
+          </span>
           <span className="text-section">RiverGuard</span>
         </Link>
         <div className="ml-auto flex gap-1.5">
-          <button
-            type="button"
-            onClick={openSearch}
-            aria-label="Search RiverGuard"
-            className="inline-flex size-9 items-center justify-center rounded-control border border-line"
-          >
-            <MagnifyingGlass size={17} />
-          </button>
           <button
             type="button"
             onClick={() => setMobileOpen((open) => !open)}
@@ -474,7 +314,7 @@ export function AppShell({ children, role }: AppShellProps) {
               </Link>
             ))}
             <Link
-              href="/settings/profile"
+              href={`/settings?from=/${role}`}
               onClick={() => setMobileOpen(false)}
               className="text-navigation flex items-center gap-3 rounded-control px-3 py-2.5 hover:bg-canvas-soft"
             >
@@ -491,24 +331,7 @@ export function AppShell({ children, role }: AppShellProps) {
         </div>
       ) : null}
 
-      <div className="min-w-0 md:pl-14">
-        {children}
-        <footer className="text-metadata flex flex-wrap items-center justify-end gap-2 border-t border-line px-4 py-2 text-muted">
-          <BuildStamp />
-        </footer>
-      </div>
-
-      {searchOpen ? (
-        <SearchDialog
-          items={searchDialogItems}
-          onClose={() => setSearchOpen(false)}
-          footnote={
-            role === "resident"
-              ? "Search covers pages, settings, and the four supported cities."
-              : "Search covers pages, settings, supported cities, and stored runs."
-          }
-        />
-      ) : null}
+      <div className="min-w-0 md:pl-[5.75rem]">{children}</div>
     </div>
   );
 }

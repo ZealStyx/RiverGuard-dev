@@ -2,28 +2,41 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { cx } from "@/lib/classnames";
 
-const variantClasses = {
+/**
+ * The single source of truth for button colour.
+ *
+ * `Button` and `ActionLink` (a link styled as a button) both read these, so a
+ * colour change here reaches every button and button-link in the product
+ * without editing screens. Do not re-declare variant colours anywhere else.
+ */
+export const buttonVariantClasses = {
   primary:
     "bg-brand-primary text-white hover:bg-brand-primary-hover active:bg-brand-primary-active",
   secondary:
-    "bg-brand-secondary text-white hover:bg-brand-secondary-hover active:bg-brand-primary",
+    "bg-brand-secondary text-white hover:bg-brand-secondary-hover active:bg-brand-primary-active",
   quiet:
     "border border-line bg-transparent text-ink hover:bg-canvas-soft active:bg-line",
   danger: "bg-danger text-white hover:bg-danger/90 active:bg-danger/80",
 };
 
-const sizeClasses = {
+export const buttonSizeClasses = {
   small: "min-h-7 px-2.5",
   medium: "min-h-8 px-3",
   large: "min-h-10 px-4",
 };
 
+export type ButtonVariant = keyof typeof buttonVariantClasses;
+export type ButtonSize = keyof typeof buttonSizeClasses;
+
+const variantClasses = buttonVariantClasses;
+const sizeClasses = buttonSizeClasses;
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
   loading?: boolean;
   loadingLabel?: string;
-  size?: keyof typeof sizeClasses;
-  variant?: keyof typeof variantClasses;
+  size?: ButtonSize;
+  variant?: ButtonVariant;
 }
 
 export function Button({
