@@ -4,10 +4,15 @@ import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
 import type { ReactNode } from "react";
 
 import { useFirebaseConvexAuth } from "@/components/auth/FirebaseAuthProvider";
+import { convexDeploymentUrl } from "@/lib/convex-config";
 
-const deploymentUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-const convexClient = deploymentUrl
-  ? new ConvexReactClient(deploymentUrl)
+/**
+ * The URL arrives already validated — see lib/convex-config.ts. An unusable
+ * value yields null here rather than a ConvexReactClient that throws during
+ * render, so a typo costs the Convex features instead of the whole layout.
+ */
+const convexClient = convexDeploymentUrl
+  ? new ConvexReactClient(convexDeploymentUrl)
   : null;
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
