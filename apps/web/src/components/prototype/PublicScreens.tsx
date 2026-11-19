@@ -36,8 +36,10 @@ import { AppShell } from "@/components/prototype/AppShell";
 import { Button } from "@/components/ui";
 import { useFirebaseAuth } from "@/components/auth/FirebaseAuthProvider";
 import type { ProductRole } from "@/data/prototype";
-import { api } from "../../../../../convex/_generated/api";
-import { useMutation } from "convex/react";
+import {
+  type ProvisionAccount,
+  WithEnsureCurrent,
+} from "@/components/auth/EnsureCurrent";
 
 import {
   ActionLink,
@@ -677,18 +679,31 @@ function AuthLayout({
 }
 
 function LoginForm() {
+  return (
+    <WithEnsureCurrent>
+      {(ensureCurrent) => <LoginFormBody ensureCurrent={ensureCurrent} />}
+    </WithEnsureCurrent>
+  );
+}
+
+function LoginFormBody({
+  ensureCurrent,
+}: {
+  ensureCurrent: ProvisionAccount | null;
+}) {
   const router = useRouter();
   const { signInWithEmail, signInWithGoogle, signOut } = useFirebaseAuth();
-  const ensureCurrent = useMutation(api.users.ensureCurrent);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   async function finishSignIn() {
-    const account = await ensureCurrent({});
-    const destination = ["resident", "lgu", "researcher", "admin"].includes(
-      account.role,
-    )
-      ? `/${account.role}`
-      : "/resident";
+    // Without Convex the account (and therefore the role) cannot be read, so the
+    // default workspace is used. Sign-in itself still succeeded.
+    const account = await ensureCurrent?.({});
+    const destination =
+      account &&
+      ["resident", "lgu", "researcher", "admin"].includes(account.role)
+        ? `/${account.role}`
+        : "/resident";
     router.push(destination);
   }
   async function signInWithGoogleAccount() {
@@ -892,16 +907,37 @@ function buildRoleProfile(formData: FormData, role: ProductRole) {
 }
 
 function ResidentSignup({
-  role,
   onRoleChange,
+  role,
 }: {
-  role: ProductRole;
   onRoleChange: (role: ProductRole) => void;
+  role: ProductRole;
+}) {
+  return (
+    <WithEnsureCurrent>
+      {(ensureCurrent) => (
+        <ResidentSignupBody
+          ensureCurrent={ensureCurrent}
+          onRoleChange={onRoleChange}
+          role={role}
+        />
+      )}
+    </WithEnsureCurrent>
+  );
+}
+
+function ResidentSignupBody({
+  ensureCurrent,
+  onRoleChange,
+  role,
+}: {
+  ensureCurrent: ProvisionAccount | null;
+  onRoleChange: (role: ProductRole) => void;
+  role: ProductRole;
 }) {
   const router = useRouter();
   const { createAccountWithEmail, sendEmailVerification, signInWithGoogle } =
     useFirebaseAuth();
-  const ensureCurrent = useMutation(api.users.ensureCurrent);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const signupForm = useRef<HTMLFormElement>(null);
@@ -927,7 +963,7 @@ function ResidentSignup({
         password,
       );
       await sendEmailVerification();
-      await ensureCurrent({
+      await ensureCurrent?.({
         requestedRole: role,
         roleProfile: buildRoleProfile(formData, role),
       });
@@ -1109,7 +1145,7 @@ function ResidentSignup({
               const formData = signupForm.current
                 ? new FormData(signupForm.current)
                 : new FormData();
-              await ensureCurrent({
+              await ensureCurrent?.({
                 requestedRole: role,
                 roleProfile: buildRoleProfile(formData, role),
               });
@@ -1232,9 +1268,20 @@ function AccessRequest() {
 }
 
 function Verification() {
+  return (
+    <WithEnsureCurrent>
+      {(ensureCurrent) => <VerificationBody ensureCurrent={ensureCurrent} />}
+    </WithEnsureCurrent>
+  );
+}
+
+function VerificationBody({
+  ensureCurrent,
+}: {
+  ensureCurrent: ProvisionAccount | null;
+}) {
   const params = useSearchParams();
   const { user, sendEmailVerification } = useFirebaseAuth();
-  const ensureCurrent = useMutation(api.users.ensureCurrent);
   const [verified, setVerified] = useState(false);
   const [resent, setResent] = useState(false);
   const [verificationError, setVerificationError] = useState("");
@@ -1383,7 +1430,7 @@ function Verification() {
                 "Click the verification link in your email first.",
               );
             }
-            await ensureCurrent({ requestedRole: role });
+            await ensureCurrent?.({ requestedRole: role });
             setVerified(true);
           } catch (error) {
             setVerificationError(formatAuthError(error));
