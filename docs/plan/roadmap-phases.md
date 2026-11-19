@@ -260,6 +260,17 @@ Treat the file as a schema/pipeline smoke-test dataset until independently verif
 - Coverage gaps, data freshness, and uncertainty are visible.
 - All map data attribution is displayed.
 
+### Current implementation status (2026-11-20)
+
+- **Implemented:** existing MapLibre integration, verified-local-layer support,
+  city markers for the four supported locations, day selection, and a
+  synchronized map detail card.
+- **Implemented safely:** marker states come from real forecast output;
+  missing and degraded output is shown explicitly.
+- **Not implemented:** verified hazard/boundary/station geometry, station
+  observations, gauge comparisons, uncertainty intervals, calibration UI,
+  fine spatial units, or automatic alert publication.
+
 ## Phase 6 — Local Demo Validation and Research Review
 
 **Objective:** Verify the end-to-end local workflow and prepare a defensible NCR demonstration.

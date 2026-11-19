@@ -179,6 +179,10 @@ export function DashboardLayout() {
             <RiverMap
               activeLayer={activeLayer}
               onLayerChange={setActiveLayer}
+              forecast={outlook.snapshot}
+              locationCode={DEFAULT_LOCATION}
+              selectedDay={selectedDay}
+              onDayChange={setSelectedDay}
               className="min-[1180px]:sticky min-[1180px]:top-[5.5rem] z-0 min-[1180px]:col-span-8"
               cooperativeGestures
             />

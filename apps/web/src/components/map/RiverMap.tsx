@@ -4,6 +4,7 @@ import { ArrowCounterClockwise } from "@phosphor-icons/react";
 import type {
   ExpressionSpecification,
   Map as MapLibreMap,
+  Marker,
   StyleSpecification,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -12,6 +13,12 @@ import { useEffect, useRef, useState } from "react";
 import type { GisLayerSummary } from "@/lib/gis-types";
 import { gisLayerIdFromKey, gisLayerKey } from "@/lib/gis-types";
 import { useGisLayers } from "@/lib/use-gis-layers";
+import {
+  LOCATION_CODES,
+  LOCATIONS,
+  type LocationCode,
+} from "@/lib/locations";
+import type { OutlookSnapshot } from "@/lib/outlook";
 import type { MapLayerId } from "@/types";
 
 export interface RiverMapProps {
@@ -25,6 +32,14 @@ export interface RiverMapProps {
    * scrolling page, so a wheel gesture over the map does not trap the page.
    */
   cooperativeGestures?: boolean;
+  /** Real city-level outlook for the selected location. */
+  forecast?: OutlookSnapshot | null;
+  /** City currently represented by the map marker. */
+  locationCode?: LocationCode;
+  /** Selected index in the forecast's day array. */
+  selectedDay?: number;
+  onDayChange?: (index: number) => void;
+  onLocationChange?: (locationCode: LocationCode) => void;
 }
 
 type MapStatus = "loading" | "ready" | "error";
@@ -147,10 +162,16 @@ export function RiverMap({
   activeLayer,
   className = "",
   cooperativeGestures = false,
+  forecast = null,
   hideChrome = false,
+  locationCode,
+  onDayChange,
+  onLocationChange,
+  selectedDay = 0,
 }: RiverMapProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const markersRef = useRef<Marker[]>([]);
   const [mapStatus, setMapStatus] = useState<MapStatus>("loading");
   const [mapError, setMapError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -229,6 +250,8 @@ export function RiverMap({
     return () => {
       cancelled = true;
       resizeObserver?.disconnect();
+      for (const marker of markersRef.current) marker.remove();
+      markersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -335,6 +358,80 @@ export function RiverMap({
     }
   }, [activeLayer, gis.layers, mapStatus]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || mapStatus !== "ready") return;
+
+    let cancelled = false;
+    void import("maplibre-gl").then((maplibregl) => {
+      if (cancelled) return;
+
+      for (const marker of markersRef.current) marker.remove();
+      markersRef.current = [];
+
+      const activeIndex = Math.min(
+        selectedDay,
+        Math.max((forecast?.days.length ?? 1) - 1, 0),
+      );
+      const activeDay = forecast?.days[activeIndex];
+
+      for (const code of LOCATION_CODES) {
+        const location = LOCATIONS[code];
+        const selected = code === locationCode;
+        const element = document.createElement("button");
+        element.type = "button";
+        element.setAttribute("aria-label", `${location.name} city forecast`);
+        element.className =
+          "inline-flex min-h-8 items-center gap-1.5 rounded-full border-2 border-white px-2.5 text-xs font-semibold text-white shadow-[0_8px_24px_rgba(7,42,76,0.22)] transition";
+
+        let probability: number | null = null;
+        let label = "No run";
+        if (selected && activeDay) {
+          probability = activeDay.probability ?? null;
+          label = activeDay.label;
+        }
+
+        if (selected && probability !== null) {
+          element.style.background =
+            label === "Elevated"
+              ? "#b9443f"
+              : label === "Moderate"
+                ? "#a36726"
+                : "#147384";
+          element.textContent =
+            `${location.name} · ${(probability * 100).toFixed(0)}%`;
+        } else if (selected) {
+          element.style.background = "#64748b";
+          element.textContent = `${location.name} · No data`;
+        } else {
+          element.style.background = "rgba(9, 40, 71, 0.72)";
+          element.textContent = location.name;
+        }
+
+        element.onpointerdown = (event) => event.stopPropagation();
+        element.onclick = () => onLocationChange?.(code);
+
+        const marker = new maplibregl.Marker({
+          element,
+          anchor: "center",
+        })
+          .setLngLat([location.longitude, location.latitude])
+          .addTo(map);
+        markersRef.current.push(marker);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    forecast,
+    locationCode,
+    mapStatus,
+    onLocationChange,
+    selectedDay,
+  ]);
+
   function resetView() {
     mapRef.current?.fitBounds(NCR_VIEW_BOUNDS, {
       padding: 28,
@@ -345,6 +442,14 @@ export function RiverMap({
   const activeGisId = gisLayerIdFromKey(activeLayer);
   const activeGisLayer =
     gis.layers.find((layer) => layer.id === activeGisId) ?? null;
+  const activeIndex = Math.min(
+    selectedDay,
+    Math.max((forecast?.days.length ?? 1) - 1, 0),
+  );
+  const activeDay = forecast?.days[activeIndex] ?? null;
+  const selectedLocation = locationCode
+    ? LOCATIONS[locationCode]
+    : null;
 
   const layerSummary = activeGisLayer
     ? `${activeGisLayer.description || `${activeGisLayer.title} from a verified local file.`} Source: ${activeGisLayer.source.publisher}, ${activeGisLayer.source.license}, retrieved ${activeGisLayer.source.retrievedAt}.`
@@ -439,10 +544,6 @@ export function RiverMap({
                 {activeLayer === "base" ? "Basemap" : "RiverGuard overlay"}
               </p>
               <p className="text-metadata mt-2 text-muted">{layerSummary}</p>
-              <p className="text-metadata mt-2 border-t border-line pt-2 text-muted">
-                No RiverGuard prediction or hazard geometry is being fabricated
-                on this map.
-              </p>
               {USING_OSM_TILES ? (
                 <p className="text-metadata mt-2 text-muted">
                   Tiles from OpenStreetMap&apos;s volunteer servers:{" "}
@@ -458,6 +559,89 @@ export function RiverMap({
                 </p>
               ) : null}
             </div>
+            {selectedLocation ? (
+              <div className="pointer-events-auto w-full rounded-panel border border-line bg-canvas/95 p-3 text-ink shadow-lg backdrop-blur-sm lg:max-w-[360px]">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-metadata uppercase tracking-[0.12em] text-brand-secondary">
+                      City-level outlook
+                    </p>
+                    <p className="text-section mt-1">{selectedLocation.name}</p>
+                  </div>
+                  {activeDay ? (
+                    <span
+                      className={
+                        activeDay.label === "Elevated"
+                          ? "rounded-full bg-danger/10 px-2 py-1 text-metadata font-semibold text-danger"
+                          : activeDay.label === "Moderate"
+                            ? "rounded-full bg-warning/10 px-2 py-1 text-metadata font-semibold text-warning"
+                            : "rounded-full bg-brand-secondary-soft px-2 py-1 text-metadata font-semibold text-brand-secondary"
+                      }
+                    >
+                      {activeDay.label}
+                    </span>
+                  ) : null}
+                </div>
+                {activeDay ? (
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <div>
+                      <p className="text-metadata text-muted">Probability</p>
+                      <p className="text-button mt-0.5">
+                        {activeDay.probability === undefined
+                          ? "—"
+                          : `${(activeDay.probability * 100).toFixed(1)}%`}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-metadata text-muted">Rainfall</p>
+                      <p className="text-button mt-0.5">
+                        {activeDay.rainfallMm === undefined
+                          ? "—"
+                          : `${activeDay.rainfallMm.toFixed(1)} mm`}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-metadata text-muted">Level proxy</p>
+                      <p className="text-button mt-0.5">
+                        {activeDay.waterLevelM === undefined
+                          ? "—"
+                          : `${activeDay.waterLevelM.toFixed(2)} m`}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-metadata mt-3 text-muted">
+                    Run a forecast to place the first city-level result on this map.
+                  </p>
+                )}
+                {forecast?.days.length ? (
+                  <div
+                    className="mt-3 grid grid-cols-7 gap-1 border-t border-line pt-2"
+                    aria-label="Forecast day timeline"
+                  >
+                    {forecast.days.map((day, index) => (
+                      <button
+                        key={day.isoDate}
+                        type="button"
+                        onClick={() => onDayChange?.(index)}
+                        aria-pressed={activeIndex === index}
+                        className={
+                          activeIndex === index
+                            ? "rounded-control bg-brand-primary px-1 py-1.5 text-metadata font-semibold text-white"
+                            : "rounded-control border border-line bg-canvas px-1 py-1.5 text-metadata text-muted hover:bg-canvas-soft"
+                        }
+                        title={`${day.isoDate} · ${day.label}`}
+                      >
+                        {day.day.slice(0, 2)}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <p className="text-metadata mt-2 text-muted">
+                  Experimental city-level index. Not a gauge reading or street-level warning.
+                </p>
+              </div>
+            ) : null}
           </div>
         )}
       </div>

@@ -61,6 +61,21 @@ Normal interactive viewing is permitted; bulk, offline, or many-user use is not.
 
 OSM also answers `403 Access blocked` to origins its operators cannot identify or consider abusive — shared or cloud-hosted preview origins included. When that happens the map is not broken; the provider refused. Switch with `NEXT_PUBLIC_MAP_TILE_PROVIDER=carto` (CARTO's public basemaps, OSM data, no key), or point `NEXT_PUBLIC_MAP_TILE_URL`/`NEXT_PUBLIC_MAP_TILE_ATTRIBUTION` at any other raster provider. The map names the active provider in its header and in the error card, so a 403 and a network failure are distinguishable.
 
+### Map forecast MVP
+
+The existing MapLibre basemap also provides a city-level ML forecast view for
+the four supported locations. The forecast marker and detail card are
+synchronized with the selected forecast day.
+
+- Marker colours use the model's Lower, Moderate, and Elevated labels.
+- The detail card shows probability, rainfall, and the derived water-level
+  proxy.
+- Missing and unavailable forecasts remain explicit.
+- Static hazard, station, boundary, and prediction geometry remain separate
+  and require verified local GIS assets.
+- The view does not provide barangay, street, gauge-reading, or flood-depth
+  claims at city-level resolution.
+
 ## 2. Study area and available development data
 
 ### 2.1 NCR target area

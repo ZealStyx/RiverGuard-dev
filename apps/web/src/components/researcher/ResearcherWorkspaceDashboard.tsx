@@ -374,6 +374,11 @@ export function ResearcherWorkspaceDashboard() {
               <RiverMap
                 activeLayer={activeLayer}
                 onLayerChange={setActiveLayer}
+                forecast={outlook.snapshot}
+                locationCode={locationCode}
+                selectedDay={selectedDay}
+                onDayChange={setSelectedDay}
+                onLocationChange={setLocationCode}
                 cooperativeGestures
                 className="!h-full min-h-[610px] rounded-none border-0"
               />

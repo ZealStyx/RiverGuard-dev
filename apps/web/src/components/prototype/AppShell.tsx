@@ -21,11 +21,12 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 
 import { can, type ProductRole, roleDefinitions } from "@/data/prototype";
 import { cx } from "@/lib/classnames";
+import { useFirebaseAuth } from "@/components/auth/FirebaseAuthProvider";
 
 interface AppShellProps {
   children: ReactNode;
@@ -154,6 +155,13 @@ export function AppShell({
   variant = "default",
 }: AppShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { signOut } = useFirebaseAuth();
+  async function handleSignOut() {
+    await signOut();
+    setMobileOpen(false);
+    router.replace("/auth/logout");
+  }
   const researchShell = variant === "research";
   const residentShell = variant === "resident";
   const structuredShell = researchShell || residentShell;
@@ -250,8 +258,9 @@ export function AppShell({
           >
             <SidebarItemContent icon={<GearSix size={19} />} label="Settings" />
           </Link>
-          <Link
-            href="/auth/logout"
+          <button
+            type="button"
+            onClick={() => void handleSignOut()}
             title="Sign out"
             className={cx(
               "role-sidebar-item text-navigation",
@@ -259,7 +268,7 @@ export function AppShell({
             )}
           >
             <SidebarItemContent icon={<SignOut size={18} />} label="Sign out" />
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -329,13 +338,13 @@ export function AppShell({
             >
               <GearSix size={18} /> Settings
             </Link>
-            <Link
-              href="/auth/logout"
-              onClick={() => setMobileOpen(false)}
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
               className="text-navigation flex items-center gap-3 rounded-control px-3 py-2.5 hover:bg-canvas-soft"
             >
               <SignOut size={18} /> Sign out
-            </Link>
+            </button>
           </nav>
         </div>
       ) : null}

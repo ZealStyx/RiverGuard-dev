@@ -15,7 +15,11 @@ import { MonthlyRainfallChart } from "@/components/charts/MonthlyRainfallChart";
 import { ObservedHistoryChart } from "@/components/charts/ObservedHistoryChart";
 import { convexConfigured } from "@/components/dashboard/OutlookBridge";
 import { RiskSummary } from "@/components/dashboard/RiskSummary";
-import { LOCATIONS, locationCodeForName } from "@/lib/locations";
+import {
+  LOCATIONS,
+  locationCodeForName,
+  type LocationCode,
+} from "@/lib/locations";
 import { describePersistence } from "@/lib/persistence";
 import { convexErrorHint } from "@/lib/convex-functions";
 import { useConvexQueryResult } from "@/lib/convex-query";
@@ -68,6 +72,9 @@ function DashboardOverview() {
 
 function MapWorkspace() {
   const [activeLayer, setActiveLayer] = useState<MapLayerId>("base");
+  const [locationCode, setLocationCode] = useState<LocationCode>("marikina");
+  const [selectedDay, setSelectedDay] = useState(0);
+  const outlook = useOutlookFeed(locationCode);
   const gis = useGisLayers();
   return (
     <>
@@ -82,7 +89,15 @@ function MapWorkspace() {
         }
       />
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_320px]">
-        <RiverMap activeLayer={activeLayer} onLayerChange={setActiveLayer} />
+        <RiverMap
+          activeLayer={activeLayer}
+          onLayerChange={setActiveLayer}
+          forecast={outlook.snapshot}
+          locationCode={locationCode}
+          selectedDay={selectedDay}
+          onDayChange={setSelectedDay}
+          onLocationChange={setLocationCode}
+        />
         <div className="grid content-start gap-3 xl:flex xl:h-full xl:flex-col">
           <Surface
             title="Location list"
@@ -1749,8 +1764,12 @@ function DataSourceForm({
           <ActionLink href={`${basePath}?view=research`} variant="quiet">
             Cancel
           </ActionLink>
-          <Button size="small" onClick={() => setSaved(true)}>
-            <FloppyDisk size={14} /> Save metadata
+          <Button
+            size="small"
+            disabled
+            title="Source metadata editing requires a Convex-backed workspace"
+          >
+            <FloppyDisk size={14} /> Editing unavailable
           </Button>
         </div>
         {saved ? (

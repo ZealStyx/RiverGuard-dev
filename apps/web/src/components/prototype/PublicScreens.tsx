@@ -1501,81 +1501,28 @@ function PendingApproval() {
 }
 
 function MfaScreen() {
-  const params = useSearchParams();
-  const role = params.get("role") ?? "admin";
-  const [verified, setVerified] = useState(false);
-  if (verified)
-    return (
-      <AuthSuccess
-        title="MFA verified"
-        description="The sample security challenge is complete."
-        href={`/onboarding/${role}`}
-        action="Continue to workspace"
-      />
-    );
   return (
     <div className="grid gap-3">
-      <Notice title="Security challenge">
-        Enter a code from the configured authentication method.
+      <Notice title="MFA is not configured" tone="warning">
+        This prototype does not provide Firebase MFA or recovery-code verification.
       </Notice>
-      <TextField
-        id="mfa-code"
-        label="Authentication code"
-        inputMode="numeric"
-        defaultValue="123456"
-      />
-      <Button className="w-full" onClick={() => setVerified(true)}>
-        Verify
-      </Button>
-      <Button className="w-full" variant="quiet">
-        Use recovery code
+      <Button className="w-full" variant="quiet" disabled>
+        MFA setup unavailable
       </Button>
     </div>
   );
 }
 
 function Invitation() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const role = params.get("role") ?? "lgu";
-  const [accepted, setAccepted] = useState(false);
-  if (accepted)
-    return (
-      <AuthSuccess
-        title="Invitation accepted"
-        description="Complete the role-specific onboarding to enter the sample workspace."
-        href={`/auth/verify?role=${role}&source=invitation`}
-        action="Begin onboarding"
-      />
-    );
   return (
     <div className="grid gap-3">
-      <Notice title="Marikina DRRMO invitation">
-        Assigned role: LGU operator · Assigned area: Marikina.
+      <Notice title="Workspace invitations are unavailable" tone="warning">
+        This prototype has no invitation record or account-provisioning backend.
+        Do not enter credentials or use this screen for real access.
       </Notice>
-      <TextField
-        id="invite-name"
-        label="Confirm full name"
-        defaultValue="Liza Torres"
-      />
-      <PasswordField id="invite-password" label="Create password" />
-      <CheckControl id="invite-use" label="Accept authorized-use notice" />
-      <Button onClick={() => setAccepted(true)} className="w-full">
-        Accept invitation
-      </Button>
-      <Button
-        variant="quiet"
-        className="w-full"
-        onClick={() => router.push("/welcome")}
-      >
-        Decline
-      </Button>
-      <Link
-        href="/auth/request-access"
-        className="text-metadata text-center text-brand-primary underline"
-      >
-        Report an incorrect invitation
-      </Link>
+      <ActionLink href="/welcome" variant="quiet" className="w-full">
+        Back to overview
+      </ActionLink>
     </div>
   );
 }
@@ -1639,6 +1586,10 @@ function AccountProblem({ screen }: { screen: string }) {
 }
 
 function LogoutScreen() {
+  const { signOut } = useFirebaseAuth();
+  useEffect(() => {
+    void signOut();
+  }, [signOut]);
   return (
     <div className="grid gap-3 text-center">
       <span className="mx-auto inline-flex size-12 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary">
@@ -2723,8 +2674,8 @@ function SettingsScreenBody({
             <option>Email</option>
           </SelectControl>
         </div>
-        <Button className="mt-4" size="small" onClick={() => setSaved(true)}>
-          Save preferences
+        <Button className="mt-4" size="small" disabled>
+          Backend storage required
         </Button>
       </div>
     );
@@ -2763,8 +2714,8 @@ function SettingsScreenBody({
             <option>Location list</option>
           </SelectControl>
         </div>
-        <Button className="mt-4" size="small" onClick={() => setSaved(true)}>
-          Save preferences
+        <Button className="mt-4" size="small" disabled>
+          Backend storage required
         </Button>
       </div>
     );
@@ -2804,9 +2755,10 @@ function SettingsScreenBody({
                 <Button
                   size="small"
                   variant="quiet"
-                  onClick={() => setActiveScreen("security")}
+                  disabled
+                  title="MFA setup is not configured"
                 >
-                  Set up MFA
+                  Available after MFA setup
                 </Button>
               </div>
               <div className="flex flex-wrap items-center gap-3 px-3 py-3">
@@ -2826,7 +2778,7 @@ function SettingsScreenBody({
                   </p>
                 </div>
                 <Button size="small" variant="quiet">
-                  Log out other sessions
+                  Session management unavailable
                 </Button>
               </div>
             </div>
@@ -2862,9 +2814,10 @@ function SettingsScreenBody({
               <Button
                 size="small"
                 className="w-full sm:w-fit"
-                onClick={() => setSaved(true)}
+                disabled
+                title="Password changes use the Send reset email action"
               >
-                Change password
+                Use password reset
               </Button>
             </div>
           </section>
@@ -2890,8 +2843,8 @@ function SettingsScreenBody({
                   locations.
                 </p>
               </div>
-              <Button size="small" variant="quiet">
-                Request review
+              <Button size="small" variant="quiet" disabled>
+                Backend review required
               </Button>
             </div>
             <div className="flex flex-wrap items-center gap-3 px-3 py-3">
@@ -2904,8 +2857,8 @@ function SettingsScreenBody({
                   preserve audit history.
                 </p>
               </div>
-              <Button size="small" variant="danger">
-                Request deactivation
+              <Button size="small" variant="danger" disabled>
+                Administrator action only
               </Button>
             </div>
           </div>
@@ -2957,9 +2910,10 @@ function SettingsScreenBody({
               <Button
                 size="small"
                 className="w-full"
-                onClick={() => setSaved(true)}
+                disabled
+                title="Password changes use the Send reset email action"
               >
-                Change password
+                Use password reset
               </Button>
             </div>
           </div>

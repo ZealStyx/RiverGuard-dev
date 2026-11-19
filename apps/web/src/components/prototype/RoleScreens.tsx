@@ -16,7 +16,7 @@ import { useSearchParams } from "next/navigation";
 import { useMutation } from "convex/react";
 
 import { useGisLayers } from "@/lib/use-gis-layers";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { RiverMap } from "@/components/map/RiverMap";
@@ -147,6 +147,8 @@ function ResidentLocationsWorkspace({}: {
 } = {}) {
   const [saved, setSaved] = useState("Marikina");
   const [layer, setLayer] = useState<MapLayerId>("base");
+  const [selectedDay, setSelectedDay] = useState(0);
+  const outlook = useOutlookFeed("marikina");
   const gis = useGisLayers();
 
   return (
@@ -173,6 +175,10 @@ function ResidentLocationsWorkspace({}: {
         <RiverMap
           activeLayer={layer}
           onLayerChange={setLayer}
+          forecast={outlook.snapshot}
+          locationCode="marikina"
+          selectedDay={selectedDay}
+          onDayChange={setSelectedDay}
           className="!h-[610px]"
           hideChrome
         />
@@ -245,6 +251,42 @@ function HazardContext() {
 
 function ResidentPreferences() {
   const [saved, setSaved] = useState(false);
+  const [primaryCity, setPrimaryCity] = useState("Marikina");
+  const [defaultView, setDefaultView] = useState("Map");
+  const [outlookNotify, setOutlookNotify] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(
+        window.localStorage.getItem("riverguard:resident-preferences") ?? "{}",
+      ) as {
+        primaryCity?: string;
+        defaultView?: string;
+        outlookNotify?: boolean;
+        reducedMotion?: boolean;
+      };
+      if (stored.primaryCity) setPrimaryCity(stored.primaryCity);
+      if (stored.defaultView) setDefaultView(stored.defaultView);
+      setOutlookNotify(Boolean(stored.outlookNotify));
+      setReducedMotion(Boolean(stored.reducedMotion));
+    } catch {
+      // Invalid local preferences are ignored and reset by the next save.
+    }
+  }, []);
+
+  function savePreferences() {
+    window.localStorage.setItem(
+      "riverguard:resident-preferences",
+      JSON.stringify({
+        primaryCity,
+        defaultView,
+        outlookNotify,
+        reducedMotion,
+      }),
+    );
+    setSaved(true);
+  }
   return (
     <div className="mx-auto max-w-[96rem]">
       <section className="mb-4 rounded-[1.75rem] bg-[#e7f0f5] px-5 py-6 ring-1 ring-[#0b3358]/8 sm:px-7">
@@ -263,13 +305,23 @@ function ResidentPreferences() {
         title="Resident preferences"
       >
         <div className="grid gap-3 sm:grid-cols-2">
-          <SelectControl id="resident-city" label="Primary city">
+          <SelectControl
+            id="resident-city"
+            label="Primary city"
+            value={primaryCity}
+            onChange={(event) => setPrimaryCity(event.target.value)}
+          >
             <option>Marikina</option>
             <option>Quezon City</option>
             <option>Manila</option>
             <option>Pasig</option>
           </SelectControl>
-          <SelectControl id="default-view" label="Default spatial view">
+          <SelectControl
+            id="default-view"
+            label="Default spatial view"
+            value={defaultView}
+            onChange={(event) => setDefaultView(event.target.value)}
+          >
             <option>Map</option>
             <option>Accessible list</option>
           </SelectControl>
@@ -277,19 +329,23 @@ function ResidentPreferences() {
             id="outlook-notify"
             label="Experimental outlook updates"
             description="Choose how RiverGuard should notify you when services are connected."
+            checked={outlookNotify}
+            onChange={(event) => setOutlookNotify(event.target.checked)}
           />
           <CheckControl
             id="reduced-motion"
             label="Reduce motion"
             description="Respect reduced-motion interactions where supported."
+            checked={reducedMotion}
+            onChange={(event) => setReducedMotion(event.target.checked)}
           />
         </div>
-        <Button className="mt-4" size="small" onClick={() => setSaved(true)}>
+        <Button className="mt-4" size="small" onClick={savePreferences}>
           <FloppyDisk size={14} /> Save preferences
         </Button>
         {saved ? (
           <p className="text-metadata mt-2 text-success" role="status">
-            Preferences saved for this preview.
+            Preferences saved on this device.
           </p>
         ) : null}
       </Surface>
@@ -408,6 +464,7 @@ function LguLocations() {
 
 function LguOutlook() {
   const [layer, setLayer] = useState<MapLayerId>("base");
+  const [selectedDay, setSelectedDay] = useState(0);
   const outlook = useOutlookFeed("marikina");
 
   return (
@@ -441,7 +498,14 @@ function LguOutlook() {
         description="Geographic context for the same Marikina forecast"
       >
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_320px]">
-          <RiverMap activeLayer={layer} onLayerChange={setLayer} />
+          <RiverMap
+            activeLayer={layer}
+            onLayerChange={setLayer}
+            forecast={outlook.snapshot}
+            locationCode="marikina"
+            selectedDay={selectedDay}
+            onDayChange={setSelectedDay}
+          />
           <div className="h-fit self-start rounded-[1rem] border border-line bg-canvas-soft p-4">
             <h3 className="text-section">Assigned location</h3>
             <p className="text-body mt-0.5 text-muted">
@@ -758,7 +822,6 @@ function AlertApproval() {
 }
 
 function AlertDraft() {
-  const [submitted, setSubmitted] = useState(false);
   return (
     <>
       <PageHeading
@@ -821,19 +884,12 @@ function AlertDraft() {
           <Button
             size="small"
             variant="secondary"
-            onClick={() => setSubmitted(true)}
+            disabled
+            title="Alert submission requires a governed backend workflow"
           >
-            <ShieldCheck size={14} /> Request approval
+            <ShieldCheck size={14} /> Approval unavailable
           </Button>
         </div>
-        {submitted ? (
-          <p
-            className="text-metadata mt-2 text-right text-success"
-            role="status"
-          >
-            Draft moved to “Approval requested”.
-          </p>
-        ) : null}
       </Surface>
     </>
   );
@@ -946,7 +1002,6 @@ function AccessRequests({ detail }: { detail?: string }) {
 }
 
 function RequestReview() {
-  const [result, setResult] = useState("");
   return (
     <>
       <PageHeading
@@ -992,33 +1047,25 @@ function RequestReview() {
             <Button
               size="small"
               variant="quiet"
-              onClick={() => setResult("More information requested")}
+              disabled
             >
               Request information
             </Button>
             <Button
               size="small"
               variant="danger"
-              onClick={() => setResult("Request rejected")}
+              disabled
             >
               Reject
             </Button>
             <Button
               size="small"
               variant="secondary"
-              onClick={() => setResult("Request approved for Marikina")}
+              disabled
             >
               Approve
             </Button>
           </div>
-          {result ? (
-            <p
-              className="text-metadata mt-2 text-right text-success"
-              role="status"
-            >
-              {result}.
-            </p>
-          ) : null}
         </Surface>
         <Surface title="Request evidence">
           <dl className="text-body grid grid-cols-[110px_1fr] gap-2">
@@ -1356,8 +1403,13 @@ function ConfigurationScreen({
             />
           ))}
         </div>
-        <Button className="mt-5" size="small" onClick={() => setSaved(true)}>
-          <FloppyDisk size={14} /> Save configuration
+        <Button
+          className="mt-5"
+          size="small"
+          disabled
+          title="Configuration writes require a Convex-backed admin workflow"
+        >
+          <FloppyDisk size={14} /> Configuration unavailable
         </Button>
         {saved ? (
           <p className="text-metadata mt-2 text-success" role="status">
