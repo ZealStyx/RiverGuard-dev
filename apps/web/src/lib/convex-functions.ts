@@ -9,6 +9,8 @@
 
 import { makeFunctionReference } from "convex/server";
 
+import { convexDeploymentUrl } from "@/lib/convex-config";
+
 export interface OutlookDayRow {
   date: string;
   horizonDays: number;
@@ -164,8 +166,12 @@ export const convexFunctions = {
   >("alerts:listOpenForLocation"),
 };
 
-export const convexUrl: string | undefined =
-  process.env.NEXT_PUBLIC_CONVEX_URL ?? process.env.CONVEX_URL;
+/**
+ * Validated once in lib/convex-config.ts. Undefined means "no Convex in this
+ * build", either because nothing was configured or because the value was
+ * rejected — the caller cannot tell the difference, and should not need to.
+ */
+export const convexUrl: string | undefined = convexDeploymentUrl ?? undefined;
 
 /**
  * Turn Convex's "Could not find public function for 'forecasts:latestOutlook'"
