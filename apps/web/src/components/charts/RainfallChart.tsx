@@ -26,9 +26,12 @@ import {
   ChartTooltipContent,
   StatusLabel,
 } from "@/components/ui";
+import {
+  LOCATIONS,
+  STAGE_DRY_SEASON_DROP_M,
+  type LocationCode,
+} from "@/lib/locations";
 import type { HistoricalReading } from "@/types";
-
-import { LOCATIONS, type LocationCode } from "@/lib/locations";
 
 type LoadState = "loading" | "ready" | "empty" | "error";
 
@@ -143,10 +146,14 @@ export function RainfallChart({
   const showAlarms = alarms !== null && peak >= alarms[0] - 2.5;
 
   // The water level is a proxy, never a gauge reading, so it is labelled every
-  // time. The rainfall series is not annotated per-range by design.
+  // time — and the band is named, because "13.4 m" reads as alarming until you
+  // know the floor sits 2 m below the first alarm on purpose.
   const waterIsDerived = Boolean(latest?.qualityStatus?.includes("derived"));
+  const dryFloorM = alarms ? alarms[0] - STAGE_DRY_SEASON_DROP_M : null;
   const dataNote = waterIsDerived
-    ? "Water level is a rainfall-derived proxy in this dataset, not a gauge reading."
+    ? alarms && dryFloorM !== null
+      ? `Water level is a rainfall-derived stage proxy on this river's alarm datum, not a gauge reading. Dry-season floor ${dryFloorM.toFixed(1)} m · Alarm 1 at ${alarms[0]} m${alarmsVerified ? "" : " (indicative)"} · the proxy saturates at Alarm 3 (${alarms[2]} m).`
+      : "Water level is a rainfall-derived proxy in this dataset, not a gauge reading."
     : null;
 
   return (
