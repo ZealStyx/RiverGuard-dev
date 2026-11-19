@@ -122,6 +122,17 @@ export interface RemoteRun {
   days: RemoteRunDay[];
 }
 
+/** A stored observation, as `observedWeather:listRange` returns it. */
+export interface StoredObservedDay {
+  isoDate: string;
+  rainfallMm: number;
+  tmaxC?: number;
+  tminC?: number;
+  et0Mm?: number;
+  source: string;
+  fetchedAt: number;
+}
+
 export const convexFunctions = {
   recordOutlook: makeFunctionReference<
     "mutation",
@@ -164,6 +175,26 @@ export const convexFunctions = {
       createdAt: number;
     }>
   >("alerts:listOpenForLocation"),
+  observedRange: makeFunctionReference<
+    "query",
+    { cityCode: string; start: string; end: string },
+    StoredObservedDay[]
+  >("observedWeather:listRange"),
+  saveObservedDays: makeFunctionReference<
+    "mutation",
+    {
+      cityCode: string;
+      days: Array<{
+        isoDate: string;
+        rainfallMm: number;
+        tmaxC?: number;
+        tminC?: number;
+        et0Mm?: number;
+        source: string;
+      }>;
+    },
+    { inserted: number; updated: number }
+  >("observedWeather:upsertDays"),
 };
 
 /**

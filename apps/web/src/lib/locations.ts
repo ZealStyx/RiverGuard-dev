@@ -25,6 +25,17 @@ export interface LocationConfig {
   timezone: string;
 }
 
+/**
+ * How far below the first alarm the dataset generator puts the dry-season floor.
+ *
+ * `data/generate_dataset.py` routes rainfall through quick and slow stores, then
+ * maps that index onto each river's own alarm band: `Alarm 1 − 2.0 m` .. `Alarm 1`
+ * below the 98th percentile, `Alarm 1` .. `Alarm 3` above it, saturating at the
+ * third alarm. Quoted where the chart explains a stage value, so "13.0 m" is not
+ * read as an alarming number when the flood floor is 17 m.
+ */
+export const STAGE_DRY_SEASON_DROP_M = 2;
+
 export const LOCATIONS: Record<LocationCode, LocationConfig> = {
   marikina: {
     code: "marikina",

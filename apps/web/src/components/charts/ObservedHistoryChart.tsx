@@ -47,6 +47,8 @@ interface HistoricalResponse {
   dateMin: string;
   dateMax: string;
   readings: HistoricalReading[];
+  /** What the response could not provide (unpublished days, missing levels). */
+  notes?: string[];
   error?: string;
   detail?: string;
 }
@@ -77,6 +79,7 @@ export function ObservedHistoryChart({
   const [readings, setReadings] = useState<HistoricalReading[]>([]);
   const [range, setRange] = useState<{ min: string; max: string } | null>(null);
   const [dataset, setDataset] = useState("");
+  const [notes, setNotes] = useState<string[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -114,6 +117,7 @@ export function ObservedHistoryChart({
         setReadings(payload.readings ?? []);
         setRange({ min: payload.dateMin, max: payload.dateMax });
         setDataset(payload.dataset);
+        setNotes(payload.notes ?? []);
         setErrorDetail(null);
         setState(payload.readings?.length ? "ready" : "empty");
         setResolvedKey(requestKey);
@@ -150,6 +154,9 @@ export function ObservedHistoryChart({
   return (
     <WorkspaceChartSection
       className={className}
+      // One panel per row: the two charts get the full card width instead of
+      // being squeezed into half of it each.
+      gridClassName="grid-cols-1"
       eyebrow={eyebrow}
       title={title}
       description={
@@ -307,6 +314,19 @@ export function ObservedHistoryChart({
             ? ` · alarm lines hidden: the series peaks at ${peak.toFixed(2)} m, more than 2.5 m below the ${alarms[0]} m first alarm`
             : ""}
         </p>
+      ) : null}
+
+      {shownState === "ready" && notes.length > 0 ? (
+        <ul className="space-y-1 text-xs text-[#53697d] lg:col-span-2">
+          {notes.map((note) => (
+            <li key={note} className="flex gap-1.5">
+              <span aria-hidden className="text-[#94a9ba]">
+                ·
+              </span>
+              {note}
+            </li>
+          ))}
+        </ul>
       ) : null}
     </WorkspaceChartSection>
   );

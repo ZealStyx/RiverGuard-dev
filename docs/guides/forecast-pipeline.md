@@ -151,7 +151,7 @@ Nothing in the UI holds its own sample values. One table:
 
 | Panel                             | Source                               | Endpoint                                                |
 | --------------------------------- | ------------------------------------ | ------------------------------------------------------- |
-| Observed history charts           | `data/daily_observations.csv`        | `GET /api/historical?location=&limit=`                  |
+| Observed history charts           | live Open-Meteo, stored in Convex (`observedWeather`), with the CSV as fallback and as the water-level column | `GET /api/historical?location=&limit=`                  |
 | Dataset banner + provenance panel | the same CSV's identity and coverage | `GET /api/dataset`                                      |
 | Seven-day outlook                 | one completed model run              | `POST /api/forecast`                                    |
 | Model contribution bars           | one-at-a-time sensitivity sweep      | `GET /api/contributions` → `POST /v1/forecast/next-day` |
@@ -160,7 +160,22 @@ Nothing in the UI holds its own sample values. One table:
 
 The CSV row in that table is **training data and history**, not a run-time input: the model was fitted
 on those columns, and the charts read the rows back, but a forecast is always scored from the weather
-provider window. The data-source catalogue in the app carries the same split in its "Used for" column.
+provider window.
+
+### Why the history chart is not CSV-only any more
+
+The CSV ends on a fixed date (2026-11-14 in dataset v2), so a chart read straight from it could never
+be current. `GET /api/historical` now asks Open-Meteo for the requested window, writes whatever it
+returns to the `observedWeather` table in Convex, and serves the merged range; days already stored are
+not fetched again, and a revisit costs no network call. Two details are deliberate:
+
+- **The archive lags.** `archive-api.open-meteo.com` publishes several days behind, so the route takes
+  recent days from the forecast endpoint (which accepts up to 92 past days) and anything older from the
+  archive. Days that neither publishes yet are reported in `notes` instead of being drawn as zero.
+- **Water level stops with the dataset.** Only rainfall is live. The dataset's level column is a
+  rainfall-derived proxy, and extrapolating it would dress a guess up as a gauge reading, so days after
+  the CSV's last row carry `waterLevel: null` and the panel says so. Antecedent rainfall sums do
+  continue, because they are just sums of observed days. The data-source catalogue in the app carries the same split in its "Used for" column.
 
 If a source is missing, the panel says which one and offers the action that fixes it. There is no
 static fallback for observations or outlook days — an illustrative week and a real forecast are
