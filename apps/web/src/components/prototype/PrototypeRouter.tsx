@@ -43,6 +43,14 @@ export function PrototypeRouter({
   }
   if (section === "settings")
     return <WorkspaceSettingsScreen initialSection={segments[0]} />;
+  if (isProductRole(section) && segments[0] === "settings") {
+    return (
+      <WorkspaceSettingsScreen role={section} initialSection={segments[1]} />
+    );
+  }
+  if (isProductRole(section) && segments[0] === "help") {
+    return <WorkspaceMethodologyScreen role={section} />;
+  }
   if (section === "researcher") {
     return (
       <WorkspaceGate role="researcher">

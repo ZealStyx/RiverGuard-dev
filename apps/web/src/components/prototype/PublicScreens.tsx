@@ -30,6 +30,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { sendPasswordResetEmail, updateProfile } from "firebase/auth";
+import { useMutation, useQuery } from "convex/react";
 
 import { WorkspaceGate } from "@/components/auth/WorkspaceGate";
 import { AppShell } from "@/components/prototype/AppShell";
@@ -40,6 +42,9 @@ import {
   type ProvisionAccount,
   WithEnsureCurrent,
 } from "@/components/auth/EnsureCurrent";
+import { convexConfigured } from "@/lib/convex-config";
+import { api } from "../../../../../convex/_generated/api";
+import { firebaseAuth } from "@/lib/firebase";
 
 import {
   ActionLink,
@@ -613,14 +618,6 @@ function AuthLayout({
             <span className="text-xl font-semibold tracking-[-0.04em] text-[#071b3d]">
               RiverGuard
             </span>
-          </Link>
-          <Link
-            href="/welcome"
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-[#244967] transition hover:bg-[#e4eef4]"
-          >
-            <ArrowLeft size={16} />
-            <span className="hidden sm:inline">Back to overview</span>
-            <span className="sm:hidden">Back</span>
           </Link>
         </div>
       </header>
@@ -2233,11 +2230,13 @@ const settingsGroups: Array<{
  */
 export function WorkspaceSettingsScreen({
   initialSection,
+  role: roleOverride,
 }: {
   initialSection?: string;
+  role?: ProductRole;
 }) {
   const params = useSearchParams();
-  const role = roleFromParam(params.get("from"));
+  const role = roleOverride ?? roleFromParam(params.get("from"));
   return (
     <WorkspaceGate role={role}>
       <AppShell role={role}>
@@ -2263,9 +2262,13 @@ function roleFromParam(value: string | null): ProductRole {
   return (matched?.[1] ?? "resident") as ProductRole;
 }
 
-export function WorkspaceMethodologyScreen() {
+export function WorkspaceMethodologyScreen({
+  role: roleOverride,
+}: {
+  role?: ProductRole;
+} = {}) {
   const params = useSearchParams();
-  const role = roleFromParam(params.get("from"));
+  const role = roleOverride ?? roleFromParam(params.get("from"));
 
   return (
     <AppShell role={role}>
@@ -2375,7 +2378,69 @@ export function WorkspaceMethodologyScreen() {
 }
 
 export function SettingsScreen({ screen }: { screen?: string }) {
+  if (!convexConfigured) {
+    return <SettingsScreenBody screen={screen} currentUser={null} user={null} />;
+  }
+  return <LiveSettingsScreen screen={screen} />;
+}
+
+function LiveSettingsScreen({ screen }: { screen?: string }) {
+  const { user } = useFirebaseAuth();
+  const currentUser = useQuery(api.users.getCurrent, {});
+  const updateCurrentProfile = useMutation(api.users.updateCurrentProfile);
+  return (
+    <SettingsScreenBody
+      screen={screen}
+      currentUser={currentUser}
+      user={user}
+      updateCurrentProfile={updateCurrentProfile}
+    />
+  );
+}
+
+function SettingsScreenBody({
+  screen,
+  currentUser,
+  user,
+  updateCurrentProfile,
+}: {
+  screen?: string;
+  currentUser: any;
+  user: any;
+  updateCurrentProfile?: (args: {
+    displayName: string;
+    roleProfile?: {
+      city?: string;
+      organization?: string;
+      position?: string;
+      researcherType?: "government" | "private" | "independent" | "other";
+      requestedArea?: string;
+      purpose?: string;
+    };
+  }) => Promise<{ updated: boolean }>;
+}) {
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [securityMessage, setSecurityMessage] = useState("");
+  const [displayName, setDisplayName] = useState(
+    currentUser?.displayName ?? user?.displayName ?? "",
+  );
+  const [organization, setOrganization] = useState(
+    currentUser?.roleProfile?.organization ?? "",
+  );
+  const [city, setCity] = useState(currentUser?.roleProfile?.city ?? "");
+  const [position, setPosition] = useState(
+    currentUser?.roleProfile?.position ?? "",
+  );
+  useEffect(() => {
+    if (currentUser === undefined) return;
+    setDisplayName(
+      currentUser?.displayName ?? user?.displayName ?? "",
+    );
+    setOrganization(currentUser?.roleProfile?.organization ?? "");
+    setCity(currentUser?.roleProfile?.city ?? "");
+    setPosition(currentUser?.roleProfile?.position ?? "");
+  }, [currentUser, user]);
   const [activeScreen, setActiveScreen] = useState(screen || "profile");
   const settingsTitle =
     activeScreen === "notifications"
@@ -2392,6 +2457,57 @@ export function SettingsScreen({ screen }: { screen?: string }) {
 
   let content: ReactNode;
   if (activeScreen === "profile") {
+    const roleLabel: Record<string, string> = {
+      resident: "Resident",
+      lgu: "LGU operator",
+      researcher: "Researcher",
+      admin: "Administrator",
+    };
+    const nameParts = displayName.trim().split(/\s+/);
+    const firstName = nameParts.shift() ?? "";
+    const lastName = nameParts.join(" ");
+    const assignedLocations =
+      currentUser?.roleProfile?.city ??
+      currentUser?.roleProfile?.requestedArea ??
+      (currentUser?.role === "admin"
+        ? "All supported locations"
+        : currentUser?.role === "lgu"
+          ? "Assigned by an administrator"
+          : "Not assigned");
+
+    async function saveProfile() {
+      setSaveError("");
+      if (!displayName.trim()) {
+        setSaveError("Display name is required.");
+        return;
+      }
+      try {
+        if (user) await updateProfile(user, { displayName: displayName.trim() });
+        await updateCurrentProfile?.({
+          displayName: displayName.trim(),
+          roleProfile: {
+            ...(city ? { city } : {}),
+            ...(organization ? { organization } : {}),
+            ...(position ? { position } : {}),
+            ...(currentUser?.roleProfile?.researcherType
+              ? { researcherType: currentUser.roleProfile.researcherType }
+              : {}),
+            ...(currentUser?.roleProfile?.requestedArea
+              ? { requestedArea: currentUser.roleProfile.requestedArea }
+              : {}),
+            ...(currentUser?.roleProfile?.purpose
+              ? { purpose: currentUser.roleProfile.purpose }
+              : {}),
+          },
+        });
+        setSaved(true);
+      } catch (error) {
+        setSaveError(
+          error instanceof Error ? error.message : "Profile could not be saved.",
+        );
+      }
+    }
+
     content = (
       <div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
@@ -2401,28 +2517,36 @@ export function SettingsScreen({ screen }: { screen?: string }) {
               Personal details and workspace assignment.
             </p>
           </div>
-          <Button size="small" onClick={() => setSaved(true)}>
+          <Button
+            size="small"
+            loading={currentUser === undefined}
+            loadingLabel="Loading account"
+            onClick={() => void saveProfile()}
+          >
             <FloppyDisk size={14} /> Save changes
           </Button>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 py-4">
           <span className="inline-flex size-14 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-primary">
-            <UserCircle size={32} weight="duotone" />
+            {user?.photoURL ? (
+              <Image
+                src={user.photoURL}
+                alt=""
+                width={56}
+                height={56}
+                className="size-14 rounded-full object-cover"
+                unoptimized
+              />
+            ) : (
+              <UserCircle size={32} weight="duotone" />
+            )}
           </span>
           <div>
             <p className="text-button">Profile image</p>
             <p className="text-metadata mt-0.5 text-muted">
-              PNG or JPEG under 2 MB
+              Synced from your sign-in provider
             </p>
-          </div>
-          <div className="ml-auto flex gap-2">
-            <Button size="small" variant="secondary">
-              Change image
-            </Button>
-            <Button size="small" variant="quiet">
-              Remove
-            </Button>
           </div>
         </div>
 
@@ -2430,33 +2554,66 @@ export function SettingsScreen({ screen }: { screen?: string }) {
           <TextField
             id="profile-first-name"
             label="First name"
-            defaultValue="RiverGuard"
+            value={firstName}
+            onChange={(event) => {
+              const nextFirst = event.target.value;
+              setDisplayName(
+                [nextFirst, lastName].filter(Boolean).join(" "),
+              );
+            }}
           />
           <TextField
             id="profile-last-name"
             label="Last name"
-            defaultValue="Administrator"
+            value={lastName}
+            onChange={(event) => {
+              setDisplayName(
+                [firstName, event.target.value].filter(Boolean).join(" "),
+              );
+            }}
           />
           <TextField
             id="profile-org"
             label="Organization"
-            defaultValue="RiverGuard research"
+            value={organization}
+            onChange={(event) => setOrganization(event.target.value)}
           />
+          {currentUser?.role === "resident" ? (
+            <TextField
+              id="profile-city"
+              label="Saved city"
+              value={city}
+              onChange={(event) => setCity(event.target.value)}
+            />
+          ) : null}
+          {currentUser?.role === "lgu" ? (
+            <TextField
+              id="profile-position"
+              label="Position"
+              value={position}
+              onChange={(event) => setPosition(event.target.value)}
+            />
+          ) : null}
           <TextField
             id="profile-role"
             label="Role"
-            value="Administrator"
+            value={
+              currentUser?.role
+                ? roleLabel[currentUser.role] ?? currentUser.role
+                : "Unavailable"
+            }
             readOnly
           />
           <TextField
             id="profile-email"
             label="Contact email"
-            defaultValue="admin@riverguard.local"
+            value={user?.email ?? currentUser?.email ?? ""}
+            readOnly
           />
           <TextField
             id="profile-locations"
             label="Assigned locations"
-            value="All supported locations"
+            value={assignedLocations}
             readOnly
           />
         </div>
@@ -2468,11 +2625,33 @@ export function SettingsScreen({ screen }: { screen?: string }) {
               <div className="min-w-0 flex-1">
                 <p className="text-button">Email address</p>
                 <p className="text-body mt-0.5 text-muted">
-                  admin@riverguard.local
+                  {user?.email ?? currentUser?.email ?? "Unavailable"}
                 </p>
               </div>
-              <Button size="small" variant="quiet">
-                Change email
+              <Button
+                size="small"
+                variant="quiet"
+                disabled={!user?.email}
+                onClick={() => {
+                  if (!user?.email) return;
+                  void sendPasswordResetEmail(firebaseAuth, user.email)
+                    .then(() => {
+                      setSaved(false);
+                      setSaveError("");
+                      setSecurityMessage(
+                        "Password reset email sent. Check your inbox.",
+                      );
+                    })
+                    .catch((error: unknown) => {
+                      setSaveError(
+                        error instanceof Error
+                          ? error.message
+                          : "Password reset email could not be sent.",
+                      );
+                    });
+                }}
+              >
+                Send reset email
               </Button>
             </div>
             <div className="flex flex-wrap items-center gap-3 px-3 py-3">
@@ -2482,9 +2661,13 @@ export function SettingsScreen({ screen }: { screen?: string }) {
                   ••••••••••••
                 </p>
               </div>
-              <ActionLink href="/settings/password" variant="quiet">
+              <Button
+                size="small"
+                variant="quiet"
+                onClick={() => setActiveScreen("security")}
+              >
                 Change password
-              </ActionLink>
+              </Button>
             </div>
             <div className="flex flex-wrap items-center gap-3 px-3 py-3">
               <div className="min-w-0 flex-1">
@@ -2493,9 +2676,13 @@ export function SettingsScreen({ screen }: { screen?: string }) {
                   Add an extra verification step when signing in.
                 </p>
               </div>
-              <ActionLink href="/auth/mfa" variant="quiet">
+              <Button
+                size="small"
+                variant="quiet"
+                onClick={() => setActiveScreen("security")}
+              >
                 Set up
-              </ActionLink>
+              </Button>
             </div>
           </div>
         </div>
@@ -2614,9 +2801,13 @@ export function SettingsScreen({ screen }: { screen?: string }) {
                   <p className="text-button">Multi-factor authentication</p>
                   <p className="text-body mt-0.5 text-muted">Not configured</p>
                 </div>
-                <ActionLink href="/auth/mfa" variant="quiet">
+                <Button
+                  size="small"
+                  variant="quiet"
+                  onClick={() => setActiveScreen("security")}
+                >
                   Set up MFA
-                </ActionLink>
+                </Button>
               </div>
               <div className="flex flex-wrap items-center gap-3 px-3 py-3">
                 <div className="min-w-0 flex-1">
@@ -2867,6 +3058,14 @@ export function SettingsScreen({ screen }: { screen?: string }) {
           {saved ? (
             <p className="text-metadata mt-3 text-success" role="status">
               Changes saved.
+            </p>
+          ) : securityMessage ? (
+            <p className="text-metadata mt-3 text-success" role="status">
+              {securityMessage}
+            </p>
+          ) : saveError ? (
+            <p className="text-metadata mt-3 text-danger" role="alert">
+              {saveError}
             </p>
           ) : null}
         </section>

@@ -17,7 +17,7 @@ import {
 import Image from "next/image";
 import { useMemo, useState } from "react";
 
-import { RainfallChart } from "@/components/charts/RainfallChart";
+import { ObservedHistoryChart } from "@/components/charts/ObservedHistoryChart";
 import { ModelContributionPanel } from "@/components/dashboard/ModelContributionPanel";
 import {
   convexConfigured,
@@ -381,7 +381,7 @@ export function ResearcherWorkspaceDashboard() {
           </article>
 
           <WorkspaceChartSection
-            className="mt-0 lg:col-span-4"
+            className="mt-0 w-full lg:col-span-12"
             title="Seven-day model outlook"
             description="Rainfall bars and flood probability against the operating threshold."
             gridClassName="lg:grid-cols-1"
@@ -525,8 +525,12 @@ export function ResearcherWorkspaceDashboard() {
         </section>
 
         <section className="mt-4 grid gap-4 xl:grid-cols-12">
-          <div className="xl:col-span-8 [&>section]:rounded-[1.6rem] [&>section]:border-[#d7e2e9] [&>section]:bg-white [&>section]:shadow-[0_12px_38px_rgba(7,42,76,0.06)]">
-            <RainfallChart location={location.name} compact />
+          <div className="xl:col-span-8 [&>section]:w-full [&>section]:rounded-[1.6rem] [&>section]:border-[#d7e2e9] [&>section]:bg-white [&>section]:shadow-[0_12px_38px_rgba(7,42,76,0.06)]">
+            <ObservedHistoryChart
+              className="mt-0"
+              location={location.name}
+              limit={14}
+            />
           </div>
           <article className="rounded-[1.6rem] bg-white p-5 shadow-[0_12px_38px_rgba(7,42,76,0.06)] ring-1 ring-[#d7e2e9] sm:p-6 xl:col-span-4">
             <div className="flex items-start justify-between gap-3">

@@ -106,6 +106,8 @@ function isActive(pathname: string, href: string) {
  */
 function navigationIcon(label: string) {
   const normalized = label.toLowerCase();
+  if (normalized === "forecast workspace")
+    return <ChartLineUp size={18} />;
   if (normalized.includes("workspace")) return <SquaresFour size={18} />;
   if (normalized.includes("map") || normalized.includes("location"))
     return <MapTrifold size={18} />;
@@ -223,7 +225,7 @@ export function AppShell({
 
         <div className="grid gap-1 border-t border-white/10 p-2">
           <Link
-            href={`/methodology?from=/${role}`}
+            href={`/${role}/help`}
             title="Help and limitations"
             className={cx(
               "role-sidebar-item text-navigation",
@@ -236,7 +238,7 @@ export function AppShell({
             />
           </Link>
           <Link
-            href={`/settings?from=/${role}`}
+            href={`/${role}/settings`}
             title="Settings"
             aria-current={pathname.startsWith("/settings") ? "page" : undefined}
             className={cx(
@@ -314,7 +316,14 @@ export function AppShell({
               </Link>
             ))}
             <Link
-              href={`/settings?from=/${role}`}
+              href={`/${role}/help`}
+              onClick={() => setMobileOpen(false)}
+              className="text-navigation flex items-center gap-3 rounded-control px-3 py-2.5 hover:bg-canvas-soft"
+            >
+              <Question size={18} /> Help & limitations
+            </Link>
+            <Link
+              href={`/${role}/settings`}
               onClick={() => setMobileOpen(false)}
               className="text-navigation flex items-center gap-3 rounded-control px-3 py-2.5 hover:bg-canvas-soft"
             >

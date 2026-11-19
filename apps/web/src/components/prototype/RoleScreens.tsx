@@ -397,7 +397,7 @@ function LguLocations() {
             .map((location) => ({ ...location }))}
           actions={() => (
             <ActionLink href="/lgu/outlook" variant="quiet">
-              Open
+              Inspect
             </ActionLink>
           )}
         />

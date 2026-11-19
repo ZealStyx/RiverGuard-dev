@@ -11,7 +11,6 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { RainfallChart } from "@/components/charts/RainfallChart";
 import { MonthlyRainfallChart } from "@/components/charts/MonthlyRainfallChart";
 import { ObservedHistoryChart } from "@/components/charts/ObservedHistoryChart";
 import { convexConfigured } from "@/components/dashboard/OutlookBridge";
@@ -184,8 +183,12 @@ export function LocationDetails() {
           tone="warning"
         />
       </div>
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
-        <RainfallChart />
+      <div className="grid gap-3">
+        <ObservedHistoryChart
+          eyebrow="Observed records"
+          location="Marikina"
+          limit={14}
+        />
         <Surface title="Coverage and provenance">
           <dl className="grid grid-cols-[105px_minmax(0,1fr)] gap-x-3 gap-y-2 text-body">
             <dt className="text-muted">Resolution</dt>
@@ -782,7 +785,7 @@ function RunHistoryTable({ runs }: { runs: StoredRunSummary[] }) {
       ]}
       rows={rows}
       actions={(row) => (
-        <ActionLink href={`/researcher/runs/${row.run}`} variant="secondary">
+        <ActionLink href={`/researcher/runs/${row.run}`} variant="quiet">
           Inspect
         </ActionLink>
       )}
@@ -1961,6 +1964,14 @@ function ModelsInner({
               className="flex h-full flex-col"
               title={model.name}
               description={model.responsibility}
+              action={
+                <ActionLink
+                  href={`${basePath}/${model.id}?view=research`}
+                  variant="quiet"
+                >
+                  View model card
+                </ActionLink>
+              }
             >
               <dl className="text-body grid gap-2">
                 <div>
@@ -1984,13 +1995,6 @@ function ModelsInner({
                   </dd>
                 </div>
               </dl>
-              <ActionLink
-                href={`${basePath}/${model.id}?view=research`}
-                variant="quiet"
-                className="mt-auto w-full"
-              >
-                View model card
-              </ActionLink>
             </Surface>
           ))}
         </div>

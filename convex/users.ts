@@ -86,3 +86,38 @@ export const ensureCurrent = mutation({
     };
   },
 });
+
+export const updateCurrentProfile = mutation({
+  args: {
+    displayName: v.string(),
+    roleProfile: v.optional(userRoleProfileValidator),
+  },
+  returns: v.object({
+    updated: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity === null) {
+      throw new Error("Authentication is required");
+    }
+
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("by_external_id", (index) =>
+        index.eq("externalId", identity.subject),
+      )
+      .unique();
+
+    if (!existing) {
+      throw new Error("RiverGuard account is not provisioned.");
+    }
+
+    await ctx.db.patch(existing._id, {
+      displayName: args.displayName,
+      ...(args.roleProfile ? { roleProfile: args.roleProfile } : {}),
+      updatedAt: Date.now(),
+    });
+
+    return { updated: true };
+  },
+});

@@ -13,7 +13,7 @@ export const buttonVariantClasses = {
   primary:
     "bg-brand-primary text-white hover:bg-brand-primary-hover active:bg-brand-primary-active",
   secondary:
-    "bg-brand-secondary text-white hover:bg-brand-secondary-hover active:bg-brand-primary-active",
+    "border border-brand-secondary bg-brand-secondary-soft text-brand-secondary hover:bg-brand-secondary hover:text-white active:bg-brand-secondary-hover",
   quiet:
     "border border-line bg-transparent text-ink hover:bg-canvas-soft active:bg-line",
   danger: "bg-danger text-white hover:bg-danger/90 active:bg-danger/80",
