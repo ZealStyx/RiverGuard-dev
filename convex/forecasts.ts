@@ -199,6 +199,9 @@ export const recordOutlook = mutation({
   },
 });
 
+/** How many recent runs `latestOutlook` will scan looking for this location. */
+const MAX_RUNS_SCANNED = 40;
+
 /**
  * The dashboard's read path: the newest completed run for a location, with its
  * forecast days and risk levels flattened into something a chart can render.
@@ -209,18 +212,43 @@ export const latestOutlook = query({
   handler: async (ctx, args) => {
     const user = await requireCurrentUser(ctx);
     await assertLocationAccess(ctx, user, args.locationCode);
-    const run = await ctx.db
+    /**
+     * The newest completed run *that actually carries this location*.
+     *
+     * The previous version took the newest completed run across the whole
+     * deployment and filtered afterwards, so a resident of a city whose latest
+     * run was not the global newest was shown nothing. Runs are walked newest
+     * first and the first one with a row for this city wins; the per-run probe
+     * takes one row, so the cost is bounded by the number of runs scanned.
+     */
+    const candidateRuns = await ctx.db
       .query("forecastRuns")
       .withIndex("by_requested_at", (index: any) => index)
       .order("desc")
       .filter((row: any) => row.status === "completed")
-      .first();
+      .take(MAX_RUNS_SCANNED);
+
+    let run: (typeof candidateRuns)[number] | null = null;
+    for (const candidate of candidateRuns) {
+      const probe = await ctx.db
+        .query("forecasts")
+        .withIndex("by_run_valid_at", (index: any) =>
+          index.eq("runId", candidate._id),
+        )
+        .filter((row: any) => row.locationCode === args.locationCode)
+        .take(1);
+
+      if (probe.length > 0) {
+        run = candidate;
+        break;
+      }
+    }
 
     if (!run) return null;
 
     const forecasts = await ctx.db
       .query("forecasts")
-      .withIndex("by_run_valid_at", (index: any) => index.eq("runId", run._id))
+      .withIndex("by_run_valid_at", (index: any) => index.eq("runId", run!._id))
       .order("asc")
       .collect();
 

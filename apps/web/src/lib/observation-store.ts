@@ -31,8 +31,26 @@ const WRITE_BATCH = 400;
 const PROVIDER_CODE = "open-meteo";
 const RAINFALL_SOURCE = "provider";
 
+/**
+ * The shared secret the deployment expects on the ingest mutation.
+ *
+ * Server-side only: `RIVERGUARD_INGEST_SECRET` is deliberately not a
+ * `NEXT_PUBLIC_` value, so it never reaches the browser bundle. Unset means the
+ * deployment cannot be written to — the read path still works, because the
+ * history route treats storage as best effort.
+ */
+function ingestSecret(): string | undefined {
+  const value = process.env.RIVERGUARD_INGEST_SECRET;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 export function observationStoreEnabled(): boolean {
   return Boolean(convexUrl);
+}
+
+/** True when writes are possible: a deployment and the ingest secret. */
+export function observationStoreWritable(): boolean {
+  return Boolean(convexUrl) && ingestSecret() !== undefined;
 }
 
 function client(): ConvexHttpClient {
@@ -89,6 +107,17 @@ export async function saveObservedDays(
   days: ObservedDay[],
 ): Promise<StoreWriteResult> {
   if (!convexUrl || days.length === 0) return { stored: 0 };
+
+  const secret = ingestSecret();
+  if (secret === undefined) {
+    // Fail closed, and say so: the deployment refuses unauthenticated writes,
+    // so the caller must not report these days as persisted.
+    return {
+      stored: 0,
+      error:
+        "RIVERGUARD_INGEST_SECRET is not set in this server environment, so observations were not stored.",
+    };
+  }
   const retrievedAt = Date.now();
   let stored = 0;
   try {
@@ -109,6 +138,7 @@ export async function saveObservedDays(
         locationCode,
         locationName,
         days: batch,
+        secret,
       });
       stored += batch.length;
     }
