@@ -110,6 +110,10 @@ function buildRequestBody(bundle: WeatherBundle, issueDate: string) {
       rainfallMm: day.rainfallMm,
       tmaxC: day.tmaxC,
       tminC: day.tminC,
+      // The provider returns ET0 per day and the soil-moisture bucket needs it:
+      // it is the outflow term. Dropping it here is what made the horizon drain
+      // by a monthly average instead of the actual forecast.
+      et0Mm: day.et0Mm,
     })),
   };
 }

@@ -79,9 +79,13 @@ Convex subscription, so a reload does not spend another weather call.
    the input in `observedState` (`asOfDate` = last day of that window, `rainSource`, `qualityStatus`)
    and names the source rows in `weather.notes`.
 5. `POST {ML_API_BASE_URL}/v1/forecast/daily` with that input state and the seven days.
-6. The ML service chains them: predict day _d_, fold its rain into the antecedent sums and the soil
-   bucket, predict day _d+1_. Each day comes back with probability, water level, risk level, alarm
-   crossing, and a one-sentence reason.
+6. The ML service chains them: predict day _d_, fold its rain into the antecedent sums and its ET0
+   out of the soil bucket, predict day _d+1_. Both terms of the bucket are real — the provider's rain
+   and the provider's `et0_fao_evapotranspiration` for each of the seven days travel in the request,
+   so a cloudless week dries the catchment faster than an overcast one. (A caller that sends no ET0
+   falls back to the month's normal from the artifact, which is what every day used before the field
+   existed.) Each day comes back with probability, water level, risk level, alarm crossing, and a
+   one-sentence reason.
 7. The route stores the run, in one of two places:
    - **Convex** (`NEXT_PUBLIC_CONVEX_URL` set) — `forecasts:recordOutlook` writes one `forecastRuns`
      row, seven `forecasts`, seven `riskAssessments`, a `modelVersions` row if it is new, and an alert

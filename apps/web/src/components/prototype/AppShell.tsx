@@ -107,8 +107,7 @@ function isActive(pathname: string, href: string) {
  */
 function navigationIcon(label: string) {
   const normalized = label.toLowerCase();
-  if (normalized === "forecast workspace")
-    return <ChartLineUp size={18} />;
+  if (normalized === "forecast workspace") return <ChartLineUp size={18} />;
   if (normalized.includes("workspace")) return <SquaresFour size={18} />;
   if (normalized.includes("map") || normalized.includes("location"))
     return <MapTrifold size={18} />;

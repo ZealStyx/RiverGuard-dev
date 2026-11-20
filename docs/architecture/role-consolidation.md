@@ -1,33 +1,52 @@
-# Current Role Model and Research Workspace
+# Role Model — Proposal, and What Actually Ships
 
-**Status:** Accepted for the local prototype (November 2026)
+**Status:** the proposal below was **not implemented**. It is kept as a record of the decision that
+was considered, and superseded by the shipped behaviour described in the next section.
 
-## Decision
+The audit of this repository found the documentation claiming a three-role model while the code,
+the Convex validators, the signup screen, and the router all still carried a fourth role. That
+contradiction is now resolved in favour of the code, because the code is what users experience.
 
-RiverGuard does not use a separate Researcher product role in the current prototype. The active user-facing roles are:
+## What actually ships
 
-- **Resident** — views the simplified resident experience and official-source links.
-- **LGU operator** — reviews assigned-area outlooks and records controlled assessments.
-- **Administrator** — manages governance and uses the research tools.
+Four roles, defined in `convex/validators.ts` and mirrored by `apps/web/src/data/prototype.ts`:
 
-This is an intentional small-team decision. It avoids creating a Researcher account when there is no dedicated research operator, while keeping the research workflows available to the administrator responsible for data and model review.
+```text
+resident | lgu | researcher | admin
+```
 
-## Administrator workspace
+| Role | Workspace | How the account is created |
+|---|---|---|
+| Resident | `/resident` | Signup, stored `active` |
+| LGU operator | `/lgu` | Access request, stored `pending` until an administrator approves |
+| Researcher | `/researcher` | Access request, stored `pending` until an administrator approves |
+| Administrator | `/admin` | Provisioned by an existing administrator; signup cannot request it |
 
-The Administrator shell has six task-level areas:
+`users.ensureCurrent` treats the requested role as a request, not a grant: only `resident` is
+`active` immediately, `lgu` and `researcher` are stored `pending`, and a requested `admin` throws.
+`WorkspaceGate` reads the stored role and status, and refuses when either cannot be verified.
 
-1. Overview
-2. Research
-3. Forecasts
-4. Users & access
-5. Configuration
-6. Audit
+`/researcher/*` is a mounted workspace with its own screens (`ResearcherScreens.tsx`), not a
+redirect to `/admin/research/*`.
 
-Research workflows use the `/admin/research/*` route family. Configuration domains remain canonical under `/admin/locations`, `/admin/data-sources`, and `/admin/models`, with research/detail tabs where appropriate.
+## The proposal that was not implemented
+
+For the record, the earlier plan was to collapse the research workflows into the Administrator
+workspace: three roles (Resident, LGU operator, Administrator), research tools under
+`/admin/research/*`, `resident | lgu | admin` in the validator, and `/researcher/*` kept only as
+compatibility aliases.
+
+None of that shipped. The validator still accepts `researcher`, signup still offers it, and the
+`/researcher` route still renders the research workspace. Anyone reading the git history will find
+this file claiming otherwise; that is why the claim is being retired rather than deleted.
+
+If the consolidation is ever wanted, it is a product change of its own: remove the role from the
+validator, the signup screen, the router, and the onboarding copy in one change, migrate the
+existing `researcher` rows, and update this file and `docs/AUTH_ROUTING.md` in the same commit.
 
 ## Capabilities
 
-The application keeps internal capabilities even though they currently belong to one role:
+The capability names are still used to decide what the administrator navigation shows:
 
 - `research.read`
 - `research.runForecast`
@@ -36,48 +55,15 @@ The application keeps internal capabilities even though they currently belong to
 - `governance.configureSystem`
 - `governance.viewAudit`
 
-The frontend uses these capabilities to decide which Admin navigation items are visible. Once authentication and Convex authorization are connected, the same checks must be enforced in backend queries and mutations; hidden navigation is not authorization.
-
-## Authentication and onboarding
-
-- Resident signup remains available.
-- LGU operator access uses an access request and administrator approval.
-- Administrator access is invitation-only and requires MFA in the prototype flow.
-- Researcher is not offered in signup, access requests, pending approval copy, demo login, or onboarding.
-- Research orientation is included in Administrator onboarding.
-
-## Public information navigation
-
-About and Official Sources remain available as public pages from the Welcome page only. Authenticated role shells do not show those links; they keep the in-context Help & Limitations route instead.
-
-## Route compatibility
-
-Existing Researcher URLs are compatibility aliases, not a separate role workspace:
-
-- `/researcher/*` → `/admin/research/*`
-- `/researcher/data-sources/*` → `/admin/data-sources/*?view=research`
-- `/researcher/models/*` → `/admin/models/*?view=research`
-- `/researcher/locations/*` → `/admin/locations/*?view=research`
-
-New internal links must use the Administrator route families directly.
-
-## Backend role contract
-
-The current Convex validator uses:
-
-```text
-resident | lgu | admin
-```
-
-The frontend and Convex role names must stay aligned. There is no deployed user migration in this prototype, so the role validator can be edited directly rather than maintaining a legacy Researcher migration path.
+Hidden navigation is not authorisation. The backend checks that matter live in `convex/auth.ts`
+(`requireCurrentUser`, `requireRole`), in the mutations that guard writes, and in
+`apps/web/src/lib/api-auth.ts` for the API routes.
 
 ## Source-of-truth files
 
-- `apps/web/src/data/prototype.ts` — roles, capabilities, and navigation.
-- `apps/web/src/components/prototype/AppShell.tsx` — Admin shell and capability-aware navigation.
-- `apps/web/src/components/prototype/PrototypeRouter.tsx` — route selection and compatibility handling.
-- `apps/web/src/components/prototype/PublicScreens.tsx` — auth, signup, access request, and onboarding flows.
-- `apps/web/src/components/prototype/ResearcherScreens.tsx` — existing research workflow implementation mounted under Admin.
-- `apps/web/src/components/prototype/RoleScreens.tsx` — Admin routes and configuration/research tabs.
-- `convex/validators.ts` — backend role validator.
-- `docs/designs/frontend-route-inventory.md` — current route inventory.
+- `convex/validators.ts` — the role enum.
+- `convex/users.ts` — account creation and the "request, not grant" rule.
+- `apps/web/src/data/prototype.ts` — roles and navigation.
+- `apps/web/src/components/prototype/PrototypeRouter.tsx` — which section mounts which workspace.
+- `apps/web/src/components/auth/WorkspaceGate.tsx` — the access check, fail-closed.
+- `docs/AUTH_ROUTING.md` — routes, statuses, and the signup contract.

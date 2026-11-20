@@ -33,6 +33,17 @@ class DailyWeatherInput(BaseModel):
     rainfallMm: float = Field(ge=0, le=600, description="Daily total for this date.")
     tmaxC: float = Field(ge=10, le=45)
     tminC: float = Field(ge=10, le=45)
+    et0Mm: float | None = Field(
+        default=None,
+        ge=0,
+        le=20,
+        description=(
+            "Reference evapotranspiration for this date, in mm. This is the outflow "
+            "term of the soil-moisture bucket the model was trained on. Omit it and "
+            "the service falls back to the month's normal from the artifact, which is "
+            "what it did for every day before this field existed."
+        ),
+    )
 
     @model_validator(mode="after")
     def min_below_max(self) -> "DailyWeatherInput":

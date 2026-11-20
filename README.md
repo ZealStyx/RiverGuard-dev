@@ -18,9 +18,16 @@ RiverGuard is a decision-support research prototype. It does not replace PAGASA 
 
 ### Current application roles
 
-The local prototype uses three application roles: Resident, LGU operator, and Administrator. Research workflows are Administrator tools under `/admin/research/*`; there is no separate Researcher account in the current product model. Older `/researcher/*` URLs redirect to the corresponding Administrator route for compatibility.
+The prototype has four application roles: Resident, LGU operator, Researcher, and Administrator. This is what the code does, and the documentation now matches it.
 
-See [`docs/architecture/role-consolidation.md`](docs/architecture/role-consolidation.md) for the role, capability, route, and onboarding decision.
+- **Resident** — signs up directly; the account is stored `active`.
+- **LGU operator** — requests access; the account is stored `pending` until an administrator approves it.
+- **Researcher** — requests access; the account is stored `pending` until an administrator approves it. Approved researchers get their own workspace at `/researcher`.
+- **Administrator** — not selectable at signup. `users.ensureCurrent` refuses a client-supplied `admin` role; administrator accounts are provisioned by an existing administrator.
+
+`/researcher/*` is a mounted workspace, not a compatibility redirect. The role is present in `convex/validators.ts`, in the signup screen, and in the router, so it is live rather than vestigial.
+
+See [`docs/AUTH_ROUTING.md`](docs/AUTH_ROUTING.md) for the route, status, and signup contract. The earlier proposal to fold Researcher into the administrator workspace is kept, and marked as **not implemented**, in [`docs/architecture/role-consolidation.md`](docs/architecture/role-consolidation.md).
 
 ---
 

@@ -256,6 +256,10 @@ function ResidentPreferences() {
   const [outlookNotify, setOutlookNotify] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect --
+     localStorage does not exist during the server render, so these preferences
+     can only be read after mount. Reading them in a lazy initialiser would make
+     the server and client markup disagree. */
   useEffect(() => {
     try {
       const stored = JSON.parse(
@@ -274,6 +278,7 @@ function ResidentPreferences() {
       // Invalid local preferences are ignored and reset by the next save.
     }
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function savePreferences() {
     window.localStorage.setItem(
@@ -1050,25 +1055,13 @@ function RequestReview() {
             </div>
           </div>
           <div className="mt-5 flex flex-wrap justify-end gap-2">
-            <Button
-              size="small"
-              variant="quiet"
-              disabled
-            >
+            <Button size="small" variant="quiet" disabled>
               Request information
             </Button>
-            <Button
-              size="small"
-              variant="danger"
-              disabled
-            >
+            <Button size="small" variant="danger" disabled>
               Reject
             </Button>
-            <Button
-              size="small"
-              variant="secondary"
-              disabled
-            >
+            <Button size="small" variant="secondary" disabled>
               Approve
             </Button>
           </div>
@@ -1287,7 +1280,9 @@ function ConfigurationScreen({
   kind: string;
   detail?: string;
 }) {
-  const [saved, setSaved] = useState(false);
+  // `saved` is read for the "saved" confirmation; nothing in this screen sets
+  // it because the form is not wired to a backend yet.
+  const [saved] = useState(false);
   const searchParams = useSearchParams();
   const researchView =
     searchParams.get("view") === "research" || Boolean(detail);
