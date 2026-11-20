@@ -22,7 +22,7 @@ resident | lgu | researcher | admin
 | Researcher | `/researcher` | Access request, stored `pending` until an administrator approves |
 | Administrator | `/admin` | Provisioned by an existing administrator; signup cannot request it |
 
-`users.ensureCurrent` treats the requested role as a request, not a grant: only `resident` is
+`users.register` treats the requested role as a request, not a grant: only `resident` is
 `active` immediately, `lgu` and `researcher` are stored `pending`, and a requested `admin` throws.
 `WorkspaceGate` reads the stored role and status, and refuses when either cannot be verified.
 

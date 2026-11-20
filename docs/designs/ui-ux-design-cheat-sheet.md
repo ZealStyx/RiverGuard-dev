@@ -1,5 +1,7 @@
 # RiverGuard UI/UX Design Cheat Sheet
 
+> Historical design specification. For the implemented account lifecycle (without onboarding), see [Authentication and Routing](../AUTH_ROUTING.md).
+
 > **Document purpose:** Complete product-flow and screen-planning reference for RiverGuard UI/UX design.
 >
 > **Status:** Design specification. It includes the current local research prototype and clearly labeled future concepts. It does not mean every screen is implemented.

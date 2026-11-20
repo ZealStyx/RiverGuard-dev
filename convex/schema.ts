@@ -2,6 +2,8 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 import {
+  elevatedRole,
+  cityCode,
   alertStatusValidator,
   dataQualityValidator,
   hazardLayerKindValidator,
@@ -34,6 +36,7 @@ export default defineSchema({
     email: v.string(),
     displayName: v.string(),
     role: userRoleValidator,
+    additionalRoles: v.optional(v.array(userRoleValidator)),
     status: v.optional(userStatusValidator),
     roleProfile: v.optional(userRoleProfileValidator),
     createdAt: v.number(),
@@ -42,6 +45,40 @@ export default defineSchema({
     .index("by_external_id", ["externalId"])
     .index("by_email", ["email"]),
 
+  roleRequests: defineTable({
+    userId: v.id("users"),
+    role: elevatedRole,
+    profile: userRoleProfileValidator,
+    initial: v.boolean(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("rejected"),
+    ),
+    reviewer: v.optional(v.id("users")),
+    decidedAt: v.optional(v.number()),
+    location: v.optional(cityCode),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+  invitations: defineTable({
+    mailStatus: v.optional(
+      v.union(v.literal("queued"), v.literal("sent"), v.literal("failed")),
+    ),
+    email: v.string(),
+    role: userRoleValidator,
+    location: v.optional(cityCode),
+    sender: v.id("users"),
+    expiresAt: v.number(),
+    acceptedBy: v.optional(v.id("users")),
+  }).index("by_email", ["email"]),
+  accessEvents: defineTable({
+    actor: v.id("users"),
+    subject: v.string(),
+    action: v.string(),
+    role: userRoleValidator,
+    location: v.optional(cityCode),
+  }),
   lguProfiles: defineTable({
     userId: v.id("users"),
     cityCode: v.string(),

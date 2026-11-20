@@ -23,13 +23,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import {
-  type FormEvent,
-  type ReactNode,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { sendPasswordResetEmail, updateProfile } from "firebase/auth";
 import { useMutation, useQuery } from "convex/react";
 
@@ -38,10 +32,9 @@ import { AppShell } from "@/components/prototype/AppShell";
 import { Button } from "@/components/ui";
 import { useFirebaseAuth } from "@/components/auth/FirebaseAuthProvider";
 import type { ProductRole } from "@/data/prototype";
-import {
-  type ProvisionAccount,
-  WithEnsureCurrent,
-} from "@/components/auth/EnsureCurrent";
+import { accountRoute } from "@/lib/account-client";
+import { AccessPanel } from "../auth/AccessPanel";
+import { MfaSetup } from "../auth/MfaSetup";
 import { convexConfigured } from "@/lib/convex-config";
 import { api } from "../../../../../convex/_generated/api";
 import type { User } from "firebase/auth";
@@ -56,7 +49,6 @@ import {
   PageHeading,
   SelectControl,
   StatusBadge,
-  Stepper,
   Surface,
   TextAreaField,
   TextField,
@@ -678,40 +670,15 @@ function AuthLayout({
 }
 
 function LoginForm() {
-  return (
-    <WithEnsureCurrent>
-      {(ensureCurrent) => <LoginFormBody ensureCurrent={ensureCurrent} />}
-    </WithEnsureCurrent>
-  );
-}
-
-function LoginFormBody({
-  ensureCurrent,
-}: {
-  ensureCurrent: ProvisionAccount | null;
-}) {
   const router = useRouter();
-  const { signInWithEmail, signInWithGoogle, sendEmailVerification } =
-    useFirebaseAuth();
+  const { signInWithEmail, signInWithGoogle } = useFirebaseAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  async function finishSignIn() {
-    // Without Convex the account (and therefore the role) cannot be read, so the
-    // default workspace is used. Sign-in itself still succeeded.
-    const account = await provisionWithTimeout(ensureCurrent, {});
-    const destination =
-      account &&
-      ["resident", "lgu", "researcher", "admin"].includes(account.role)
-        ? `/${account.role}`
-        : "/resident";
-    router.push(destination);
-  }
   async function signInWithGoogleAccount() {
     setLoading(true);
     setError("");
     try {
-      await signInWithGoogle();
-      await finishSignIn();
+      router.replace(await accountRoute(await signInWithGoogle()));
     } catch (signInError) {
       setLoading(false);
       setError(formatAuthError(signInError));
@@ -727,33 +694,7 @@ function LoginFormBody({
         String(formData.get("login-email")).trim(),
         String(formData.get("login-password")),
       );
-      if (!signedInUser.emailVerified) {
-        let verificationSent = false;
-        try {
-          const sent = await settleWithin(sendEmailVerification(), 10_000);
-          verificationSent = sent !== null;
-          if (!verificationSent) {
-            setError(
-              "Verification email request timed out. You can resend it on the next screen.",
-            );
-          }
-        } catch (verificationSendError) {
-          setError(formatAuthError(verificationSendError));
-        }
-        const account = await provisionWithTimeout(ensureCurrent, {
-          requestedRole: "resident",
-        });
-        const role =
-          account &&
-          ["resident", "lgu", "researcher", "admin"].includes(account.role)
-            ? account.role
-            : "resident";
-        router.push(
-          `/auth/verify?role=${role}&source=signup&sent=${verificationSent ? "1" : "0"}`,
-        );
-        return;
-      }
-      await finishSignIn();
+      router.replace(await accountRoute(signedInUser));
     } catch (signInError) {
       setLoading(false);
       setError(formatAuthError(signInError));
@@ -779,11 +720,6 @@ function LoginFormBody({
           autoComplete="current-password"
           placeholder="Enter your password"
           required
-        />
-        <CheckControl
-          id="remember-device"
-          label="Remember this device"
-          description="Keep this account signed in on this device."
         />
         <Button
           type="submit"
@@ -928,41 +864,23 @@ function buildRoleProfile(formData: FormData, role: ProductRole) {
   };
 }
 
-function ResidentSignup({
+function SignupForm({
   onRoleChange,
   role,
 }: {
-  onRoleChange: (role: ProductRole) => void;
-  role: ProductRole;
-}) {
-  return (
-    <WithEnsureCurrent>
-      {(ensureCurrent) => (
-        <ResidentSignupBody
-          ensureCurrent={ensureCurrent}
-          onRoleChange={onRoleChange}
-          role={role}
-        />
-      )}
-    </WithEnsureCurrent>
-  );
-}
-
-function ResidentSignupBody({
-  ensureCurrent,
-  onRoleChange,
-  role,
-}: {
-  ensureCurrent: ProvisionAccount | null;
   onRoleChange: (role: ProductRole) => void;
   role: ProductRole;
 }) {
   const router = useRouter();
-  const { createAccountWithEmail, sendEmailVerification, signInWithGoogle } =
-    useFirebaseAuth();
+  const {
+    user,
+    createAccountWithEmail,
+    sendEmailVerification,
+    signInWithGoogle,
+  } = useFirebaseAuth();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const signupForm = useRef<HTMLFormElement>(null);
+  const [method, setMethod] = useState<"email" | "google">("email");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -971,34 +889,34 @@ function ResidentSignupBody({
     setError("");
     const formData = new FormData(event.currentTarget);
     try {
-      const password = String(formData.get("signup-password"));
-      const confirmation = String(formData.get("signup-confirm"));
-      if (password !== confirmation) {
-        throw new Error("Passwords do not match.");
-      }
-      const passwordRequirementError = getPasswordRequirementError(password);
-      if (passwordRequirementError) {
-        throw new Error(passwordRequirementError);
-      }
-      await createAccountWithEmail(
-        String(formData.get("signup-email")).trim(),
-        password,
-      );
-      await provisionWithTimeout(ensureCurrent, {
-        requestedRole: role,
-        roleProfile: buildRoleProfile(formData, role),
-      });
-      let verificationSent = false;
-      const sent = await settleWithin(sendEmailVerification(), 10_000);
-      verificationSent = sent !== null;
-      if (!verificationSent) {
-        setError(
-          "Verification email request timed out. You can resend it on the next screen.",
+      if (role === "admin") throw new Error("Choose a self-service role.");
+      let credential = user;
+      if (!credential && method === "google")
+        credential = await signInWithGoogle();
+      if (!credential) {
+        if (password !== confirmPassword)
+          throw new Error("Passwords do not match.");
+        const invalid = getPasswordRequirementError(password);
+        if (invalid) throw new Error(invalid);
+        credential = await createAccountWithEmail(
+          String(formData.get("signup-email")).trim(),
+          password,
         );
       }
-      router.push(
-        `/auth/verify?role=${role}&source=signup&sent=${verificationSent ? "1" : "0"}`,
-      );
+      const route = await accountRoute(credential, {
+        requestedRole: role,
+        displayName: String(formData.get("signup-name")),
+        roleProfile: buildRoleProfile(formData, role),
+      });
+      if (route === "/auth/verify") {
+        try {
+          await sendEmailVerification();
+        } catch {
+          router.replace("/auth/verify?delivery=failed");
+          return;
+        }
+      }
+      router.replace(route);
     } catch (signupError) {
       setError(formatAuthError(signupError));
     } finally {
@@ -1006,7 +924,7 @@ function ResidentSignupBody({
     }
   };
   return (
-    <form ref={signupForm} className="grid gap-3" onSubmit={submit}>
+    <form className="grid gap-3" onSubmit={submit}>
       {error ? <p className="text-metadata text-danger">{error}</p> : null}
       <SelectControl
         id="signup-role"
@@ -1039,41 +957,62 @@ function ResidentSignupBody({
         placeholder="Your full name"
         required
       />
-      <TextField
-        id="signup-email"
-        name="signup-email"
-        label="Email"
-        type="email"
-        autoComplete="email"
-        placeholder="you@example.com"
-        required
-      />
-      <PasswordField
-        id="signup-password"
-        name="signup-password"
-        label="Password"
-        autoComplete="new-password"
-        placeholder="Create a password"
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
-        required
-        hint={<PasswordRequirements password={password} />}
-      />
-      <PasswordField
-        id="signup-confirm"
-        name="signup-confirm"
-        label="Confirm password"
-        autoComplete="new-password"
-        placeholder="Re-enter your password"
-        value={confirmPassword}
-        onChange={(event) => setConfirmPassword(event.target.value)}
-        error={
-          confirmPassword && confirmPassword !== password
-            ? "Passwords do not match."
-            : undefined
-        }
-        required
-      />
+      {user ? (
+        <p>
+          Completing registration as {user.email}.{" "}
+          <Link href="/auth/logout">Use another account</Link>
+        </p>
+      ) : (
+        <SelectControl
+          id="signup-method"
+          label="Registration method"
+          value={method}
+          onChange={(e) => setMethod(e.target.value as "email" | "google")}
+        >
+          <option value="email">Email and password</option>
+          <option value="google">Google</option>
+        </SelectControl>
+      )}
+      {!user && method === "email" && (
+        <>
+          {" "}
+          <TextField
+            id="signup-email"
+            name="signup-email"
+            label="Email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            required
+          />
+          <PasswordField
+            id="signup-password"
+            name="signup-password"
+            label="Password"
+            autoComplete="new-password"
+            placeholder="Create a password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            hint={<PasswordRequirements password={password} />}
+          />
+          <PasswordField
+            id="signup-confirm"
+            name="signup-confirm"
+            label="Confirm password"
+            autoComplete="new-password"
+            placeholder="Re-enter your password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            error={
+              confirmPassword && confirmPassword !== password
+                ? "Passwords do not match."
+                : undefined
+            }
+            required
+          />
+        </>
+      )}
       {role === "resident" ? (
         <SelectControl
           id="signup-city"
@@ -1155,12 +1094,6 @@ function ResidentSignupBody({
         description="This refers to RiverGuard’s terms of use, privacy notice, and authorized-use limitations."
         required
       />
-      <CheckControl
-        id="signup-notifications"
-        name="signup-notifications"
-        label="Receive RiverGuard notifications"
-        description="Optional and separate from account consent."
-      />
       <Button
         type="submit"
         loading={loading}
@@ -1169,37 +1102,6 @@ function ResidentSignupBody({
       >
         Create Account
       </Button>
-      <div className="border-t border-line pt-3">
-        <Button
-          type="button"
-          variant="quiet"
-          onClick={async () => {
-            setLoading(true);
-            setError("");
-            try {
-              await signInWithGoogle();
-              const formData = signupForm.current
-                ? new FormData(signupForm.current)
-                : new FormData();
-              await provisionWithTimeout(ensureCurrent, {
-                requestedRole: role,
-                roleProfile: buildRoleProfile(formData, role),
-              });
-              router.push(`/onboarding/${role}`);
-            } catch (signupError) {
-              setError(formatAuthError(signupError));
-            } finally {
-              setLoading(false);
-            }
-          }}
-          loading={loading}
-          loadingLabel="Connecting to Google"
-          className="w-full border-[#dadce0] bg-white text-[#3c4043] hover:bg-[#f8fafd]"
-        >
-          <GoogleMark />
-          Sign up with Google
-        </Button>
-      </div>
       <Link
         href="/auth/login"
         className="text-metadata text-center text-brand-primary"
@@ -1208,45 +1110,6 @@ function ResidentSignupBody({
       </Link>
     </form>
   );
-}
-
-async function provisionWithTimeout(
-  provision: ProvisionAccount | null,
-  args: Parameters<ProvisionAccount>[0],
-): Promise<Awaited<ReturnType<ProvisionAccount>> | null> {
-  if (!provision) return null;
-  let timer: number | null = null;
-  try {
-    return await Promise.race([
-      provision(args),
-      new Promise<null>((resolve) => {
-        timer = window.setTimeout(() => resolve(null), 12_000);
-      }),
-    ]);
-  } catch {
-    return null;
-  } finally {
-    if (timer !== null) window.clearTimeout(timer);
-  }
-}
-
-async function settleWithin<T>(
-  operation: Promise<T>,
-  timeoutMs: number,
-): Promise<T | null> {
-  let timer: number | null = null;
-  try {
-    return await Promise.race([
-      operation,
-      new Promise<null>((resolve) => {
-        timer = window.setTimeout(() => resolve(null), timeoutMs);
-      }),
-    ]);
-  } catch {
-    return null;
-  } finally {
-    if (timer !== null) window.clearTimeout(timer);
-  }
 }
 
 function formatAuthError(error: unknown) {
@@ -1288,371 +1151,68 @@ function getPasswordRequirementError(password: string) {
   return "";
 }
 
-function AccessRequest() {
-  const router = useRouter();
-  return (
-    <form
-      className="grid gap-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        router.push("/auth/verify?role=lgu&source=access");
-      }}
-    >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <TextField id="access-name" label="Full name" required />
-        <TextField id="access-email" label="Work email" type="email" required />
-        <TextField id="access-org" label="Organization" required />
-        <TextField
-          id="access-role"
-          name="access-role"
-          label="Requested role"
-          value="LGU operator"
-          readOnly
-        />
-        <SelectControl id="access-location" label="Requested area">
-          <option>Marikina</option>
-          <option>Quezon City</option>
-          <option>Manila</option>
-          <option>Pasig</option>
-        </SelectControl>
-        <TextField id="access-reference" label="Reference or contact" />
-      </div>
-      <TextAreaField
-        id="access-reason"
-        label="Reason for access"
-        required
-        placeholder="Explain the research or authorized operational purpose…"
-      />
-      <CheckControl
-        id="access-acknowledge"
-        label="Authorized-use acknowledgement"
-        required
-        description="Requesting a role does not grant it."
-      />
-      <Button type="submit" className="w-full">
-        Submit access request
-      </Button>
-      <Link
-        href="/auth/login"
-        className="text-metadata text-center text-brand-primary underline"
-      >
-        Cancel and return to login
-      </Link>
-    </form>
-  );
-}
-
 function Verification() {
-  return (
-    <WithEnsureCurrent>
-      {(ensureCurrent) => <VerificationBody ensureCurrent={ensureCurrent} />}
-    </WithEnsureCurrent>
-  );
-}
-
-function VerificationBody({
-  ensureCurrent,
-}: {
-  ensureCurrent: ProvisionAccount | null;
-}) {
-  const params = useSearchParams();
   const { user, sendEmailVerification } = useFirebaseAuth();
-  const [verified, setVerified] = useState(false);
-  const [resent, setResent] = useState(false);
-  const [verificationError, setVerificationError] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [code, setCode] = useState("");
-  const [secondsRemaining, setSecondsRemaining] = useState(
-    params.get("sent") === "0" ? 0 : 60,
-  );
-  const codeInputs = useRef<Array<HTMLInputElement | null>>([]);
-  const roleParam = params.get("role") ?? "lgu";
-  const role: ProductRole = ["resident", "lgu", "researcher", "admin"].includes(
-    roleParam,
-  )
-    ? (roleParam as ProductRole)
-    : "lgu";
-  const source = params.get("source") ?? "access";
-  const isEmailVerification = source === "signup";
-  const initialSendFailed = params.get("sent") === "0";
-  const [sendStatus, setSendStatus] = useState<"idle" | "sent" | "failed">(
-    initialSendFailed ? "failed" : "idle",
-  );
-  useEffect(() => {
-    if (secondsRemaining <= 0) return;
-    const timer = window.setInterval(
-      () => setSecondsRemaining((current) => Math.max(0, current - 1)),
-      1000,
-    );
-    return () => window.clearInterval(timer);
-  }, [secondsRemaining]);
-  if (verified)
-    return (
-      <AuthSuccess
-        title="Identity verified"
-        description={
-          role === "resident"
-            ? "Your account has been verified and is ready for onboarding."
-            : "Your role request is now pending administrator approval."
-        }
-        href={
-          role === "resident"
-            ? "/onboarding/resident"
-            : source === "invitation"
-              ? `/auth/mfa?role=${role}&source=invitation`
-              : `/auth/pending?role=${role}`
-        }
-        action={
-          role === "resident" ? "Continue to onboarding" : "View request status"
-        }
-      />
-    );
-  return (
-    <div className="grid min-w-0 gap-3">
-      {isEmailVerification ? (
-        <Notice
-          title={
-            sendStatus === "failed"
-              ? "Verification email could not be sent"
-              : resent
-                ? "Verification email resent"
-                : "Check your email"
-          }
-          tone={sendStatus === "failed" ? "warning" : "info"}
-        >
-          {sendStatus === "failed"
-            ? `Use Resend verification email to try again for ${user?.email ?? "your email address"}.`
-            : `We sent a verification link to ${user?.email ?? "your email address"}. Open the email and click the link to confirm your address.`}
-        </Notice>
-      ) : (
-        <Notice title={resent ? "New code sent" : "Code sent"}>
-          A verification code was sent to re••••••@example.com.
-        </Notice>
-      )}
-      {!isEmailVerification ? (
-        <div className="grid w-full gap-1.5">
-          <span className="text-button">Six-digit code</span>
-          <div
-            className="grid min-w-0 grid-cols-6 gap-2"
-            aria-label="Six-digit verification code"
-          >
-            {Array.from({ length: 6 }, (_, index) => (
-              <input
-                key={index}
-                ref={(element) => {
-                  codeInputs.current[index] = element;
-                }}
-                aria-label={`Digit ${index + 1}`}
-                className="text-body h-11 min-w-0 w-full rounded-control border border-line bg-canvas text-center text-ink outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
-                inputMode="numeric"
-                maxLength={1}
-                value={code[index] ?? ""}
-                onChange={(event) => {
-                  const digit = event.target.value.replace(/\D/g, "").slice(-1);
-                  const next = code.padEnd(6, "").split("");
-                  next[index] = digit;
-                  setCode(next.join("").slice(0, 6));
-                  if (digit && index < 5)
-                    codeInputs.current[index + 1]?.focus();
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Backspace" && !code[index] && index > 0) {
-                    codeInputs.current[index - 1]?.focus();
-                  }
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      ) : null}
-      {verificationError ? (
-        <p className="text-metadata text-danger">{verificationError}</p>
-      ) : null}
-      <div className="mt-1 flex items-center justify-between text-metadata">
-        <button
-          type="button"
-          disabled={secondsRemaining > 0}
-          onClick={() => {
-            if (isEmailVerification) {
-              void settleWithin(sendEmailVerification(), 10_000)
-                .then((sent) => {
-                  if (sent === null) {
-                    setSendStatus("failed");
-                    setVerificationError(
-                      "The verification email request timed out. Check Firebase mail settings and try again.",
-                    );
-                    return;
-                  }
-                  setResent(true);
-                  setSendStatus("sent");
-                  setSecondsRemaining(60);
-                  setVerificationError("");
-                })
-                .catch((error: unknown) => {
-                  setSendStatus("failed");
-                  setVerificationError(formatAuthError(error));
-                });
-            } else {
-              setResent(true);
-              setCode("");
-              setSecondsRemaining(60);
-            }
-          }}
-          className={
-            secondsRemaining > 0
-              ? "cursor-not-allowed text-muted"
-              : "text-brand-primary"
-          }
-        >
-          {isEmailVerification
-            ? resent
-              ? "Email resent"
-              : "Resend verification email"
-            : resent
-              ? "Code resent"
-              : "Resend code"}
-        </button>
-        <span className="text-muted">
-          Expires in 00:{String(secondsRemaining).padStart(2, "0")}
-        </span>
-      </div>
-      <Button
-        loading={checking}
-        onClick={async () => {
-          if (!isEmailVerification) {
-            setVerified(true);
-            return;
-          }
-          setChecking(true);
-          setVerificationError("");
-          try {
-            const reloadResult = user
-              ? await settleWithin(user.reload(), 8_000)
-              : null;
-            if (reloadResult === null) {
-              throw new Error(
-                "Verification status could not be refreshed. Check your connection and try again.",
-              );
-            }
-            if (!user?.emailVerified) {
-              throw new Error(
-                "Click the verification link in your email first.",
-              );
-            }
-            await provisionWithTimeout(ensureCurrent, {
-              requestedRole: role,
-            });
-            setVerified(true);
-          } catch (error) {
-            setVerificationError(formatAuthError(error));
-          } finally {
-            setChecking(false);
-          }
-        }}
-        className="w-full"
-      >
-        {isEmailVerification ? "I verified my email" : "Verify"}
-      </Button>
-      <div className="text-center text-metadata">
-        <Link href="/auth/login" className="text-brand-primary">
-          Back to login
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-function PendingApproval() {
+  const deliveryFailed = useSearchParams().get("delivery") === "failed";
   const router = useRouter();
-  const params = useSearchParams();
-  const role = params.get("role") ?? "lgu";
-  const [approved, setApproved] = useState(false);
-  if (approved)
-    return (
-      <AuthSuccess
-        title="Access approved"
-        description="Your role-specific onboarding is ready to begin."
-        href={`/onboarding/${role}`}
-        action="Begin onboarding"
-      />
-    );
+  const [message, setMessage] = useState("");
+  async function check() {
+    if (!user) return;
+    try {
+      await user.reload();
+      await user.getIdToken(true);
+      const route = await accountRoute(user);
+      if (route === "/auth/verify")
+        setMessage(
+          "Email is not verified yet. Open the Firebase link, then check again.",
+        );
+      else router.replace(route);
+    } catch (e) {
+      setMessage(formatAuthError(e));
+    }
+  }
   return (
     <div className="grid gap-3">
-      <div className="flex justify-center">
-        <span className="inline-flex size-12 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary">
-          <ShieldCheck size={26} />
-        </span>
-      </div>
-      <div className="text-center">
-        <p className="text-section">LGU operator access requested</p>
-        <p className="text-body mt-1 text-muted">
-          Submitted · Verification complete
+      <p>
+        Open your Firebase verification link (or request a new one below), then
+        check your account here.
+      </p>
+      {deliveryFailed && (
+        <p role="alert">
+          The verification email could not be sent. Request another link below.
         </p>
-      </div>
-      <div className="rounded-control bg-canvas-soft p-3 text-body">
-        <p>
-          <strong>Status:</strong> Pending administrator approval
-        </p>
-        <p className="mt-1 text-muted">
-          You cannot enter a protected workspace until the request is approved.
-        </p>
-      </div>
-      <Button
-        variant="quiet"
-        className="w-full"
-        onClick={() => {
-          setApproved(true);
-          router.refresh();
-        }}
-      >
-        Refresh status
-      </Button>
-      <ActionLink href="/auth/logout" variant="quiet" className="w-full">
-        Log out
-      </ActionLink>
+      )}
+      {user ? (
+        <>
+          <Button onClick={check}>Check verification</Button>
+          <Button
+            onClick={() =>
+              sendEmailVerification()
+                .then(() => setMessage("Verification email sent."))
+                .catch((e) => setMessage(formatAuthError(e)))
+            }
+          >
+            Resend verification link
+          </Button>
+        </>
+      ) : (
+        <Link href="/auth/login">Sign in</Link>
+      )}
+      <p role="status">{message}</p>
     </div>
   );
 }
-
-function MfaScreen() {
-  return (
-    <div className="grid gap-3">
-      <Notice title="MFA is not configured" tone="warning">
-        This prototype does not provide Firebase MFA or recovery-code
-        verification.
-      </Notice>
-      <Button className="w-full" variant="quiet" disabled>
-        MFA setup unavailable
-      </Button>
-    </div>
-  );
-}
-
-function Invitation() {
-  return (
-    <div className="grid gap-3">
-      <Notice title="Workspace invitations are unavailable" tone="warning">
-        This prototype has no invitation record or account-provisioning backend.
-        Do not enter credentials or use this screen for real access.
-      </Notice>
-      <ActionLink href="/welcome" variant="quiet" className="w-full">
-        Back to overview
-      </ActionLink>
-    </div>
-  );
-}
-
 function AccountProblem({ screen }: { screen: string }) {
   const content: Record<string, [string, string, string]> = {
     rejected: [
       "Access request not approved",
-      "Your sample request was not approved. A neutral administrator note may be shown when appropriate.",
-      "Contact administrator",
+      "Your request was not approved. Contact your administrator for details.",
+      "Return to login",
     ],
     suspended: [
       "Account suspended",
       "Access is temporarily unavailable. Contact the administrator for non-sensitive guidance.",
-      "Contact administrator",
+      "Return to login",
     ],
     locked: [
       "Account locked",
@@ -1701,10 +1261,12 @@ function AccountProblem({ screen }: { screen: string }) {
 }
 
 function LogoutScreen() {
-  const { signOut } = useFirebaseAuth();
+  const { user, loading, signOut } = useFirebaseAuth();
+  const [error, setError] = useState("");
   useEffect(() => {
-    void signOut();
-  }, [signOut]);
+    if (user) void signOut().catch((err) => setError(formatAuthError(err)));
+  }, [user, signOut]);
+  if (loading || user) return <p role="status">{error || "Signing out…"}</p>;
   return (
     <div className="grid gap-3 text-center">
       <span className="mx-auto inline-flex size-12 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary">
@@ -1721,31 +1283,6 @@ function LogoutScreen() {
   );
 }
 
-function AuthSuccess({
-  action,
-  description,
-  href,
-  title,
-}: {
-  action: string;
-  description: string;
-  href: string;
-  title: string;
-}) {
-  return (
-    <div className="grid gap-3 text-center">
-      <span className="mx-auto inline-flex size-12 items-center justify-center rounded-full bg-success/10 text-success">
-        <CheckCircle size={26} weight="fill" />
-      </span>
-      <div>
-        <p className="text-section">{title}</p>
-        <p className="text-body mt-1 text-muted">{description}</p>
-      </div>
-      <ActionLink href={href}>{action}</ActionLink>
-    </div>
-  );
-}
-
 export function AuthScreen({ screen }: { screen: string }) {
   const [signupRole, setSignupRole] = useState<ProductRole>("resident");
   const titles: Record<string, [string, string]> = {
@@ -1755,23 +1292,23 @@ export function AuthScreen({ screen }: { screen: string }) {
       "Set up your account and continue to the workspace available to your role.",
     ],
     "request-access": [
-      "Request staff access",
-      "LGU operator access requires administrator approval. Administrator access is invitation-only.",
+      "Workspace access",
+      "Request Researcher or LGU access, review invitations, or open an approved workspace.",
     ],
     verify: ["Verify identity", "Confirm the account destination."],
     pending: [
-      "Pending approval",
+      "Approval status",
       "Track the status of a privileged-role request.",
     ],
     mfa: [
       "Multi-factor authentication",
-      "Complete the required security challenge.",
+      "Manage authenticator-app protection for your Firebase account.",
     ],
     invitation: [
       "Accept invitation",
       "Review the assigned role, area, and authorized-use notice.",
     ],
-    logout: ["Signed out", "Your RiverGuard session has ended."],
+    logout: ["Sign out", "End your RiverGuard session."],
   };
   const [title, description] = titles[screen] ?? [
     "Account status",
@@ -1780,12 +1317,13 @@ export function AuthScreen({ screen }: { screen: string }) {
   let content: ReactNode;
   if (screen === "login") content = <LoginForm />;
   else if (screen === "signup")
-    content = <ResidentSignup role={signupRole} onRoleChange={setSignupRole} />;
-  else if (screen === "request-access") content = <AccessRequest />;
+    content = <SignupForm role={signupRole} onRoleChange={setSignupRole} />;
+  else if (screen === "request-access")
+    content = <AccessPanel view="request" />;
   else if (screen === "verify") content = <Verification />;
-  else if (screen === "pending") content = <PendingApproval />;
-  else if (screen === "mfa") content = <MfaScreen />;
-  else if (screen === "invitation") content = <Invitation />;
+  else if (screen === "pending") content = <AccessPanel view="status" />;
+  else if (screen === "mfa") content = <MfaSetup />;
+  else if (screen === "invitation") content = <AccessPanel view="inbox" />;
   else if (screen === "logout") content = <LogoutScreen />;
   else content = <AccountProblem screen={screen} />;
   return (
@@ -1796,303 +1334,6 @@ export function AuthScreen({ screen }: { screen: string }) {
     >
       {content}
     </AuthLayout>
-  );
-}
-
-const onboardingContent: Record<
-  ProductRole,
-  { steps: string[]; title: string; destination: string }
-> = {
-  resident: {
-    title: "Resident onboarding",
-    destination: "/resident",
-    steps: ["Welcome", "Locations", "Preferences", "Safety"],
-  },
-  lgu: {
-    title: "LGU operator onboarding",
-    destination: "/lgu",
-    steps: [
-      "Assignment",
-      "Authority",
-      "Review flow",
-      "Notes",
-      "Notifications",
-      "Safety",
-      "Ready",
-    ],
-  },
-  researcher: {
-    title: "Researcher onboarding",
-    destination: "/researcher",
-    steps: ["Profile", "Research responsibility", "Methodology", "Ready"],
-  },
-  admin: {
-    title: "Administrator onboarding",
-    destination: "/admin",
-    steps: [
-      "Assignment",
-      "MFA",
-      "Role policy",
-      "Research tools",
-      "Methodology",
-      "Configuration",
-      "Audit",
-      "Security",
-      "Ready",
-    ],
-  },
-};
-
-export function OnboardingScreen({ role }: { role: ProductRole }) {
-  const config = onboardingContent[role];
-  const [step, setStep] = useState(0);
-  const router = useRouter();
-  const isLast = step === config.steps.length - 1;
-  const profileStep = (
-    <div key="profile" className="grid gap-3 sm:grid-cols-2">
-      <TextField
-        id="onboard-name"
-        label="Full name"
-        defaultValue={role === "resident" ? "Resident user" : "RiverGuard user"}
-      />
-      <TextField
-        id="onboard-org"
-        label="Organization"
-        defaultValue={
-          role === "lgu"
-            ? "Marikina DRRMO"
-            : role === "admin"
-              ? "RiverGuard research"
-              : "University research team"
-        }
-      />
-    </div>
-  );
-  const coverageStep = (
-    <Notice
-      key="coverage"
-      title={
-        role === "lgu"
-          ? "Review is not warning authority"
-          : "Supported sample geography"
-      }
-      tone="warning"
-    >
-      {role === "lgu"
-        ? "Use the review and escalation process. RiverGuard cannot issue official warnings."
-        : "RiverGuard currently represents city-level views for four NCR cities, not barangay or street-level evidence."}
-    </Notice>
-  );
-  const tourStep = (
-    <div key="tour">
-      <div className="grid gap-2 sm:grid-cols-2">
-        {[
-          "Role dashboard",
-          "Map and locations",
-          "Evidence and provenance",
-          "Help and limitations",
-        ].map((item) => (
-          <div
-            key={item}
-            className="rounded-control border border-line bg-canvas-soft p-3"
-          >
-            <p className="text-button">{item}</p>
-            <p className="text-metadata mt-1 text-muted">
-              Available from your RiverGuard workspace.
-            </p>
-          </div>
-        ))}
-      </div>
-      <Notice
-        title="Ready to enter the workspace"
-        tone="success"
-        className="mt-3"
-      >
-        You can revisit methodology and limitations from every role shell.
-      </Notice>
-    </div>
-  );
-  const content =
-    role === "resident"
-      ? [
-          <Notice key="welcome" title="Welcome to RiverGuard">
-            Review experimental outlooks as decision-support information and
-            confirm official advisories before taking action.
-          </Notice>,
-          <div key="locations" className="grid gap-3 sm:grid-cols-2">
-            <SelectControl id="resident-primary-city" label="Primary city">
-              <option>Marikina</option>
-              <option>Quezon City</option>
-              <option>Manila</option>
-              <option>Pasig</option>
-            </SelectControl>
-            <SelectControl
-              id="resident-additional-cities"
-              label="Additional locations"
-            >
-              <option>None</option>
-              <option>Quezon City</option>
-              <option>Manila</option>
-              <option>Pasig</option>
-            </SelectControl>
-          </div>,
-          <div key="resident-preferences" className="grid gap-2">
-            <CheckControl
-              id="resident-notifications"
-              label="Receive outlook notifications"
-            />
-            <CheckControl
-              id="resident-accessibility"
-              label="Prefer chart table alternatives"
-            />
-          </div>,
-          <div key="resident-safety" className="grid gap-3">
-            <Notice title="Official advisories remain primary" tone="warning">
-              RiverGuard provides experimental research outputs. Check PAGASA
-              and your LGU for official advisories and evacuation instructions.
-            </Notice>
-            <CheckControl
-              id="resident-responsible-use"
-              label="I understand the experimental-use limitations"
-              required
-            />
-          </div>,
-        ]
-      : role === "researcher"
-        ? [
-            profileStep,
-            <Notice key="researcher-responsibility" title="Research access">
-              Researcher access is for inspecting experimental model inputs,
-              outputs, evaluation evidence, and stored runs. It does not grant
-              authority to issue official warnings.
-            </Notice>,
-            <Notice key="researcher-methodology" title="Read the limitations">
-              RiverGuard currently validates the pipeline on derived dataset
-              targets. Treat model results as research evidence, not operational
-              flood warnings.
-            </Notice>,
-            <CheckControl
-              key="researcher-safety"
-              id="researcher-responsible-use"
-              label="I understand the experimental-use limitations"
-              required
-            />,
-          ]
-        : role === "lgu"
-          ? [
-              profileStep,
-              <Notice
-                key="lgu-authority"
-                title="Review is not warning authority"
-                tone="warning"
-              >
-                RiverGuard cannot issue official warnings or evacuation
-                instructions.
-              </Notice>,
-              <Surface key="lgu-review" title="Review workflow">
-                <p className="text-body text-muted">
-                  Inspect the latest outlook, review quality warnings, record an
-                  internal assessment, and escalate for authorized action.
-                </p>
-              </Surface>,
-              <CheckControl
-                key="lgu-notes"
-                id="lgu-notes"
-                label="Enable internal review notes"
-              />,
-              <CheckControl
-                key="lgu-notifications"
-                id="lgu-notifications"
-                label="Receive assigned-area review notifications"
-              />,
-              <CheckControl
-                key="lgu-safety"
-                id="lgu-authorized-use"
-                label="I understand the authorized-use limitations"
-                required
-              />,
-              <Notice key="lgu-ready" title="Ready for review" tone="success">
-                Your assigned-area dashboard and review queue are ready.
-              </Notice>,
-            ]
-          : [
-              profileStep,
-              <Notice key="admin-mfa" title="Secure administrator access">
-                Complete multi-factor authentication before managing users or
-                system configuration.
-              </Notice>,
-              <CheckControl
-                key="admin-policy"
-                id="admin-role-policy"
-                label="I understand role and location assignment policy"
-                required
-              />,
-              tourStep,
-              coverageStep,
-              <Surface
-                key="admin-configuration"
-                title="Configuration readiness"
-              >
-                <p className="text-body text-muted">
-                  Review supported locations, provider status, model versions,
-                  and data-source readiness.
-                </p>
-              </Surface>,
-              <Surface key="admin-audit" title="Audit responsibilities">
-                <p className="text-body text-muted">
-                  Access changes and configuration updates are recorded for
-                  authorized review.
-                </p>
-              </Surface>,
-              <CheckControl
-                key="admin-security"
-                id="admin-security"
-                label="I understand administrator security responsibilities"
-                required
-              />,
-              <Notice
-                key="admin-ready"
-                title="Ready for administration"
-                tone="success"
-              >
-                Research tools, user requests, configuration, and audit tools
-                are ready.
-              </Notice>,
-            ];
-  return (
-    <PublicShell>
-      <main className="mx-auto max-w-5xl px-5 py-8">
-        <PageHeading
-          title={config.title}
-          eyebrow={`${role} workspace`}
-          description="Complete the role-specific introduction before opening the workspace."
-        />
-        <Surface>
-          <Stepper steps={config.steps} current={step} />
-          <div className="my-6 min-h-48">{content[step]}</div>
-          <div className="flex justify-between">
-            <Button
-              size="small"
-              variant="quiet"
-              disabled={step === 0}
-              onClick={() => setStep((value) => value - 1)}
-            >
-              <ArrowLeft size={14} /> Back
-            </Button>
-            <Button
-              size="small"
-              onClick={() =>
-                isLast
-                  ? router.push(config.destination)
-                  : setStep((value) => value + 1)
-              }
-            >
-              {isLast ? "Go to workspace" : "Continue"} <ArrowRight size={14} />
-            </Button>
-          </div>
-        </Surface>
-      </main>
-    </PublicShell>
   );
 }
 
@@ -2478,13 +1719,21 @@ function SettingsScreenBody({
     displayName?: string | null;
     email?: string | null;
     role?: string;
+    additionalRoles?: string[];
+    assignedLocations?: string[] | null;
     roleProfile?: {
       organization?: string;
       city?: string;
       position?: string;
       requestedArea?: string;
       purpose?: string;
-      researcherType?: "government" | "private" | "independent" | "other";
+      researcherType?:
+        | "student"
+        | "faculty"
+        | "government"
+        | "private"
+        | "independent"
+        | "other";
     };
   } | null;
   /** The Firebase account, which is what password reset and email need. */
@@ -2495,7 +1744,13 @@ function SettingsScreenBody({
       city?: string;
       organization?: string;
       position?: string;
-      researcherType?: "government" | "private" | "independent" | "other";
+      researcherType?:
+        | "student"
+        | "faculty"
+        | "government"
+        | "private"
+        | "independent"
+        | "other";
       requestedArea?: string;
       purpose?: string;
     };
@@ -2552,14 +1807,11 @@ function SettingsScreenBody({
     const firstName = nameParts.shift() ?? "";
     const lastName = nameParts.join(" ");
     const assignedLocations =
-      currentUser?.roleProfile?.city ??
-      currentUser?.roleProfile?.requestedArea ??
-      (currentUser?.role === "admin"
+      currentUser?.assignedLocations?.join(", ") ||
+      (currentUser?.role === "admin" ||
+      currentUser?.additionalRoles?.includes("admin")
         ? "All supported locations"
-        : currentUser?.role === "lgu"
-          ? "Assigned by an administrator"
-          : "Not assigned");
-
+        : "No LGU assignment");
     async function saveProfile() {
       setSaveError("");
       if (!displayName.trim()) {
@@ -2605,6 +1857,9 @@ function SettingsScreenBody({
               Personal details and workspace assignment.
             </p>
           </div>
+          <Link className="underline" href="/auth/request-access">
+            Workspaces and invitations
+          </Link>
           <Button
             size="small"
             loading={currentUser === undefined}
@@ -2685,7 +1940,9 @@ function SettingsScreenBody({
             label="Role"
             value={
               currentUser?.role
-                ? (roleLabel[currentUser.role] ?? currentUser.role)
+                ? [currentUser.role, ...(currentUser.additionalRoles ?? [])]
+                    .map((role) => roleLabel[role] ?? role)
+                    .join(", ")
                 : "Unavailable"
             }
             readOnly
@@ -2892,16 +2149,11 @@ function SettingsScreenBody({
               <div className="flex flex-wrap items-center gap-3 px-3 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-button">Multi-factor authentication</p>
-                  <p className="text-body mt-0.5 text-muted">Not configured</p>
+                  <p className="text-body mt-0.5 text-muted">
+                    Authenticator app protection
+                  </p>
                 </div>
-                <Button
-                  size="small"
-                  variant="quiet"
-                  disabled
-                  title="MFA setup is not configured"
-                >
-                  Available after MFA setup
-                </Button>
+                <Link href="/auth/mfa">Manage MFA</Link>
               </div>
               <div className="flex flex-wrap items-center gap-3 px-3 py-3">
                 <div className="min-w-0 flex-1">
@@ -2919,9 +2171,9 @@ function SettingsScreenBody({
                     End access on other signed-in devices.
                   </p>
                 </div>
-                <Button size="small" variant="quiet">
-                  Session management unavailable
-                </Button>
+                <p className="text-metadata">
+                  Contact your administrator to revoke other sessions.
+                </p>
               </div>
             </div>
           </section>
@@ -2938,28 +2190,8 @@ function SettingsScreenBody({
               </p>
             </div>
             <div className="grid gap-3">
-              <PasswordField
-                id="combined-current-password"
-                label="Current password"
-                autoComplete="current-password"
-              />
-              <PasswordField
-                id="combined-new-password"
-                label="New password"
-                autoComplete="new-password"
-              />
-              <PasswordField
-                id="combined-confirm-password"
-                label="Confirm new password"
-                autoComplete="new-password"
-              />
-              <Button
-                size="small"
-                className="w-full sm:w-fit"
-                disabled
-                title="Password changes use the Send reset email action"
-              >
-                Use password reset
+              <Button size="small" onClick={() => setActiveScreen("profile")}>
+                Go to profile to send a reset email
               </Button>
             </div>
           </section>
@@ -2985,9 +2217,7 @@ function SettingsScreenBody({
                   locations.
                 </p>
               </div>
-              <Button size="small" variant="quiet" disabled>
-                Backend review required
-              </Button>
+              <Link href="/auth/request-access">Manage access</Link>
             </div>
             <div className="flex flex-wrap items-center gap-3 px-3 py-3">
               <div className="min-w-0 flex-1">
@@ -2999,9 +2229,6 @@ function SettingsScreenBody({
                   preserve audit history.
                 </p>
               </div>
-              <Button size="small" variant="danger" disabled>
-                Administrator action only
-              </Button>
             </div>
           </div>
         </section>
@@ -3077,9 +2304,7 @@ function SettingsScreenBody({
                 Ask an administrator to review your role or assigned locations.
               </p>
             </div>
-            <Button size="small" variant="quiet">
-              Request review
-            </Button>
+            <Link href="/auth/request-access">Manage access</Link>
           </div>
           <div className="flex flex-wrap items-center gap-3 px-3 py-3">
             <div className="flex-1">
@@ -3091,9 +2316,6 @@ function SettingsScreenBody({
                 preserve audit history.
               </p>
             </div>
-            <Button size="small" variant="danger">
-              Request deactivation
-            </Button>
           </div>
         </div>
       </div>

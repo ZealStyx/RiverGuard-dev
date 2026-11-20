@@ -11,6 +11,7 @@
  */
 
 import {
+  internalMutationGeneric as internalMutation,
   mutationGeneric as mutation,
   queryGeneric as query,
 } from "convex/server";
@@ -103,7 +104,7 @@ export const recordOutlook = mutation({
   }),
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin", "lgu", "researcher"]);
-    await assertLocationAccess(ctx, user, args.locationCode);
+    await assertLocationAccess(ctx, user, args.locationCode, ["researcher"]);
     if (args.days.length === 0) {
       throw new Error("recordOutlook requires at least one forecast day");
     }
@@ -211,7 +212,10 @@ export const latestOutlook = query({
   returns: v.union(v.any(), v.null()),
   handler: async (ctx, args) => {
     const user = await requireCurrentUser(ctx);
-    await assertLocationAccess(ctx, user, args.locationCode);
+    await assertLocationAccess(ctx, user, args.locationCode, [
+      "researcher",
+      "resident",
+    ]);
     /**
      * The newest completed run *that actually carries this location*.
      *
@@ -349,7 +353,9 @@ export const recentRuns = query({
   ),
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["admin", "lgu", "researcher"]);
-    const allowedLocations = await assignedLocationCodes(ctx, user);
+    const allowedLocations = await assignedLocationCodes(ctx, user, [
+      "researcher",
+    ]);
     const runs = await ctx.db
       .query("forecastRuns")
       .withIndex("by_requested_at", (index: any) => index)
@@ -452,7 +458,9 @@ export const getRun = query({
       .collect();
 
     for (const forecast of forecasts) {
-      await assertLocationAccess(ctx, user, forecast.locationCode);
+      await assertLocationAccess(ctx, user, forecast.locationCode, [
+        "researcher",
+      ]);
     }
 
     const modelVersionId = forecasts.find(
@@ -534,7 +542,7 @@ export const getRun = query({
 });
 
 /** Housekeeping used by the cron: finish runs that never completed. */
-export const failStaleRuns = mutation({
+export const failStaleRuns = internalMutation({
   args: { olderThanMs: v.optional(v.number()) },
   returns: v.number(),
   handler: async (ctx, args) => {

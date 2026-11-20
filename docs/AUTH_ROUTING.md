@@ -79,56 +79,27 @@ as a section and the remaining segments as that section's screen or detail route
 Administrators manage access, configuration, and audit evidence. They do not run the researcher
 workflow through an administrator route. An approved researcher account uses `/researcher`.
 
-### Shared routes
+### Account and shared routes
 
-- `/onboarding/:role` — role-specific onboarding
-- `/settings/:screen` — shared settings, currently admin-gated
+- `/{role}/settings` — profile, security, and links to workspace access.
+- `/auth/request-access` — approved workspace links, additional role or LGU reassignment requests, decision history, and invitations.
+- `/auth/invitation` — verified recipient’s invitation inbox.
+- `/auth/mfa` — enroll an authenticator app; Firebase challenges enrolled accounts at sign-in.
 
-Unknown role screens fall back to the relevant workspace home. Unknown top-level sections fall back
-to the public welcome screen.
+There is no onboarding route or completion flag. Name, city, organization, and role-specific application details belong in registration/profile or a role request. Optional display preferences are not authorization inputs. Unknown top-level sections return 404.
 
-## 4. Signup flow
+## Registration, login and approval
 
-Residents submit their name, email, and city. Their Convex account is created as `active`.
+Login (Google or password) queries `users.getCurrent` with the newly authenticated person's Firebase token. A missing record opens registration with that credential; a failed lookup never creates a record or selects a fallback workspace. Only explicit registration calls `users.register`. Retrying registration cannot overwrite a stored role, profile, or status. Firebase email/password verification uses the emailed Firebase link, not a local code. A verified email and active Convex account are both required for workspace operations.
 
-LGU operators submit their agency, position, requested area, and operational purpose. Researchers
-submit their researcher type, organization/school, requested area, and research purpose. These roles
-are created with `status: pending` and must be approved by an administrator.
+Resident registration is active immediately. Researcher and LGU registration creates a pending account **and** a pending request in one transaction. Approval in `/admin/requests` activates an initial account; rejection denies access. An active member’s additional request never disables their existing roles. Approval adds a grant, rejection leaves prior access unchanged. An LGU reviewer assignment must be a supported city; applicant-editable profile data never establishes operational scope. Approvals and invitation acceptance record actor, target, role, time, and assignment in the audit log.
 
-Administrators are not publicly selectable during signup. They should be pre-provisioned by an
-administrator or through a controlled Convex setup process.
+`/admin/users` sends invitations to a normalized email address. The verified recipient can accept once within seven days, as an active member or for their matching pending signup role. For a new account, register first and open the inbox in workspace access or pending status. Invitations are delivered **in-app** by default. For email notifications set `RESEND_API_KEY`, `RIVERGUARD_INVITE_FROM` (a verified sender), and `RIVERGUARD_APP_URL` (the trusted app origin) **on Convex**, never in public frontend variables. Administrators see inbox-only, queued, sent (provider accepted), or failed delivery. The notification link itself grants nothing.
 
-## 5. Login and workspace routing
+## Rollout and checks
 
-After successful Firebase login, `users.ensureCurrent` creates or updates the Convex profile.
-The user is routed according to the Convex role:
-
-| Role | Workspace | Access condition |
-|---|---|---|
-| Resident | `/resident` | `status: active` (set at signup) |
-| LGU operator | `/lgu` | `status: active` (created `pending`; an administrator approves it) |
-| Researcher | `/researcher` | `status: active` (created `pending`; an administrator approves it) |
-| Admin | `/admin` | `status: active` (provisioned by an administrator — signup cannot request it) |
-
-`WorkspaceGate` checks Firebase authentication, Convex authentication, the current Convex user,
-the role, and the status. Unauthenticated users return to `/auth/login`; inactive users see an
-access-denied message; users opening another role's URL are redirected to their own workspace.
-
-## 6. Admin verification
-
-The intended flow is:
-
-```text
-Firebase login → match Convex externalId → check role/status → allow or deny workspace
-```
-
-The current signup form stores role-profile information in Convex. The admin review screen still
-needs to read those profiles and provide approve/reject actions. Do not allow a public client to
-assign itself the `admin` role.
-
-## 7. Resetting test accounts
-
-Firebase accounts and Convex profiles are separate. To fully reset a test account, remove it from
-Firebase Authentication and remove the matching Convex `users` row. Deleting only the Convex row
-does not prevent the Firebase identity from signing in again.
-
+1. Enable Google and email/password sign-in in Firebase; authorize the app domain for popup sign-in and verification links. TOTP enrollment requires Firebase Authentication with Identity Platform and the TOTP provider enabled. Test enrollment and a subsequent sign-in in your own staging tenant.
+2. Configure matching Firebase project IDs in the web app and Convex, and the web app’s `NEXT_PUBLIC_CONVEX_URL`. Deploy the schema and functions together with the updated client. A disconnected/missing database denies workspace access, including Admin; there is no development user bypass. Trusted server-to-server API credentials are separate.
+3. Bootstrap the first verified administrator through a trusted deployment operator. Inspect old records without `status` and explicitly approve only known authorized accounts: missing status is **not** active. Do not auto-promote or identify privileged users by email. Existing resident accounts created by the old Google login cannot be distinguished reliably; keep them and use the reviewed access-change workflow.
+4. Backfill pre-existing pending LGU/Researcher accounts: run `npx convex run applications:migratePending '{}'` against the intended deployment. If it returns a cursor, run again with `'{"cursor":"<returned value>"}'` until it returns `null`. The backfill is idempotent; it does not grant access or change account status.
+5. Run `npm run test:auth` (Node 22.12+) for the signup/login UI, workspace gate, and in-memory Convex authorization tests. These simulate Firebase credentials, not Google's consent screen or delivery of real mail. For staging, repeat email/Google registration and existing-user login, verify an emailed link, try the wrong workspace and a pending account, submit/decide an upgrade, accept an invitation, then disconnect Convex and check denial. Do not use production credentials for these checks.

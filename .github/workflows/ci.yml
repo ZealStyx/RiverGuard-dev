@@ -43,6 +43,9 @@ jobs:
       - name: Typecheck (web + convex)
         run: npm run typecheck
 
+      - name: Authentication and authorization regression tests
+        run: npm run test:auth
+
       - name: Lint
         run: npm run lint
 

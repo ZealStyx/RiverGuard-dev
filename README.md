@@ -23,7 +23,7 @@ The prototype has four application roles: Resident, LGU operator, Researcher, an
 - **Resident** — signs up directly; the account is stored `active`.
 - **LGU operator** — requests access; the account is stored `pending` until an administrator approves it.
 - **Researcher** — requests access; the account is stored `pending` until an administrator approves it. Approved researchers get their own workspace at `/researcher`.
-- **Administrator** — not selectable at signup. `users.ensureCurrent` refuses a client-supplied `admin` role; administrator accounts are provisioned by an existing administrator.
+- **Administrator** — not selectable at signup. `users.register` refuses a client-supplied `admin` role; administrator accounts are provisioned by an existing administrator.
 
 `/researcher/*` is a mounted workspace, not a compatibility redirect. The role is present in `convex/validators.ts`, in the signup screen, and in the router, so it is live rather than vestigial.
 

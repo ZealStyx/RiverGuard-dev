@@ -20,11 +20,16 @@
     "lint": "npm run lint --workspace @riverguard/web",
     "typecheck": "npm run typecheck --workspace @riverguard/web && npm run convex:typecheck",
     "format": "prettier --write \"apps/web/**/*.{ts,tsx,css,mjs,json}\" \"convex/**/*.ts\" convex.json package.json .prettierrc.json",
-    "format:check": "prettier --check \"apps/web/**/*.{ts,tsx,css,mjs,json}\" \"convex/**/*.ts\" convex.json package.json .prettierrc.json"
+    "format:check": "prettier --check \"apps/web/**/*.{ts,tsx,css,mjs,json}\" \"convex/**/*.ts\" convex.json package.json .prettierrc.json",
+    "test:auth": "vitest run"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
     "convex": "^1.49.0",
-    "prettier": "3.10.0"
+    "convex-test": "^0.0.73",
+    "jsdom": "^31.0.1",
+    "prettier": "3.10.0",
+    "vitest": "^5.1.1"
   },
   "dependencies": {
     "firebase": "^13.4.0"

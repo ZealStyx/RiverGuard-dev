@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as invitationMail from "../invitationMail.js";
+import type * as applications from "../applications.js";
 import type * as alerts from "../alerts.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
@@ -31,6 +33,8 @@ import type {
 import { anyApi, componentsGeneric } from "convex/server";
 
 const fullApi: ApiFromModules<{
+  invitationMail: typeof invitationMail;
+  applications: typeof applications;
   alerts: typeof alerts;
   auth: typeof auth;
   crons: typeof crons;

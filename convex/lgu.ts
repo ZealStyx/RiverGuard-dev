@@ -1,4 +1,5 @@
-import { requireRole, type AuthenticatedUser } from "./auth";
+import type { QueryCtx } from "./_generated/server";
+import { hasRole, requireRole, type AuthenticatedUser } from "./auth";
 
 /**
  * LGU access is derived only from the approved lguProfiles assignment. The
@@ -9,14 +10,20 @@ export function normalizeLocationCode(value: string): string {
 }
 
 export async function assignedLocationCodes(
-  ctx: any,
+  ctx: QueryCtx,
   user: AuthenticatedUser,
+  unrestricted: readonly ("researcher" | "resident")[] = [],
 ): Promise<string[] | null> {
-  if (user.role !== "lgu") return null;
+  if (
+    !hasRole(user, "lgu") ||
+    hasRole(user, "admin") ||
+    unrestricted.some((role) => hasRole(user, role))
+  )
+    return null;
 
   const profile = await ctx.db
     .query("lguProfiles")
-    .withIndex("by_user", (index: any) => index.eq("userId", user._id))
+    .withIndex("by_user", (index) => index.eq("userId", user._id))
     .first();
 
   const values = [
@@ -28,11 +35,12 @@ export async function assignedLocationCodes(
 }
 
 export async function assertLocationAccess(
-  ctx: any,
+  ctx: QueryCtx,
   user: AuthenticatedUser,
   locationCode: string,
+  unrestricted: readonly ("researcher" | "resident")[] = [],
 ) {
-  const allowed = await assignedLocationCodes(ctx, user);
+  const allowed = await assignedLocationCodes(ctx, user, unrestricted);
   if (
     allowed !== null &&
     !allowed.includes(normalizeLocationCode(locationCode))
@@ -41,6 +49,6 @@ export async function assertLocationAccess(
   }
 }
 
-export async function requireLguOrAdmin(ctx: any) {
+export async function requireLguOrAdmin(ctx: QueryCtx) {
   return requireRole(ctx, ["lgu", "admin"]);
 }

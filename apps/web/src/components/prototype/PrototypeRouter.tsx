@@ -4,7 +4,6 @@ import { WorkspaceGate } from "../auth/WorkspaceGate";
 import { AppShell } from "./AppShell";
 import {
   AuthScreen,
-  OnboardingScreen,
   PublicInfoScreen,
   WelcomeScreen,
   WorkspaceMethodologyScreen,
@@ -27,20 +26,13 @@ export function PrototypeRouter({
   segments?: string[];
 }) {
   if (section === "welcome") return <WelcomeScreen />;
-  if (section === "about" || section === "official-sources")
-    return (
-      <PublicInfoScreen screen={section as "about" | "official-sources"} />
-    );
-  // Help & limitations renders inside the workspace shell, so following the
-  // sidebar link keeps the navigation instead of dropping to a public page.
-  if (section === "methodology") return <WorkspaceMethodologyScreen />;
+  if (
+    section === "about" ||
+    section === "methodology" ||
+    section === "official-sources"
+  )
+    return <PublicInfoScreen screen={section} />;
   if (section === "auth") return <AuthScreen screen={segments[0] ?? "login"} />;
-  if (section === "onboarding") {
-    const role = isProductRole(segments[0] ?? "")
-      ? (segments[0] as ProductRole)
-      : "resident";
-    return <OnboardingScreen role={role} />;
-  }
   if (section === "settings")
     return <WorkspaceSettingsScreen initialSection={segments[0]} />;
   if (isProductRole(section) && segments[0] === "settings") {
@@ -49,7 +41,11 @@ export function PrototypeRouter({
     );
   }
   if (isProductRole(section) && segments[0] === "help") {
-    return <WorkspaceMethodologyScreen role={section} />;
+    return (
+      <WorkspaceGate role={section}>
+        <WorkspaceMethodologyScreen role={section} />
+      </WorkspaceGate>
+    );
   }
   if (section === "researcher") {
     return (
