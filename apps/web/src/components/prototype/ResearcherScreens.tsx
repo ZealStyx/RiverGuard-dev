@@ -11,8 +11,6 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { authFetch } from "@/lib/api-client";
-
 import { MonthlyRainfallChart } from "@/components/charts/MonthlyRainfallChart";
 import { ObservedHistoryChart } from "@/components/charts/ObservedHistoryChart";
 import { convexConfigured } from "@/components/dashboard/OutlookBridge";
@@ -263,7 +261,7 @@ function HistoricalData() {
       start: appliedFilters.startDate,
       end: appliedFilters.endDate,
     });
-    authFetch(`/api/historical?${params.toString()}`)
+    fetch(`/api/historical?${params.toString()}`)
       .then((response) => {
         if (!response.ok) throw new Error("Historical data unavailable");
         return response.json();

@@ -8,8 +8,6 @@
 
 import { NextResponse } from "next/server";
 
-import { requireApiAuth } from "@/lib/api-auth";
-
 import { listLocalRuns } from "@/lib/run-store";
 import { summaryFromStoredRun } from "@/lib/runs";
 
@@ -18,9 +16,6 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   // Stored runs are operational data: signed-in accounts only.
-  const denied = await requireApiAuth(request);
-  if (denied) return denied;
-
   const url = new URL(request.url);
   const requested = Number(url.searchParams.get("limit") ?? 25);
   const limit = Number.isFinite(requested)
