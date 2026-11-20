@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { signupRole, userRoleProfileValidator } from "./validators";
+import { cityCode, signupRole, userRoleProfileValidator } from "./validators";
 import { assignedLocationCodes } from "./lgu";
 import { currentAccount, requireCurrentUser, requireRole } from "./auth";
 import { validateApplication } from "./applications";
@@ -20,6 +20,25 @@ export const getCurrent = query({
       : null;
   },
 });
+/**
+ * The resident's saved city — the one the dashboard and map open on.
+ *
+ * It lives on the account rather than in component state so it survives a
+ * reload and is the same on every device the resident signs in from.
+ */
+export const setPrimaryLocation = mutation({
+  args: { locationCode: cityCode },
+  returns: v.object({ updated: v.boolean() }),
+  handler: async (ctx, args) => {
+    const user = await requireCurrentUser(ctx);
+    await ctx.db.patch(user._id, {
+      primaryLocation: args.locationCode,
+      updatedAt: Date.now(),
+    });
+    return { updated: true };
+  },
+});
+
 export const register = mutation({
   args: {
     requestedRole: signupRole,

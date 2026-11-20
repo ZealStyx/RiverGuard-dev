@@ -110,11 +110,15 @@ export async function POST(request: Request) {
   const accessToken = request.headers
     .get("authorization")
     ?.replace(/^Bearer\s+/i, "");
+  // Convex has to know who wrote the row. A signed-in operator proves it with
+  // their ID token; this server cannot, so it presents its own credential —
+  // compared against the same variable name in the deployment's environment.
   const persistence = await persistOutlook(
     bundle,
     forecast,
     issueDate,
     accessToken,
+    process.env.RIVERGUARD_INGEST_SECRET ?? null,
   );
 
   const warnings: string[] = [];

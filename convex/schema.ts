@@ -39,6 +39,11 @@ export default defineSchema({
     additionalRoles: v.optional(v.array(userRoleValidator)),
     status: v.optional(userStatusValidator),
     roleProfile: v.optional(userRoleProfileValidator),
+    /**
+     * The city the resident's dashboard opens on. Chosen in the app, so it is
+     * deliberately separate from `roleProfile.city`, which is signup metadata.
+     */
+    primaryLocation: v.optional(cityCode),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
