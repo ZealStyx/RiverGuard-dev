@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from app.core.config import settings
 
 
@@ -13,12 +16,23 @@ def test_health_reports_model_file_state(client):
 
 
 def test_ready_loads_the_exported_model(client):
+    """The readiness payload must report *the artifact on disk*, not a copy of it.
+
+    The threshold used to be hard-coded here (0.3439) while the artifact carried
+    0.40, so retraining the model broke a test that had nothing to do with
+    training. Reading the expected values out of `model.json` keeps the test
+    about the wiring — endpoint versus artifact — which is what it should guard.
+    """
     response = client.get("/health/ready")
     assert response.status_code == 200
     body = response.json()
+
+    artifact = json.loads(Path(settings.model_path).read_text(encoding="utf-8"))
+
     assert body["status"] == "ready"
-    assert body["model"]["version"] == "0.1.0-test"
-    assert body["model"]["operatingThreshold"] == 0.3439
+    assert body["model"]["version"] == artifact["meta"]["version"]
+    assert body["model"]["operatingThreshold"] == artifact["operating_threshold"]
+    assert 0.0 < artifact["operating_threshold"] < 1.0
     assert body["cities"] == ["marikina", "quezon-city", "manila", "pasig"]
     # The warning has to travel with the model, not only live in the docs.
     assert "derived" in body["warning"].lower()
