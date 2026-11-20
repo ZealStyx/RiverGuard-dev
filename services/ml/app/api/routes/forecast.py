@@ -70,6 +70,7 @@ def daily_forecast(request: ForecastRequest) -> ForecastResponse:
             rainfall_mm=day.rainfallMm,
             tmax_c=day.tmaxC,
             tmin_c=day.tminC,
+            et0_mm=day.et0Mm,
         )
         for day in request.days
     ]
@@ -121,7 +122,11 @@ def next_day(request: ForecastRequest) -> SingleDayForecastResponse:
         soil_moisture_percent=request.observed.soilMoisturePercent,
     ).normalised()
     weather = DailyWeather(
-        date=first.date, rainfall_mm=first.rainfallMm, tmax_c=first.tmaxC, tmin_c=first.tminC
+        date=first.date,
+        rainfall_mm=first.rainfallMm,
+        tmax_c=first.tmaxC,
+        tmin_c=first.tminC,
+        et0_mm=first.et0Mm,
     )
     inputs = build_inputs(observed, weather, runtime, first.date.month)
     ranking = contributions(runtime, inputs, city.code, first.date.month)
