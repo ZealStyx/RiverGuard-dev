@@ -20,6 +20,7 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
+import { assertIngestAuthorized } from "./ingest";
 
 /** The shape a caller writes; `observedAt` is derived from `date` here. */
 const observedDayValidator = v.object({
@@ -80,8 +81,15 @@ export const upsertDays = mutation({
     locationCode: v.string(),
     locationName: v.string(),
     days: v.array(observedDayValidator),
+    /**
+     * Server-to-server proof. `/api/historical` reads it from
+     * `RIVERGUARD_INGEST_SECRET`; a signed-in administrator may omit it.
+     */
+    secret: v.optional(v.string()),
   },
-  handler: async (ctx, { locationCode, locationName, days }) => {
+  handler: async (ctx, { locationCode, locationName, days, secret }) => {
+    await assertIngestAuthorized(ctx, secret);
+
     const now = Date.now();
     let inserted = 0;
     let updated = 0;

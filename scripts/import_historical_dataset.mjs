@@ -114,7 +114,9 @@ function validateRows(text, stationMetadata) {
       throw new Error(`Invalid Date at CSV row ${rowNumber}: ${date}`);
     }
     if (!locations.has(locationName)) {
-      throw new Error(`Unsupported location at CSV row ${rowNumber}: ${locationName}`);
+      throw new Error(
+        `Unsupported location at CSV row ${rowNumber}: ${locationName}`,
+      );
     }
     const key = `${date}|${locationName}`;
     if (seen.has(key)) throw new Error(`Duplicate date/location key: ${key}`);
@@ -137,11 +139,32 @@ function validateRows(text, stationMetadata) {
       elevationM: asNumber(get("Elevation_m"), "Elevation_m", rowNumber) ?? 0,
       rainfallMm: asNumber(get("Rainfall_mm"), "Rainfall_mm", rowNumber),
       waterLevelM: asNumber(get("WaterLevel_m"), "WaterLevel_m", rowNumber),
-      soilMoisturePercent: asNumber(get("SoilMoisture_pct"), "SoilMoisture_pct", rowNumber),
-      antecedentRain3dMm: asNumber(get("AntecedentRain_3d_mm"), "AntecedentRain_3d_mm", rowNumber),
-      antecedentRain7dMm: asNumber(get("AntecedentRain_7d_mm"), "AntecedentRain_7d_mm", rowNumber),
-      antecedentRain30dMm: asNumber(get("AntecedentRain_30d_mm"), "AntecedentRain_30d_mm", rowNumber),
-      floodOccurrence: get("FloodOccurrence") === "1" ? true : get("FloodOccurrence") === "0" ? false : undefined,
+      soilMoisturePercent: asNumber(
+        get("SoilMoisture_pct"),
+        "SoilMoisture_pct",
+        rowNumber,
+      ),
+      antecedentRain3dMm: asNumber(
+        get("AntecedentRain_3d_mm"),
+        "AntecedentRain_3d_mm",
+        rowNumber,
+      ),
+      antecedentRain7dMm: asNumber(
+        get("AntecedentRain_7d_mm"),
+        "AntecedentRain_7d_mm",
+        rowNumber,
+      ),
+      antecedentRain30dMm: asNumber(
+        get("AntecedentRain_30d_mm"),
+        "AntecedentRain_30d_mm",
+        rowNumber,
+      ),
+      floodOccurrence:
+        get("FloodOccurrence") === "1"
+          ? true
+          : get("FloodOccurrence") === "0"
+            ? false
+            : undefined,
       riskLabel: riskLabel || undefined,
       rainSource: get("RainSource") || undefined,
       split: get("Split") || undefined,
@@ -150,7 +173,12 @@ function validateRows(text, stationMetadata) {
       notes: get("Notes") || undefined,
     });
   }
-  return { records, rowCount: records.length, dateMin: minDate, dateMax: maxDate };
+  return {
+    records,
+    rowCount: records.length,
+    dateMin: minDate,
+    dateMax: maxDate,
+  };
 }
 
 function validateEvents(text) {
@@ -164,7 +192,11 @@ function validateEvents(text) {
     area: get(cells, "Area"),
     rainfallMm: asNumber(get(cells, "Rainfall_mm"), "Rainfall_mm", offset + 2),
     duration: get(cells, "Duration") || undefined,
-    marikinaPeakM: asNumber(get(cells, "Marikina_Peak_m"), "Marikina_Peak_m", offset + 2),
+    marikinaPeakM: asNumber(
+      get(cells, "Marikina_Peak_m"),
+      "Marikina_Peak_m",
+      offset + 2,
+    ),
     impact: get(cells, "Impact"),
     notes: get(cells, "Notes") || undefined,
   }));
@@ -209,6 +241,19 @@ if (!convexUrl) {
   );
 }
 
+/**
+ * The ingest mutations now refuse anonymous writes (`convex/ingest.ts`), so an
+ * import has to prove it is allowed: either this secret, or a signed-in
+ * administrator. Fail here, with the reason, rather than 200 times inside the
+ * deployment.
+ */
+const ingestSecret = process.env.RIVERGUARD_INGEST_SECRET;
+if (!ingestSecret) {
+  throw new Error(
+    "RIVERGUARD_INGEST_SECRET is required for import. Set it to the value configured on the deployment (npx convex env set RIVERGUARD_INGEST_SECRET ...).",
+  );
+}
+
 const client = new ConvexHttpClient(convexUrl);
 for (let index = 0; index < records.length; index += 200) {
   const batch = records.slice(index, index + 200);
@@ -221,13 +266,17 @@ for (let index = 0; index < records.length; index += 200) {
     dateMin,
     dateMax,
     records: batch,
+    secret: ingestSecret,
   });
-  console.log(`Imported ${Math.min(index + batch.length, records.length)}/${records.length}`);
+  console.log(
+    `Imported ${Math.min(index + batch.length, records.length)}/${records.length}`,
+  );
 }
 
 await client.mutation(anyApi.historical.upsertFloodEvents, {
   datasetId,
   source: "data/flood_events.csv",
   events,
+  secret: ingestSecret,
 });
 console.log("Historical dataset import complete.");

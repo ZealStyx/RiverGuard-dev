@@ -4,6 +4,8 @@ import {
 } from "convex/server";
 import { v } from "convex/values";
 
+import { assertIngestAuthorized } from "./ingest";
+
 const historicalRecordValidator = v.object({
   date: v.string(),
   locationCode: v.string(),
@@ -63,6 +65,8 @@ export const upsertBatch = mutation({
     dateMin: v.string(),
     dateMax: v.string(),
     records: v.array(historicalRecordValidator),
+    /** Server-to-server proof; see `convex/ingest.ts`. */
+    secret: v.optional(v.string()),
   },
   returns: v.object({
     inserted: v.number(),
@@ -70,6 +74,8 @@ export const upsertBatch = mutation({
     processed: v.number(),
   }),
   handler: async (ctx, args) => {
+    await assertIngestAuthorized(ctx, args.secret);
+
     if (args.records.length === 0 || args.records.length > 250) {
       throw new Error(
         "Historical import batches must contain 1 to 250 records",
@@ -236,9 +242,13 @@ export const upsertFloodEvents = mutation({
     datasetId: v.string(),
     source: v.string(),
     events: v.array(floodEventValidator),
+    /** Server-to-server proof; see `convex/ingest.ts`. */
+    secret: v.optional(v.string()),
   },
   returns: v.object({ inserted: v.number(), updated: v.number() }),
   handler: async (ctx, args) => {
+    await assertIngestAuthorized(ctx, args.secret);
+
     let inserted = 0;
     let updated = 0;
     for (const event of args.events) {
