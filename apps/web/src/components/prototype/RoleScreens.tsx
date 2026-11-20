@@ -924,17 +924,23 @@ function AdminHome() {
         }
       />
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {/*
+          These two used to print "3" and "Two require review" — invented
+          numbers with no query behind them. A count is only shown when a
+          deployment can produce it; until this screen reads one, the honest
+          value is "not counted".
+        */}
         <Metric
           label="Pending requests"
-          value="3"
-          detail="Two require review"
+          value="—"
+          detail="Not counted: no account query behind this screen"
           tone="warning"
         />
         <Metric
           label="Active users"
-          value="3"
-          detail="Across resident, LGU, and admin"
-          tone="primary"
+          value="—"
+          detail="Not counted: no account query behind this screen"
+          tone="warning"
         />
         <Metric
           label="Supported cities"

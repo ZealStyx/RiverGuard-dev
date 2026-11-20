@@ -20,7 +20,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { firebaseAuth } from "@/lib/firebase";
+import { firebaseConfigured, getFirebaseAuth } from "@/lib/firebase";
 
 type FirebaseAuthContextValue = {
   getIdToken: () => Promise<string | null>;
@@ -37,11 +37,32 @@ const FirebaseAuthContext = createContext<FirebaseAuthContextValue | null>(
   null,
 );
 
+/**
+ * Sign-in needs a configured SDK. Callers get a clear message instead of the
+ * SDK's own `auth/invalid-api-key` when the deployment has no Firebase keys.
+ */
+function requireFirebaseAuth() {
+  const auth = getFirebaseAuth();
+  if (auth === null) {
+    throw new Error(
+      "Sign-in is not configured in this build. Set the NEXT_PUBLIC_FIREBASE_* variables to enable it.",
+    );
+  }
+  return auth;
+}
+
 export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  // With no configuration there is no session to wait for, so start settled
+  // rather than leaving every gate on "Checking your access…" forever.
+  const [loading, setLoading] = useState(firebaseConfigured);
+
   useEffect(() => {
-    return onIdTokenChanged(firebaseAuth, (nextUser) => {
+    const auth = getFirebaseAuth();
+    // Nothing to subscribe to. `loading` already starts false in this build, so
+    // there is no state to settle and no session to wait for.
+    if (auth === null) return;
+    return onIdTokenChanged(auth, (nextUser) => {
       setUser(nextUser);
       setLoading(false);
     });
@@ -49,7 +70,7 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = useCallback(async () => {
     const result = await signInWithPopup(
-      firebaseAuth,
+      requireFirebaseAuth(),
       new GoogleAuthProvider(),
     );
     return result.user;
@@ -57,7 +78,7 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithEmail = useCallback(
     (email: string, password: string) =>
-      signInWithEmailAndPassword(firebaseAuth, email, password).then(
+      signInWithEmailAndPassword(requireFirebaseAuth(), email, password).then(
         (result) => result.user,
       ),
     [],
@@ -65,13 +86,15 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
 
   const createAccountWithEmail = useCallback(
     (email: string, password: string) =>
-      createUserWithEmailAndPassword(firebaseAuth, email, password).then(
-        (result) => result.user,
-      ),
+      createUserWithEmailAndPassword(
+        requireFirebaseAuth(),
+        email,
+        password,
+      ).then((result) => result.user),
     [],
   );
 
-  const signOut = useCallback(() => firebaseSignOut(firebaseAuth), []);
+  const signOut = useCallback(() => firebaseSignOut(requireFirebaseAuth()), []);
   const sendCurrentUserEmailVerification = useCallback(async () => {
     const currentUser = firebaseAuth.currentUser;
     if (!currentUser) {

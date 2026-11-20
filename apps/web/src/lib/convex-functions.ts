@@ -202,6 +202,12 @@ export const convexFunctions = {
         sourceLabel?: string;
         retrievedAt: number;
       }>;
+      /**
+       * Server-only proof for the write. Comes from
+       * `process.env.RIVERGUARD_INGEST_SECRET` (never a `NEXT_PUBLIC_` value) and
+       * is checked by `convex/ingest.ts`.
+       */
+      secret?: string;
     },
     { inserted: number; updated: number }
   >("observedWeather:upsertDays"),

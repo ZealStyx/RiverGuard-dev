@@ -38,9 +38,14 @@ export function WorkspaceGate({
 }
 
 /**
- * Degraded gate for builds without Convex: sign-in is still required, but role
- * and account status cannot be read from the deployment, so only authentication
- * is enforced.
+ * Degraded gate for builds without Convex.
+ *
+ * Role and account status live in the deployment, so without it they cannot be
+ * read — and this used to let any signed-in Firebase user into *every*
+ * workspace, including the administrator one. That is a fail-open check, and it
+ * is now a fail-closed one: an unverifiable role means no entry, with an
+ * explanation, instead of entry granted by default. Local design previews still
+ * opt in through `NEXT_PUBLIC_DEV_BYPASS_AUTH` in development only.
  */
 function FirebaseOnlyGate({
   role,
@@ -68,7 +73,24 @@ function FirebaseOnlyGate({
     );
   }
 
-  return <>{children}</>;
+  // Signed in, but the role and status that decide what this person may see are
+  // not reachable. Refuse: the alternative is admitting everyone.
+  return (
+    <main className="p-6 text-muted">
+      <h1 className="text-section">Access cannot be verified</h1>
+      <p className="mt-2 text-body">
+        This build has no workspace backend configured, so your RiverGuard role
+        and account status cannot be checked. Access to the {role} workspace is
+        closed until the deployment is configured.
+      </p>
+      <p className="mt-2 text-body text-muted">
+        Administrators: set the Convex deployment URL for this environment. For
+        local design previews only, set both{" "}
+        <code>NEXT_PUBLIC_DEV_BYPASS_AUTH=true</code> and{" "}
+        <code>NODE_ENV=development</code>.
+      </p>
+    </main>
+  );
 }
 
 function ConvexBackedGate({
