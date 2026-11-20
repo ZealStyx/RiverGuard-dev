@@ -96,7 +96,7 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => firebaseSignOut(requireFirebaseAuth()), []);
   const sendCurrentUserEmailVerification = useCallback(async () => {
-    const currentUser = firebaseAuth.currentUser;
+    const currentUser = getFirebaseAuth()?.currentUser ?? null;
     if (!currentUser) {
       throw new Error("You must be signed in to verify your email.");
     }
