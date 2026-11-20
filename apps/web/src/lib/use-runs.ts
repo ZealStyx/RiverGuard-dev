@@ -15,6 +15,8 @@ import { useEffect, useState } from "react";
 
 import type { StoredRun, StoredRunSummary } from "./runs";
 
+import { authFetch } from "@/lib/api-client";
+
 export interface LocalRunsState<T> {
   /** `undefined` until the first response for this key lands. */
   data: T | undefined;
@@ -42,7 +44,7 @@ export function useLocalRuns(limit = 25): LocalRunsState<StoredRunSummary[]> {
 
     void (async () => {
       try {
-        const response = await fetch(`/api/runs?limit=${limit}`, {
+        const response = await authFetch(`/api/runs?limit=${limit}`, {
           signal: controller.signal,
           cache: "no-store",
         });
@@ -92,10 +94,13 @@ export function useLocalRun(runId: string): LocalRunsState<StoredRun | null> {
 
     void (async () => {
       try {
-        const response = await fetch(`/api/runs/${encodeURIComponent(runId)}`, {
-          signal: controller.signal,
-          cache: "no-store",
-        });
+        const response = await authFetch(
+          `/api/runs/${encodeURIComponent(runId)}`,
+          {
+            signal: controller.signal,
+            cache: "no-store",
+          },
+        );
         if (response.status === 404) {
           // A real answer: the store has no run with this id.
           setResult({ key: runId, data: null, error: null });

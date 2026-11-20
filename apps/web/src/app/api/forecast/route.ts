@@ -18,6 +18,8 @@
 
 import { NextResponse } from "next/server";
 
+import { requireApiAuth } from "@/lib/api-auth";
+
 import { persistOutlook } from "@/lib/forecast-persistence";
 import { getLocation } from "@/lib/locations";
 import { MlServiceError, requestDailyForecast } from "@/lib/ml-client";
@@ -33,6 +35,11 @@ interface ForecastRequestBody {
 }
 
 export async function POST(request: Request) {
+  // A forecast costs a weather call and a model run, and writes a run to the
+  // deployment. Anonymous callers used to be able to spend both.
+  const denied = await requireApiAuth(request);
+  if (denied) return denied;
+
   let body: ForecastRequestBody;
   try {
     body = (await request.json()) as ForecastRequestBody;

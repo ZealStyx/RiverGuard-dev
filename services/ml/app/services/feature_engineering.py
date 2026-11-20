@@ -49,6 +49,9 @@ class DailyWeather:
     rainfall_mm: float
     tmax_c: float
     tmin_c: float
+    #: Provider ET0 for this day, when it sent one. `None` means "use the month's
+    #: normal" — see `forecasting._et0_for`.
+    et0_mm: float | None = None
 
 
 @dataclass

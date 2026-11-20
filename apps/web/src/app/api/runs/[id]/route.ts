@@ -8,15 +8,20 @@
 
 import { NextResponse } from "next/server";
 
+import { requireApiAuth } from "@/lib/api-auth";
+
 import { getLocalRun } from "@/lib/run-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  const denied = await requireApiAuth(request);
+  if (denied) return denied;
+
   const { id } = await context.params;
 
   try {

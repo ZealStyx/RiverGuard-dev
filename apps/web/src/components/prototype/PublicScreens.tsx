@@ -44,7 +44,9 @@ import {
 } from "@/components/auth/EnsureCurrent";
 import { convexConfigured } from "@/lib/convex-config";
 import { api } from "../../../../../convex/_generated/api";
-import { firebaseAuth } from "@/lib/firebase";
+import type { User } from "firebase/auth";
+
+import { getFirebaseAuth } from "@/lib/firebase";
 
 import {
   ActionLink,
@@ -689,11 +691,8 @@ function LoginFormBody({
   ensureCurrent: ProvisionAccount | null;
 }) {
   const router = useRouter();
-  const {
-    signInWithEmail,
-    signInWithGoogle,
-    sendEmailVerification,
-  } = useFirebaseAuth();
+  const { signInWithEmail, signInWithGoogle, sendEmailVerification } =
+    useFirebaseAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   async function finishSignIn() {
@@ -1324,9 +1323,9 @@ function VerificationBody({
   const source = params.get("source") ?? "access";
   const isEmailVerification = source === "signup";
   const initialSendFailed = params.get("sent") === "0";
-  const [sendStatus, setSendStatus] = useState<
-    "idle" | "sent" | "failed"
-  >(initialSendFailed ? "failed" : "idle");
+  const [sendStatus, setSendStatus] = useState<"idle" | "sent" | "failed">(
+    initialSendFailed ? "failed" : "idle",
+  );
   useEffect(() => {
     if (secondsRemaining <= 0) return;
     const timer = window.setInterval(
@@ -1551,7 +1550,8 @@ function MfaScreen() {
   return (
     <div className="grid gap-3">
       <Notice title="MFA is not configured" tone="warning">
-        This prototype does not provide Firebase MFA or recovery-code verification.
+        This prototype does not provide Firebase MFA or recovery-code
+        verification.
       </Notice>
       <Button className="w-full" variant="quiet" disabled>
         MFA setup unavailable
@@ -2377,7 +2377,9 @@ export function WorkspaceMethodologyScreen({
 
 export function SettingsScreen({ screen }: { screen?: string }) {
   if (!convexConfigured) {
-    return <SettingsScreenBody screen={screen} currentUser={null} user={null} />;
+    return (
+      <SettingsScreenBody screen={screen} currentUser={null} user={null} />
+    );
   }
   return <LiveSettingsScreen screen={screen} />;
 }
@@ -2403,8 +2405,22 @@ function SettingsScreenBody({
   updateCurrentProfile,
 }: {
   screen?: string;
-  currentUser: any;
-  user: any;
+  /** The Convex `users` row for the signed-in person, once it has loaded. */
+  currentUser?: {
+    displayName?: string | null;
+    email?: string | null;
+    role?: string;
+    roleProfile?: {
+      organization?: string;
+      city?: string;
+      position?: string;
+      requestedArea?: string;
+      purpose?: string;
+      researcherType?: "government" | "private" | "independent" | "other";
+    };
+  } | null;
+  /** The Firebase account, which is what password reset and email need. */
+  user?: User | null;
   updateCurrentProfile?: (args: {
     displayName: string;
     roleProfile?: {
@@ -2430,15 +2446,18 @@ function SettingsScreenBody({
   const [position, setPosition] = useState(
     currentUser?.roleProfile?.position ?? "",
   );
+  /* eslint-disable react-hooks/set-state-in-effect --
+     The account row arrives from Convex after mount, so these fields cannot be
+     initialised during render without hydration mismatches. The values are
+     written once per change of `currentUser`/`user`, not in a render loop. */
   useEffect(() => {
     if (currentUser === undefined) return;
-    setDisplayName(
-      currentUser?.displayName ?? user?.displayName ?? "",
-    );
+    setDisplayName(currentUser?.displayName ?? user?.displayName ?? "");
     setOrganization(currentUser?.roleProfile?.organization ?? "");
     setCity(currentUser?.roleProfile?.city ?? "");
     setPosition(currentUser?.roleProfile?.position ?? "");
   }, [currentUser, user]);
+  /* eslint-enable react-hooks/set-state-in-effect */
   const [activeScreen, setActiveScreen] = useState(screen || "profile");
   const settingsTitle =
     activeScreen === "notifications"
@@ -2480,7 +2499,8 @@ function SettingsScreenBody({
         return;
       }
       try {
-        if (user) await updateProfile(user, { displayName: displayName.trim() });
+        if (user)
+          await updateProfile(user, { displayName: displayName.trim() });
         await updateCurrentProfile?.({
           displayName: displayName.trim(),
           roleProfile: {
@@ -2501,7 +2521,9 @@ function SettingsScreenBody({
         setSaved(true);
       } catch (error) {
         setSaveError(
-          error instanceof Error ? error.message : "Profile could not be saved.",
+          error instanceof Error
+            ? error.message
+            : "Profile could not be saved.",
         );
       }
     }
@@ -2555,9 +2577,7 @@ function SettingsScreenBody({
             value={firstName}
             onChange={(event) => {
               const nextFirst = event.target.value;
-              setDisplayName(
-                [nextFirst, lastName].filter(Boolean).join(" "),
-              );
+              setDisplayName([nextFirst, lastName].filter(Boolean).join(" "));
             }}
           />
           <TextField
@@ -2597,7 +2617,7 @@ function SettingsScreenBody({
             label="Role"
             value={
               currentUser?.role
-                ? roleLabel[currentUser.role] ?? currentUser.role
+                ? (roleLabel[currentUser.role] ?? currentUser.role)
                 : "Unavailable"
             }
             readOnly
@@ -2632,7 +2652,14 @@ function SettingsScreenBody({
                 disabled={!user?.email}
                 onClick={() => {
                   if (!user?.email) return;
-                  void sendPasswordResetEmail(firebaseAuth, user.email)
+                  const auth = getFirebaseAuth();
+                  if (!auth) {
+                    setSaveError(
+                      "Password reset is unavailable: this build has no Firebase configuration.",
+                    );
+                    return;
+                  }
+                  void sendPasswordResetEmail(auth, user.email)
                     .then(() => {
                       setSaved(false);
                       setSaveError("");

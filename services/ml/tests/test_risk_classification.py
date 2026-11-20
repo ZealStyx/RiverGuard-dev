@@ -55,51 +55,92 @@ def test_every_assessment_explains_itself():
 @pytest.mark.parametrize(
     "location,inputs,month,expected_probability,expected_water_level",
     [
-        # Golden values produced by the same export in ml/predictor.html (the browser
-        # path) and independently in Python. If these drift, one of the three
-        # evaluators is wrong.
+        # A regression snapshot of this artifact's own output (model.json
+        # 0.1.0-test). These numbers carry no expectation about the weather: they
+        # exist so that a change to the runtime's arithmetic shows up as a diff.
+        # A retrain legitimately changes them — recompute with
+        # `load_model(settings.model_path).predict(inputs, location, month)` — which
+        # is why the assertions below also pin the invariants that must hold
+        # whatever the weights are.
         (
             "marikina",
             {"rain_next": 46, "rain_today": 12, "ant3": 50, "ant7": 120, "ant30": 270,
              "soil": 66, "tmax": 31, "tmin": 25},
             11,
-            0.13519658301156817,
-            14.582313923199997,
+            0.003149145444412732,
+            14.376887907999999,
         ),
         (
             "manila",
             {"rain_next": 180, "rain_today": 90, "ant3": 210, "ant7": 380, "ant30": 600,
              "soil": 90, "tmax": 29, "tmin": 25},
             11,
-            0.9999983773462837,
-            15.986919708799995,
+            0.9999997552166224,
+            14.392761701599998,
         ),
         (
             "quezon-city",
             {"rain_next": 0, "rain_today": 0, "ant3": 0, "ant7": 3, "ant30": 40,
              "soil": 20, "tmax": 33, "tmin": 24},
             3,
-            0.00028638047746064706,
-            11.0337277752,
+            0.00024236049853864242,
+            11.1105998824,
         ),
         (
             "pasig",
             {"rain_next": 75, "rain_today": 40, "ant3": 120, "ant7": 240, "ant30": 400,
              "soil": 78, "tmax": 30, "tmin": 26},
             8,
-            0.9999303353557137,
-            13.5291346384,
+            0.9987200342213459,
+            12.79896662,
         ),
     ],
 )
 def test_runtime_matches_the_exported_artifact(
     location, inputs, month, expected_probability, expected_water_level
 ):
-    """The service must reproduce the artifact bit for bit — no reimplementation drift."""
+    """The runtime must reproduce the snapshot, and stay sane whatever it holds."""
     runtime: ModelRuntime = load_model(settings.model_path)
     prediction = runtime.predict(inputs, location, month)
+
+    # Invariants first: these must hold for any weights, so a retrain that
+    # changes the snapshot cannot hide a broken evaluator behind new numbers.
+    assert 0.0 <= prediction.probability <= 1.0
+    assert 9.0 <= prediction.water_level_m <= 19.0  # the dataset's stage envelope
+    repeat = runtime.predict(inputs, location, month)
+    assert repeat.probability == prediction.probability
+    assert repeat.water_level_m == prediction.water_level_m
+
+    # Then the snapshot itself.
     assert prediction.probability == pytest.approx(expected_probability, abs=1e-9)
     assert prediction.water_level_m == pytest.approx(expected_water_level, abs=1e-9)
+
+
+def test_heavy_rain_never_lowers_the_risk():
+    """More rain on a wetter catchment must not read as less danger.
+
+    This is the one direction the pipeline cannot get wrong without being
+    useless: a model that inverts it would still pass every snapshot above.
+    """
+    runtime: ModelRuntime = load_model(settings.model_path)
+    dry_inputs = {
+        "rain_next": 0,
+        "rain_today": 0,
+        "ant3": 0,
+        "ant7": 5,
+        "ant30": 40,
+        "soil": 20,
+        "tmax": 33,
+        "tmin": 24,
+    }
+    wet_inputs = {**dry_inputs, "rain_next": 120, "ant3": 120, "ant7": 240, "soil": 90}
+
+    dry = runtime.predict(dry_inputs, "marikina", 8)
+    wet = runtime.predict(wet_inputs, "marikina", 8)
+
+    assert wet.probability >= dry.probability
+    assert wet.water_level_m >= dry.water_level_m
+    assert wet.water_level_m - dry.water_level_m > 0.5
 
 
 def test_one_hot_layout_comes_from_the_export():

@@ -13,11 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import type { GisLayerSummary } from "@/lib/gis-types";
 import { gisLayerIdFromKey, gisLayerKey } from "@/lib/gis-types";
 import { useGisLayers } from "@/lib/use-gis-layers";
-import {
-  LOCATION_CODES,
-  LOCATIONS,
-  type LocationCode,
-} from "@/lib/locations";
+import { LOCATION_CODES, LOCATIONS, type LocationCode } from "@/lib/locations";
 import type { OutlookSnapshot } from "@/lib/outlook";
 import type { MapLayerId } from "@/types";
 
@@ -398,8 +394,7 @@ export function RiverMap({
               : label === "Moderate"
                 ? "#a36726"
                 : "#147384";
-          element.textContent =
-            `${location.name} · ${(probability * 100).toFixed(0)}%`;
+          element.textContent = `${location.name} · ${(probability * 100).toFixed(0)}%`;
         } else if (selected) {
           element.style.background = "#64748b";
           element.textContent = `${location.name} · No data`;
@@ -424,13 +419,7 @@ export function RiverMap({
     return () => {
       cancelled = true;
     };
-  }, [
-    forecast,
-    locationCode,
-    mapStatus,
-    onLocationChange,
-    selectedDay,
-  ]);
+  }, [forecast, locationCode, mapStatus, onLocationChange, selectedDay]);
 
   function resetView() {
     mapRef.current?.fitBounds(NCR_VIEW_BOUNDS, {
@@ -447,9 +436,7 @@ export function RiverMap({
     Math.max((forecast?.days.length ?? 1) - 1, 0),
   );
   const activeDay = forecast?.days[activeIndex] ?? null;
-  const selectedLocation = locationCode
-    ? LOCATIONS[locationCode]
-    : null;
+  const selectedLocation = locationCode ? LOCATIONS[locationCode] : null;
 
   const layerSummary = activeGisLayer
     ? `${activeGisLayer.description || `${activeGisLayer.title} from a verified local file.`} Source: ${activeGisLayer.source.publisher}, ${activeGisLayer.source.license}, retrieved ${activeGisLayer.source.retrievedAt}.`
@@ -611,7 +598,8 @@ export function RiverMap({
                   </div>
                 ) : (
                   <p className="text-metadata mt-3 text-muted">
-                    Run a forecast to place the first city-level result on this map.
+                    Run a forecast to place the first city-level result on this
+                    map.
                   </p>
                 )}
                 {forecast?.days.length ? (
@@ -638,7 +626,8 @@ export function RiverMap({
                   </div>
                 ) : null}
                 <p className="text-metadata mt-2 text-muted">
-                  Experimental city-level index. Not a gauge reading or street-level warning.
+                  Experimental city-level index. Not a gauge reading or
+                  street-level warning.
                 </p>
               </div>
             ) : null}

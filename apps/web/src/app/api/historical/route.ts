@@ -24,6 +24,8 @@
 
 import { NextResponse } from "next/server";
 
+import { authorizeApiRequest } from "@/lib/api-auth";
+
 import {
   DATASET_LABEL,
   DatasetUnavailableError,
@@ -126,12 +128,19 @@ interface LiveWindow {
  * caller can fall back to the dataset and say why.
  */
 async function buildLiveWindow({
+  allowWrites,
   dataset,
   end,
   location,
   start,
   today,
 }: {
+  /**
+   * Whether this request may store what it fetched. Reads are open — the chart
+   * is public information — but writes are not, so an unauthenticated GET gets
+   * served and changes nothing.
+   */
+  allowWrites: boolean;
   dataset: Dataset | null;
   end: string;
   location: LocationConfig;
@@ -196,12 +205,19 @@ async function buildLiveWindow({
       );
       for (const day of accepted) days.set(day.isoDate, day);
       if (accepted.length > 0) {
-        const write = await saveObservedDays(
-          location.code,
-          location.name,
-          accepted,
-        );
-        storeError = write.error ?? storeError;
+        if (allowWrites) {
+          const write = await saveObservedDays(
+            location.code,
+            location.name,
+            accepted,
+          );
+          storeError = write.error ?? storeError;
+        } else {
+          // Say it rather than pretend: a caller that is not signed in gets the
+          // days for this response and no persistence.
+          storeError =
+            "this request was not authenticated, so the fetched days were served but not stored";
+        }
       }
     } catch (error) {
       providerError =
@@ -340,9 +356,13 @@ export async function GET(request: Request) {
   const windowEnd = end ?? today;
   const windowStart = start ?? addDays(windowEnd, -(limit - 1));
 
+  // Reads are public; the write that `buildLiveWindow` performs is not.
+  const auth = await authorizeApiRequest(request);
+
   let live: LiveWindow | null = null;
   if (resolved && daysBetween(windowStart, windowEnd) >= 0) {
     live = await buildLiveWindow({
+      allowWrites: auth.authorized,
       dataset,
       end: windowEnd,
       location: resolved,

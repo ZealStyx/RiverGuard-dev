@@ -36,6 +36,21 @@ class ForecastChain:
     days: list[DailyForecast]
 
 
+def _et0_for(weather: DailyWeather, runtime: ModelRuntime) -> float:
+    """Evapotranspiration to drain the soil bucket by, for this day.
+
+    The bucket is the generator's: ``SM_t = SM_{t-1} + rain - ET0 - 0.08*SM_{t-1}``.
+    Rain was always applied, but ET0 was a monthly normal, so a cloudless week and
+    an overcast week dried the catchment identically — and the horizon drifted away
+    from the observed day, whose soil was warmed up with the provider's real ET0.
+    Now the provider's own figure wins whenever it is present, and the monthly
+    normal is only the fallback for a caller that sends none.
+    """
+    if weather.et0_mm is not None:
+        return max(0.0, float(weather.et0_mm))
+    return runtime.et0_for(weather.date.month)
+
+
 def run_chain(
     runtime: ModelRuntime,
     location_code: str,
@@ -84,7 +99,7 @@ def run_chain(
         )
         # Advance the shared state for the next day in the chain.
         buffer.push(weather.rainfall_mm)
-        soil = advance_soil_moisture(soil, weather.rainfall_mm, runtime.et0_for(weather.date.month))
+        soil = advance_soil_moisture(soil, weather.rainfall_mm, _et0_for(weather, runtime))
 
     return ForecastChain(
         location_code=location_code,
