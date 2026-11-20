@@ -242,6 +242,12 @@ return to login and continue normally. If a user has lost or never received the
 email and cannot access the account, an administrator must verify the account
 directly through Firebase Authentication or provide a password reset.
 
+Account creation does not wait indefinitely for hosted account provisioning or
+email delivery. Convex provisioning has a bounded timeout, and Firebase email
+verification has a bounded request timeout. If a hosted service is slow or
+unavailable, the signup button releases and the user receives a retry or
+verification status instead of remaining on “Working” indefinitely.
+
 > **`Could not find public function for 'forecasts:latestOutlook'`** means the
 > deployment is behind the code — pull doesn't push. Run `npm run convex:dev`
 > again (or `npx convex deploy` for a production deployment) so the functions

@@ -698,7 +698,7 @@ function LoginFormBody({
   async function finishSignIn() {
     // Without Convex the account (and therefore the role) cannot be read, so the
     // default workspace is used. Sign-in itself still succeeded.
-    const account = await ensureCurrent?.({});
+    const account = await provisionWithTimeout(ensureCurrent, {});
     const destination =
       account &&
       ["resident", "lgu", "researcher", "admin"].includes(account.role)
@@ -730,12 +730,19 @@ function LoginFormBody({
       if (!signedInUser.emailVerified) {
         let verificationSent = false;
         try {
-          await sendEmailVerification();
-          verificationSent = true;
+          const sent = await settleWithin(sendEmailVerification(), 10_000);
+          verificationSent = sent !== null;
+          if (!verificationSent) {
+            setError(
+              "Verification email request timed out. You can resend it on the next screen.",
+            );
+          }
         } catch (verificationSendError) {
           setError(formatAuthError(verificationSendError));
         }
-        const account = await ensureCurrent?.({ requestedRole: "resident" });
+        const account = await provisionWithTimeout(ensureCurrent, {
+          requestedRole: "resident",
+        });
         const role =
           account &&
           ["resident", "lgu", "researcher", "admin"].includes(account.role)
@@ -977,16 +984,17 @@ function ResidentSignupBody({
         String(formData.get("signup-email")).trim(),
         password,
       );
-      await ensureCurrent?.({
+      await provisionWithTimeout(ensureCurrent, {
         requestedRole: role,
         roleProfile: buildRoleProfile(formData, role),
       });
       let verificationSent = false;
-      try {
-        await sendEmailVerification();
-        verificationSent = true;
-      } catch (verificationSendError) {
-        setError(formatAuthError(verificationSendError));
+      const sent = await settleWithin(sendEmailVerification(), 10_000);
+      verificationSent = sent !== null;
+      if (!verificationSent) {
+        setError(
+          "Verification email request timed out. You can resend it on the next screen.",
+        );
       }
       router.push(
         `/auth/verify?role=${role}&source=signup&sent=${verificationSent ? "1" : "0"}`,
@@ -1153,7 +1161,12 @@ function ResidentSignupBody({
         label="Receive RiverGuard notifications"
         description="Optional and separate from account consent."
       />
-      <Button type="submit" loading={loading} className="w-full">
+      <Button
+        type="submit"
+        loading={loading}
+        loadingLabel="Creating account"
+        className="w-full"
+      >
         Create Account
       </Button>
       <div className="border-t border-line pt-3">
@@ -1168,7 +1181,7 @@ function ResidentSignupBody({
               const formData = signupForm.current
                 ? new FormData(signupForm.current)
                 : new FormData();
-              await ensureCurrent?.({
+              await provisionWithTimeout(ensureCurrent, {
                 requestedRole: role,
                 roleProfile: buildRoleProfile(formData, role),
               });
@@ -1195,6 +1208,45 @@ function ResidentSignupBody({
       </Link>
     </form>
   );
+}
+
+async function provisionWithTimeout(
+  provision: ProvisionAccount | null,
+  args: Parameters<ProvisionAccount>[0],
+): Promise<Awaited<ReturnType<ProvisionAccount>> | null> {
+  if (!provision) return null;
+  let timer: number | null = null;
+  try {
+    return await Promise.race([
+      provision(args),
+      new Promise<null>((resolve) => {
+        timer = window.setTimeout(() => resolve(null), 12_000);
+      }),
+    ]);
+  } catch {
+    return null;
+  } finally {
+    if (timer !== null) window.clearTimeout(timer);
+  }
+}
+
+async function settleWithin<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+): Promise<T | null> {
+  let timer: number | null = null;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<null>((resolve) => {
+        timer = window.setTimeout(() => resolve(null), timeoutMs);
+      }),
+    ]);
+  } catch {
+    return null;
+  } finally {
+    if (timer !== null) window.clearTimeout(timer);
+  }
 }
 
 function formatAuthError(error: unknown) {
@@ -1422,8 +1474,15 @@ function VerificationBody({
           disabled={secondsRemaining > 0}
           onClick={() => {
             if (isEmailVerification) {
-              void sendEmailVerification()
-                .then(() => {
+              void settleWithin(sendEmailVerification(), 10_000)
+                .then((sent) => {
+                  if (sent === null) {
+                    setSendStatus("failed");
+                    setVerificationError(
+                      "The verification email request timed out. Check Firebase mail settings and try again.",
+                    );
+                    return;
+                  }
                   setResent(true);
                   setSendStatus("sent");
                   setSecondsRemaining(60);
@@ -1467,13 +1526,22 @@ function VerificationBody({
           setChecking(true);
           setVerificationError("");
           try {
-            await user?.reload();
+            const reloadResult = user
+              ? await settleWithin(user.reload(), 8_000)
+              : null;
+            if (reloadResult === null) {
+              throw new Error(
+                "Verification status could not be refreshed. Check your connection and try again.",
+              );
+            }
             if (!user?.emailVerified) {
               throw new Error(
                 "Click the verification link in your email first.",
               );
             }
-            await ensureCurrent?.({ requestedRole: role });
+            await provisionWithTimeout(ensureCurrent, {
+              requestedRole: role,
+            });
             setVerified(true);
           } catch (error) {
             setVerificationError(formatAuthError(error));
