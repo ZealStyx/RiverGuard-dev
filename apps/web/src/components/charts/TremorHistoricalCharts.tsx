@@ -15,8 +15,6 @@ import {
 } from "recharts";
 import { useEffect, useMemo, useState } from "react";
 
-import { authFetch } from "@/lib/api-client";
-
 type DailyReading = {
   date: string;
   rainfall: number | null;
@@ -98,7 +96,7 @@ function useDailyReadings(
       start: startDate,
       end: endDate,
     });
-    authFetch(`/api/historical?${params.toString()}`)
+    fetch(`/api/historical?${params.toString()}`)
       .then(async (response) => {
         if (!response.ok) throw new Error("Daily data unavailable");
         return (await response.json()) as { readings?: DailyReading[] };
@@ -418,7 +416,7 @@ export function TremorMonthlyRainfallChart({ location }: { location: string }) {
 
   useEffect(() => {
     let active = true;
-    authFetch(
+    fetch(
       `/api/historical?mode=monthly&location=${encodeURIComponent(location)}`,
     )
       .then(async (response) => {

@@ -18,8 +18,6 @@
 
 import { NextResponse } from "next/server";
 
-import { requireApiAuth } from "@/lib/api-auth";
-
 import { persistOutlook } from "@/lib/forecast-persistence";
 import { getLocation } from "@/lib/locations";
 import { MlServiceError, requestDailyForecast } from "@/lib/ml-client";
@@ -57,9 +55,6 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-
-  const denied = await requireApiAuth(request, location.code);
-  if (denied) return denied;
 
   const horizonDays = body.horizonDays ?? 7;
   if (horizonDays !== 3 && horizonDays !== 7) {

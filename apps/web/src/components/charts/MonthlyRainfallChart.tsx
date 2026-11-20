@@ -3,8 +3,6 @@
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { useEffect, useState } from "react";
 
-import { authFetch } from "@/lib/api-client";
-
 import {
   ChartContainer,
   ChartTooltip,
@@ -24,7 +22,7 @@ export function MonthlyRainfallChart({
 
   useEffect(() => {
     let active = true;
-    authFetch(
+    fetch(
       `/api/historical?mode=monthly&location=${encodeURIComponent(location)}`,
     )
       .then((response) => {

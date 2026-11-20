@@ -56,8 +56,13 @@ The capability names are still used to decide what the administrator navigation 
 - `governance.viewAudit`
 
 Hidden navigation is not authorisation. The backend checks that matter live in `convex/auth.ts`
-(`requireCurrentUser`, `requireRole`), in the mutations that guard writes, and in
-`apps/web/src/lib/api-auth.ts` for the API routes.
+(`requireCurrentUser`, `requireRole`) and in the mutations that guard writes.
+
+The Next API routes under `apps/web/src/app/api/` are **not** covered by that check: they run in
+the Next server, which holds no Convex identity. They carried a token gate while the project was
+being prepared for a possible deployment; that gate was removed when the deployment was dropped,
+so those routes are open and are safe only while the app cannot be reached from outside this
+machine.
 
 ## Source-of-truth files
 

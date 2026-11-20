@@ -20,8 +20,6 @@ import {
 } from "recharts";
 import { useCallback, useEffect, useState } from "react";
 
-import { authFetch } from "@/lib/api-client";
-
 import {
   ChartContainer,
   ChartTooltip,
@@ -92,7 +90,7 @@ export function RainfallChart({
     if (requestedStart) params.set("start", requestedStart);
     if (requestedEnd) params.set("end", requestedEnd);
 
-    authFetch(`/api/historical?${params.toString()}`)
+    fetch(`/api/historical?${params.toString()}`)
       .then(async (response) => {
         const payload = (await response.json()) as HistoricalResponse;
         if (!response.ok) {
