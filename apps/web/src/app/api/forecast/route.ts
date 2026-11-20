@@ -37,9 +37,6 @@ interface ForecastRequestBody {
 export async function POST(request: Request) {
   // A forecast costs a weather call and a model run, and writes a run to the
   // deployment. Anonymous callers used to be able to spend both.
-  const denied = await requireApiAuth(request);
-  if (denied) return denied;
-
   let body: ForecastRequestBody;
   try {
     body = (await request.json()) as ForecastRequestBody;
@@ -60,6 +57,9 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+
+  const denied = await requireApiAuth(request, location.code);
+  if (denied) return denied;
 
   const horizonDays = body.horizonDays ?? 7;
   if (horizonDays !== 3 && horizonDays !== 7) {

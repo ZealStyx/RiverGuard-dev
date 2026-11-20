@@ -357,7 +357,7 @@ export async function GET(request: Request) {
   const windowStart = start ?? addDays(windowEnd, -(limit - 1));
 
   // Reads are public; the write that `buildLiveWindow` performs is not.
-  const auth = await authorizeApiRequest(request);
+  const auth = await authorizeApiRequest(request, resolved?.code);
 
   let live: LiveWindow | null = null;
   if (resolved && daysBetween(windowStart, windowEnd) >= 0) {

@@ -1,6 +1,6 @@
 # RiverGuard Frontend Route Inventory
 
-This document records the connected frontend prototype implemented from the RiverGuard UI/UX Design Cheat Sheet. The routes use clearly labeled sample data and simulated actions. Real authentication, authorization, Convex persistence, external weather retrieval, local ML inference, verified GIS layers, alert publication, and dark mode are deferred.
+Historical prototype inventory. For current authentication, authorization, and implemented routes, see [Authentication and Routing](../AUTH_ROUTING.md).
 
 ## Public and account routes
 
@@ -11,13 +11,13 @@ This document records the connected frontend prototype implemented from the Rive
 | `/methodology`               | Definitions, evidence rules, and limitations                         |
 | `/official-sources`          | Official-source reminder and verified-link area                      |
 | `/auth/login`                | Provider-neutral login form                                          |
-| `/auth/signup`               | Resident registration prototype                                      |
+| `/auth/signup`               | Email or Google registration with requested role                                      |
 | `/auth/request-access`       | LGU operator access request; administrator access is invitation-only |
 | `/auth/verify`               | Identity verification state                                          |
 | `/auth/pending`              | Pending administrator approval                                       |
 | `/auth/forgot-password`      | Neutral recovery request                                             |
 | `/auth/reset-password`       | Reset form and completion state                                      |
-| `/auth/mfa`                  | MFA challenge prototype                                              |
+| `/auth/mfa`                  | Authenticator app enrollment                                              |
 | `/auth/invitation`           | Invitation acceptance                                                |
 | `/auth/rejected`             | Rejected access state                                                |
 | `/auth/suspended`            | Suspended account state                                              |
@@ -30,14 +30,6 @@ This document records the connected frontend prototype implemented from the Rive
 | `/auth/logout`               | Logout success                                                       |
 
 About and Official Sources remain public information routes, but their navigation links are intentionally exposed only on `/welcome`. Authenticated role shells use the in-context Help & Limitations route and do not show About or Official Sources navigation.
-
-## Onboarding routes
-
-- `/onboarding/resident`
-- `/onboarding/lgu`
-- `/onboarding/admin`
-
-Each route uses a role-specific connected flow: Resident (welcome, locations, preferences, safety), LGU (assignment, authority, review, notes, notifications, safety, ready), and Administrator (assignment, MFA, research tools, methodology, configuration, audit, security, ready).
 
 ## Administrator research workspace
 

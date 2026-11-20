@@ -14,7 +14,6 @@ export const KNOWN_SECTIONS = [
   "official-sources",
   "methodology",
   "auth",
-  "onboarding",
   "settings",
   "lgu",
   "resident",

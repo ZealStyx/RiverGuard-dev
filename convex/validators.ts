@@ -75,3 +75,12 @@ export const hazardLayerKindValidator = v.union(
   v.literal("susceptibility"),
   v.literal("terrain"),
 );
+
+export const elevatedRole = v.union(v.literal("researcher"), v.literal("lgu"));
+export const signupRole = v.union(v.literal("resident"), elevatedRole);
+export const cityCode = v.union(
+  v.literal("marikina"),
+  v.literal("pasig"),
+  v.literal("quezon-city"),
+  v.literal("manila"),
+);

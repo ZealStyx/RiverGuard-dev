@@ -14,6 +14,7 @@ import {
 } from "convex/server";
 import { v } from "convex/values";
 
+import { assertLocationAccess } from "./lgu";
 import { requireRole } from "./auth";
 
 export const listForLocation = query({
@@ -23,7 +24,12 @@ export const listForLocation = query({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["resident", "lgu", "admin"]);
+    await assertLocationAccess(
+      ctx,
+      await requireRole(ctx, ["resident", "lgu", "admin"]),
+      args.locationCode,
+      ["resident"],
+    );
     return await ctx.db
       .query("alerts")
       .withIndex("by_location_created_at", (index) =>
@@ -39,7 +45,12 @@ export const listOpenForLocation = query({
   args: { locationCode: v.string(), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["resident", "lgu", "admin"]);
+    await assertLocationAccess(
+      ctx,
+      await requireRole(ctx, ["resident", "lgu", "admin"]),
+      args.locationCode,
+      ["resident"],
+    );
     const rows = await ctx.db
       .query("alerts")
       .withIndex("by_location_created_at", (index: any) =>
@@ -153,6 +164,9 @@ export const acknowledge = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["lgu", "admin"]);
+    const alert = await ctx.db.get(args.alertId);
+    if (!alert) throw new Error("Alert not found.");
+    await assertLocationAccess(ctx, user, alert.locationCode);
     await ctx.db.patch(args.alertId, {
       status: "acknowledged",
       acknowledgedAt: Date.now(),
@@ -166,7 +180,10 @@ export const resolve = mutation({
   args: { alertId: v.id("alerts") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["lgu", "admin"]);
+    const user = await requireRole(ctx, ["lgu", "admin"]);
+    const alert = await ctx.db.get(args.alertId);
+    if (!alert) throw new Error("Alert not found.");
+    await assertLocationAccess(ctx, user, alert.locationCode);
     await ctx.db.patch(args.alertId, {
       status: "resolved",
       resolvedAt: Date.now(),

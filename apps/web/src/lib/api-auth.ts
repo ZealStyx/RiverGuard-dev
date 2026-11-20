@@ -1,41 +1,12 @@
-/**
- * Authentication for the API routes.
- *
- * The route handlers under `app/api/` are not covered by Convex's user check:
- * they run in the Next server, which has no Convex identity of its own. Before
- * this module they were simply open, so `/api/forecast` would spend a weather
- * call and an ML run for any anonymous caller, `/api/runs` would list stored
- * runs, and `/api/historical` would write to the deployment on a GET.
- *
- * Three callers are accepted, in this order:
- *
- *   1. **Service token.** `Authorization: Bearer $RIVERGUARD_API_TOKEN`, for
- *      server-to-server use (scripts, uptime checks). Only accepted when the
- *      variable is configured.
- *   2. **Firebase ID token.** The browser's signed-in user sends its ID token,
- *      which is verified against Google's Identity Toolkit. The public Firebase
- *      API key is used only to address the endpoint — the token itself is what
- *      Google validates.
- *   3. **Development bypass.** `NODE_ENV=development` **and**
- *      `NEXT_PUBLIC_DEV_BYPASS_AUTH=true`, matching `WorkspaceGate`. Never
- *      applies to a production build.
- *
- * Fails closed: no token, an unverifiable token, or a verification that cannot
- * be performed (no API key, no network) all mean "not authorised".
- */
-
+/** Trusted service credential or a verified Firebase identity with stored, scoped operational access. */
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../../../../convex/_generated/api";
+import { convexDeploymentUrl } from "./convex-config";
 import { NextResponse } from "next/server";
 
 export type ApiAuthResult =
-  | { authorized: true; via: "service-token" | "firebase" | "dev-bypass" }
+  | { authorized: true; via: "service-token" | "firebase" }
   | { authorized: false; reason: string };
-
-function devBypassEnabled(): boolean {
-  return (
-    process.env.NODE_ENV === "development" &&
-    process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true"
-  );
-}
 
 function bearerToken(request: Request): string | null {
   const header = request.headers.get("authorization");
@@ -88,11 +59,8 @@ async function verifyFirebaseIdToken(idToken: string): Promise<boolean> {
 
 export async function authorizeApiRequest(
   request: Request,
+  location?: string,
 ): Promise<ApiAuthResult> {
-  if (devBypassEnabled()) {
-    return { authorized: true, via: "dev-bypass" };
-  }
-
   const token = bearerToken(request);
 
   if (token === null) {
@@ -111,8 +79,20 @@ export async function authorizeApiRequest(
     return { authorized: true, via: "service-token" };
   }
 
-  if (await verifyFirebaseIdToken(token)) {
-    return { authorized: true, via: "firebase" };
+  if (convexDeploymentUrl && (await verifyFirebaseIdToken(token))) {
+    try {
+      const c = new ConvexHttpClient(convexDeploymentUrl);
+      c.setAuth(token);
+      if (
+        await c.query(
+          api.users.authorizeOperationalAccess,
+          location ? { location } : {},
+        )
+      )
+        return { authorized: true, via: "firebase" };
+    } catch {
+      /* Database or authorization failure: never grant fallback access. */
+    }
   }
 
   return {
@@ -129,8 +109,9 @@ export async function authorizeApiRequest(
  */
 export async function requireApiAuth(
   request: Request,
+  location?: string,
 ): Promise<NextResponse | null> {
-  const result = await authorizeApiRequest(request);
+  const result = await authorizeApiRequest(request, location);
 
   if (result.authorized) return null;
 
