@@ -12,7 +12,8 @@ import {
 import { AccessPanel } from "../auth/AccessPanel";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../../../../convex/_generated/api";
 
 import { useGisLayers } from "@/lib/use-gis-layers";
 import { useEffect, useState } from "react";
@@ -21,6 +22,12 @@ import { RiverMap } from "@/components/map/RiverMap";
 import { Button } from "@/components/ui";
 import { cx } from "@/lib/classnames";
 import { supportedLocations } from "@/data/prototype";
+import {
+  DEFAULT_LOCATION,
+  getLocation,
+  isLocationCode,
+  locationCodeForName,
+} from "@/lib/locations";
 import {
   convexConfigured,
   OutlookBridge,
@@ -58,17 +65,37 @@ import {
   Models,
 } from "./ResearcherScreens";
 
+/** The resident's saved city, or the default when they have not chosen one. */
+function usePrimaryLocation() {
+  const account = useQuery(api.users.getCurrent, {});
+  // `primaryLocation` is new in the schema; the generated types catch up on the
+  // next deploy, so read it through a narrow cast and validate the value.
+  const stored = (
+    account as { primaryLocation?: string | null } | null | undefined
+  )?.primaryLocation;
+  const chosen = Boolean(stored && isLocationCode(stored));
+  const code =
+    chosen && stored && isLocationCode(stored) ? stored : DEFAULT_LOCATION;
+  return {
+    code,
+    name: getLocation(code)?.name ?? "Marikina",
+    /** True once the resident has actually chosen a city. */
+    chosen,
+  };
+}
+
 function ResidentHome() {
-  const outlook = useOutlookFeed("marikina");
+  const primary = usePrimaryLocation();
+  const outlook = useOutlookFeed(primary.code);
   const snapshot = outlook.snapshot;
 
   return (
     <div className="mx-auto max-w-[96rem]">
       {convexConfigured ? (
-        <OutlookBridge locationCode="marikina" onSnapshot={outlook.adopt} />
+        <OutlookBridge locationCode={primary.code} onSnapshot={outlook.adopt} />
       ) : null}
       <WorkspaceHero
-        eyebrow="Marikina"
+        eyebrow={primary.name}
         title="My flood outlook"
         description="A simplified seven-day experimental outlook for your saved city, with official guidance kept clearly separate."
         notice={
@@ -94,7 +121,7 @@ function ResidentHome() {
         {[
           {
             label: "Saved city",
-            value: "Marikina",
+            value: primary.name,
             detail: "Primary location",
             icon: <MapPin size={18} />,
           },
@@ -143,10 +170,11 @@ function ResidentHome() {
 function ResidentLocationsWorkspace({}: {
   initialView?: "hazard" | "locations";
 } = {}) {
-  const [saved, setSaved] = useState("Marikina");
+  const primary = usePrimaryLocation();
+  const setPrimaryLocation = useMutation(convexFunctions.setPrimaryLocation);
   const [layer, setLayer] = useState<MapLayerId>("base");
   const [selectedDay, setSelectedDay] = useState(0);
-  const outlook = useOutlookFeed("marikina");
+  const outlook = useOutlookFeed(primary.code);
   const gis = useGisLayers();
 
   return (
@@ -174,7 +202,7 @@ function ResidentLocationsWorkspace({}: {
           activeLayer={layer}
           onLayerChange={setLayer}
           forecast={outlook.snapshot}
-          locationCode="marikina"
+          locationCode={primary.code}
           selectedDay={selectedDay}
           onDayChange={setSelectedDay}
           className="!h-[610px]"
@@ -191,17 +219,27 @@ function ResidentLocationsWorkspace({}: {
               >
                 <div className="mt-3">
                   <StatusBadge
-                    tone={location.name === saved ? "success" : "neutral"}
+                    tone={
+                      location.name === primary.name ? "success" : "neutral"
+                    }
                   >
-                    {location.name === saved ? "Primary" : "Available"}
+                    {location.name === primary.name ? "Primary" : "Available"}
                   </StatusBadge>
                   <Button
                     size="small"
-                    variant={location.name === saved ? "quiet" : "secondary"}
+                    variant={
+                      location.name === primary.name ? "quiet" : "secondary"
+                    }
                     className="mt-3 w-full"
-                    onClick={() => setSaved(location.name)}
+                    onClick={() =>
+                      void setPrimaryLocation({
+                        locationCode: locationCodeForName(location.name),
+                      })
+                    }
                   >
-                    {location.name === saved ? "Selected" : "Set primary"}
+                    {location.name === primary.name
+                      ? "Selected"
+                      : "Set primary"}
                   </Button>
                 </div>
               </Surface>
@@ -248,16 +286,20 @@ function HazardContext() {
 }
 
 function ResidentPreferences() {
+  const primary = usePrimaryLocation();
+  const setPrimaryLocation = useMutation(convexFunctions.setPrimaryLocation);
   const [saved, setSaved] = useState(false);
-  const [primaryCity, setPrimaryCity] = useState("Marikina");
+  const [primaryCity, setPrimaryCity] = useState(primary.name);
   const [defaultView, setDefaultView] = useState("Map");
   const [outlookNotify, setOutlookNotify] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
 
-  /* eslint-disable react-hooks/set-state-in-effect --
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps --
      localStorage does not exist during the server render, so these preferences
-     can only be read after mount. Reading them in a lazy initialiser would make
-     the server and client markup disagree. */
+     can only be read after mount; a lazy initialiser would make the server and
+     client markup disagree. The account's saved city is read here once as a
+     fallback for an older device value — re-running on every change would fight
+     the resident's edits. */
   useEffect(() => {
     try {
       const stored = JSON.parse(
@@ -268,7 +310,11 @@ function ResidentPreferences() {
         outlookNotify?: boolean;
         reducedMotion?: boolean;
       };
-      if (stored.primaryCity) setPrimaryCity(stored.primaryCity);
+      // The city lives on the account now; localStorage only carries the
+      // device-level toggles below. Keep an older stored value as a fallback so
+      // the field is not blank for someone who saved it before this change.
+      if (!primary.chosen && stored.primaryCity)
+        setPrimaryCity(stored.primaryCity);
       if (stored.defaultView) setDefaultView(stored.defaultView);
       setOutlookNotify(Boolean(stored.outlookNotify));
       setReducedMotion(Boolean(stored.reducedMotion));
@@ -281,13 +327,11 @@ function ResidentPreferences() {
   function savePreferences() {
     window.localStorage.setItem(
       "riverguard:resident-preferences",
-      JSON.stringify({
-        primaryCity,
-        defaultView,
-        outlookNotify,
-        reducedMotion,
-      }),
+      JSON.stringify({ defaultView, outlookNotify, reducedMotion }),
     );
+    // The primary city is account data, not device data: it has to survive a
+    // reload and follow the resident to another browser.
+    void setPrimaryLocation({ locationCode: locationCodeForName(primaryCity) });
     setSaved(true);
   }
   return (
@@ -348,7 +392,8 @@ function ResidentPreferences() {
         </Button>
         {saved ? (
           <p className="text-metadata mt-2 text-success" role="status">
-            Preferences saved on this device.
+            Preferences saved. Your primary city is stored on your account; the
+            display options stay on this device.
           </p>
         ) : null}
       </Surface>

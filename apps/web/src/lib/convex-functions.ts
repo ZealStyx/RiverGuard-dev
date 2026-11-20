@@ -36,6 +36,12 @@ export interface LatestOutlook {
 
 // A type alias (not an interface) so it satisfies convex's DefaultFunctionArgs.
 export type RecordOutlookArgs = {
+  /**
+   * Only the Next server sends this: it runs the forecast in `/api/forecast`
+   * and has no Convex identity of its own. Must equal the deployment's
+   * `RIVERGUARD_INGEST_SECRET`.
+   */
+  serverSecret?: string;
   locationCode: string;
   locationName: string;
   issueDate: string;
@@ -145,6 +151,11 @@ export const convexFunctions = {
     RecordOutlookArgs,
     RecordOutlookResult
   >("forecasts:recordOutlook"),
+  setPrimaryLocation: makeFunctionReference<
+    "mutation",
+    { locationCode: string },
+    { updated: boolean }
+  >("users:setPrimaryLocation"),
   latestOutlook: makeFunctionReference<
     "query",
     { locationCode: string },

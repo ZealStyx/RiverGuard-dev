@@ -43,6 +43,7 @@ export async function persistOutlook(
   forecast: MlForecastResponse,
   issueDate: string,
   accessToken?: string | null,
+  serverSecret?: string | null,
 ): Promise<PersistenceResult> {
   if (!convexUrl) {
     // No deployment: keep the run on this machine so history, detail and
@@ -105,6 +106,7 @@ export async function persistOutlook(
     featureSchemaVersion: forecast.meta.featureSchemaVersion,
     operatingThreshold: forecast.meta.operatingThreshold,
     warning: forecast.meta.warning,
+    ...(serverSecret ? { serverSecret } : {}),
     days: forecast.days.map((day) => ({
       date: day.date,
       horizonDays: day.horizonDays,

@@ -41,18 +41,27 @@ function sameSecret(candidate: string, expected: string): boolean {
   return mismatch === 0;
 }
 
-export async function assertIngestAuthorized(
-  ctx: MutationCtx,
-  secret?: string,
-): Promise<void> {
+/**
+ * Whether `secret` is this deployment's server credential.
+ *
+ * The same variable authorises the historical ingest and the server-side
+ * forecast write: one credential to configure, one place to rotate it.
+ */
+export function hasIngestSecret(secret?: string): boolean {
   const expected = process.env.RIVERGUARD_INGEST_SECRET;
-
-  if (
+  return (
     typeof expected === "string" &&
     expected.length > 0 &&
     typeof secret === "string" &&
     sameSecret(secret, expected)
-  ) {
+  );
+}
+
+export async function assertIngestAuthorized(
+  ctx: MutationCtx,
+  secret?: string,
+): Promise<void> {
+  if (hasIngestSecret(secret)) {
     return;
   }
 
