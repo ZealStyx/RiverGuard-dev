@@ -105,10 +105,10 @@ The user is routed according to the Convex role:
 
 | Role | Workspace | Access condition |
 |---|---|---|
-| Resident | `/resident` | `status: active` |
-| LGU operator | `/lgu` | `status: active` |
-| Researcher | `/researcher` | `status: active` |
-| Admin | `/admin` | `status: active` |
+| Resident | `/resident` | `status: active` (set at signup) |
+| LGU operator | `/lgu` | `status: active` (created `pending`; an administrator approves it) |
+| Researcher | `/researcher` | `status: active` (created `pending`; an administrator approves it) |
+| Admin | `/admin` | `status: active` (provisioned by an administrator — signup cannot request it) |
 
 `WorkspaceGate` checks Firebase authentication, Convex authentication, the current Convex user,
 the role, and the status. Unauthenticated users return to `/auth/login`; inactive users see an
